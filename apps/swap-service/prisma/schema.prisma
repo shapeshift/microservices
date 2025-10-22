@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Swap {
+  id                               String         @id @default(cuid())
+  swapId                           String         @unique
+  sellAsset                        Json
+  buyAsset                         Json
+  sellAmountCryptoBaseUnit         String
+  expectedBuyAmountCryptoBaseUnit  String
+  sellAmountCryptoPrecision        String
+  expectedBuyAmountCryptoPrecision String
+  actualBuyAmountCryptoPrecision   String?
+  status                           String         @default("PENDING")
+  source                           String
+  swapperName                      String
+  sellAccountId                    String
+  buyAccountId                     String?
+  receiveAddress                   String?
+  sellTxHash                       String?
+  buyTxHash                        String?
+  txLink                           String?
+  statusMessage                    String?
+  isStreaming                      Boolean        @default(false)
+  estimatedCompletion              DateTime?
+  createdAt                        DateTime       @default(now())
+  updatedAt                        DateTime       @updatedAt
+  metadata                         Json
+  chainflipSwapId                  Int?
+  relayTransactionMetadata         Json?
+  relayerExplorerTxLink            String?
+  relayerTxHash                    String?
+  stepIndex                        Int            @default(0)
+  streamingSwapMetadata            Json?
+  userId                           String
+  notifications                    Notification[]
+
+  @@map("swaps")
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  title       String
+  body        String
+  type        String
+  sentAt      DateTime         @default(now())
+  deliveredAt DateTime?
+  userId      String
+  deviceId    String?
+  swapId      String?
+  swap        Swap?            @relation(fields: [swapId], references: [id])
+
+  @@map("notifications")
+}

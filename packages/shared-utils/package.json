@@ -1,0 +1,25 @@
+{
+  "name": "@shapeshift/shared-utils",
+  "version": "0.0.1",
+  "description": "Shared utilities for ShapeShift backend services",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src --ext .ts",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@shapeshift/shared-types": "workspace:*",
+    "axios": "^1.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "eslint": "^9.18.0",
+    "typescript": "^5.7.3"
+  },
+  "files": [
+    "dist"
+  ]
+}

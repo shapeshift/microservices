@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  user-service:
+    build:
+      context: .
+      dockerfile: apps/user-service/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=file:./user-service.db
+    volumes:
+      - ./apps/user-service/prisma:/app/apps/user-service/prisma
+    depends_on:
+      - user-db
+
+  swap-service:
+    build:
+      context: .
+      dockerfile: apps/swap-service/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=file:./dev.db
+      - USER_SERVICE_URL=http://user-service:3002
+      - NOTIFICATIONS_SERVICE_URL=http://notifications-service:3003
+    volumes:
+      - ./apps/swap-service/prisma:/app/apps/swap-service/prisma
+    depends_on:
+      - swap-db
+      - user-service
+      - notifications-service
+
+  notifications-service:
+    build:
+      context: .
+      dockerfile: apps/notifications-service/Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - DATABASE_URL=file:./notifications-service.db
+      - USER_SERVICE_URL=http://user-service:3002
+      - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN}
+    volumes:
+      - ./apps/notifications-service/prisma:/app/apps/notifications-service/prisma
+    depends_on:
+      - notifications-db
+      - user-service
+
+  user-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=user_service
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+
+  swap-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=swap_service
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5433:5432"
+    volumes:
+      - swap_db_data:/var/lib/postgresql/data
+
+  notifications-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=notifications_service
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5434:5432"
+    volumes:
+      - notifications_db_data:/var/lib/postgresql/data
+
+volumes:
+  user_db_data:
+  swap_db_data:
+  notifications_db_data:
