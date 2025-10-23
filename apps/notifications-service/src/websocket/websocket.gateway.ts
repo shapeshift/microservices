@@ -19,6 +19,8 @@ interface AuthenticatedSocket extends Socket {
   cors: {
     origin: '*',
   },
+  pingTimeout: 10000,
+  pingInterval: 25000,
 })
 export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -38,6 +40,26 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (client.userId) {
       this.connectedClients.delete(client.userId);
     }
+  }
+
+  @SubscribeMessage('authenticate')
+  handleAuthenticate(
+    @MessageBody() data: { userId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!data.userId) {
+      this.logger.warn(`Authentication failed: No userId provided`);
+      return { success: false, error: 'userId is required' };
+    }
+
+    client.userId = data.userId;
+    this.connectedClients.set(data.userId, client);
+
+    // Join a user-specific room for targeted notifications
+    client.join(`user:${data.userId}`);
+
+    this.logger.log(`Client authenticated: ${client.id} as user ${data.userId}`);
+    return { success: true };
   }
 
   @SubscribeMessage('getNotifications')
