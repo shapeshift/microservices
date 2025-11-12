@@ -9,8 +9,15 @@ async function bootstrap() {
   const chainAdapterInitService = app.get(ChainAdapterInitService);
   await chainAdapterInitService.initializeChainAdapters();
   
-  await app.listen(3001);
-  console.log('Swap service is running on port 3001');
+  // Enable CORS
+  app.enableCors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    credentials: true,
+  });
+
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
+  console.log(`Swap service is running on: http://localhost:${port}`);
 }
 
 bootstrap();
