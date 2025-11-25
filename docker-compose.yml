@@ -1,60 +1,101 @@
-version: '3.8'
+x-build: &build
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
+
+x-service-base: &service-base
+  <<: *build
+  env_file:
+    - .env
+  volumes:
+    - .:/workspace
+    - node_modules:/workspace/node_modules
+
+x-db-base: &db-base
+  image: postgres:15-alpine
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
 
 services:
+  init:
+    <<: *build
+    working_dir: /workspace
+    command: sh -c "yarn && yarn build"
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+      - /workspace/apps/notifications-service/pulumi
+
+  packages:
+    <<: *build
+    working_dir: /workspace
+    command: sh -c "yarn turbo run dev --filter='@shapeshift/shared-types' --filter='@shapeshift/shared-utils'"
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
   user-service:
-    build:
-      context: .
-      dockerfile: apps/user-service/Dockerfile
+    <<: *service-base
+    working_dir: /workspace/apps/user-service
+    command: sh -c "yarn db:push && yarn start:dev"
     ports:
       - "3002:3002"
     environment:
       - NODE_ENV=development
       - PORT=3002
-      - DATABASE_URL=file:./user-service.db
-    volumes:
-      - ./apps/user-service/prisma:/app/apps/user-service/prisma
+      - DATABASE_URL=postgresql://postgres:password@user-db:5432/user_service
     depends_on:
-      - user-db
+      packages:
+        condition: service_started
+      user-db:
+        condition: service_healthy
 
   swap-service:
-    build:
-      context: .
-      dockerfile: apps/swap-service/Dockerfile
+    <<: *service-base
+    working_dir: /workspace/apps/swap-service
+    command: sh -c "yarn db:push && yarn start:dev"
     ports:
       - "3001:3001"
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - DATABASE_URL=file:./dev.db
+      - DATABASE_URL=postgresql://postgres:password@swap-db:5432/swap_service
       - USER_SERVICE_URL=http://user-service:3002
       - NOTIFICATIONS_SERVICE_URL=http://notifications-service:3003
-    volumes:
-      - ./apps/swap-service/prisma:/app/apps/swap-service/prisma
     depends_on:
-      - swap-db
-      - user-service
-      - notifications-service
+      swap-db:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      notifications-service:
+        condition: service_started
 
   notifications-service:
-    build:
-      context: .
-      dockerfile: apps/notifications-service/Dockerfile
+    <<: *service-base
+    working_dir: /workspace/apps/notifications-service
+    command: sh -c "yarn db:push && yarn start:dev"
     ports:
       - "3003:3003"
     environment:
       - NODE_ENV=development
       - PORT=3003
-      - DATABASE_URL=file:./notifications-service.db
+      - DATABASE_URL=postgresql://postgres:password@notifications-db:5432/notifications_service
       - USER_SERVICE_URL=http://user-service:3002
       - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN}
-    volumes:
-      - ./apps/notifications-service/prisma:/app/apps/notifications-service/prisma
     depends_on:
-      - notifications-db
-      - user-service
+      notifications-db:
+        condition: service_healthy
+      user-service:
+        condition: service_started
 
   user-db:
-    image: postgres:15-alpine
+    <<: *db-base
     environment:
       - POSTGRES_DB=user_service
       - POSTGRES_USER=postgres
@@ -65,7 +106,7 @@ services:
       - user_db_data:/var/lib/postgresql/data
 
   swap-db:
-    image: postgres:15-alpine
+    <<: *db-base
     environment:
       - POSTGRES_DB=swap_service
       - POSTGRES_USER=postgres
@@ -76,7 +117,7 @@ services:
       - swap_db_data:/var/lib/postgresql/data
 
   notifications-db:
-    image: postgres:15-alpine
+    <<: *db-base
     environment:
       - POSTGRES_DB=notifications_service
       - POSTGRES_USER=postgres
@@ -87,6 +128,7 @@ services:
       - notifications_db_data:/var/lib/postgresql/data
 
 volumes:
+  node_modules:
   user_db_data:
   swap_db_data:
   notifications_db_data:
