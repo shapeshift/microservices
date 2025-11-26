@@ -1,0 +1,13 @@
+{
+  "name": "@shapeshift/notifications-service-pulumi",
+  "version": "0.0.1",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "clean": "rm -rf node_modules"
+  },
+  "dependencies": {
+    "@pulumi/kubernetes": "4.23.0",
+    "@pulumi/pulumi": "3.160.0"
+  }
+}
