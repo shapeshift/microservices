@@ -2,11 +2,12 @@ x-build: &build
   build:
     context: .
     dockerfile: Dockerfile.dev
+    args:
+      USER_ID: ${USER_ID:-1000}
+      GROUP_ID: ${GROUP_ID:-1000}
 
 x-service-base: &service-base
   <<: *build
-  env_file:
-    - .env
   volumes:
     - .:/workspace
     - node_modules:/workspace/node_modules
@@ -46,10 +47,11 @@ services:
     command: sh -c "yarn db:push && yarn start:dev"
     ports:
       - "3002:3002"
+    env_file:
+      - ./apps/user-service/.env
     environment:
       - NODE_ENV=development
       - PORT=3002
-      - DATABASE_URL=postgresql://postgres:password@user-db:5432/user_service
     depends_on:
       packages:
         condition: service_started
@@ -62,19 +64,16 @@ services:
     command: sh -c "yarn db:push && yarn start:dev"
     ports:
       - "3001:3001"
+    env_file:
+      - ./apps/swap-service/.env
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - DATABASE_URL=postgresql://postgres:password@swap-db:5432/swap_service
-      - USER_SERVICE_URL=http://user-service:3002
-      - NOTIFICATIONS_SERVICE_URL=http://notifications-service:3003
     depends_on:
+      packages:
+        condition: service_started
       swap-db:
         condition: service_healthy
-      user-service:
-        condition: service_started
-      notifications-service:
-        condition: service_started
 
   notifications-service:
     <<: *service-base
@@ -82,17 +81,18 @@ services:
     command: sh -c "yarn db:push && yarn start:dev"
     ports:
       - "3003:3003"
+    env_file:
+      - ./apps/notifications-service/.env
     environment:
       - NODE_ENV=development
       - PORT=3003
-      - DATABASE_URL=postgresql://postgres:password@notifications-db:5432/notifications_service
-      - USER_SERVICE_URL=http://user-service:3002
-      - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN}
     depends_on:
-      notifications-db:
-        condition: service_healthy
+      packages:
+        condition: service_started
       user-service:
         condition: service_started
+      notifications-db:
+        condition: service_healthy
 
   user-db:
     <<: *db-base
