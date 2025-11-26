@@ -3,7 +3,11 @@ dist
 node_modules
 build
 .turbo
-.yarn/cache
+
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/sdks
 
 # Logs
 logs
