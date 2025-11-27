@@ -30,7 +30,11 @@ export = async (): Promise<Outputs> => {
   const docker: DeployApiArgs['docker'] = {
     context: '../../../',
     tag: gitSha,
-    command: ['sh', '-c', 'yarn db:migrate && yarn start:prod'],
+    command: [
+      'sh',
+      '-c',
+      './node_modules/.bin/prisma migrate deploy && yarn start:prod',
+    ],
   };
 
   await deployApi({
