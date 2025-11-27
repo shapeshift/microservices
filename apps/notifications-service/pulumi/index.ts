@@ -14,7 +14,7 @@ export = async (): Promise<Outputs> => {
   const coinstack = 'notifications-service';
 
   const { kubeconfig, config, namespace } = await getConfig();
-  const sampleEnv = readFileSync('../../../.env.example');
+  const sampleEnv = readFileSync('../.env.example');
 
   const assetName = config.assetName;
   const provider = new k8s.Provider('kube-provider', { kubeconfig });
@@ -23,7 +23,7 @@ export = async (): Promise<Outputs> => {
 
   const docker: DeployApiArgs['docker'] = {
     context: '../../../',
-    tag: 'test1',
+    tag: 'test2',
     command: ['sh', '-c', 'yarn db:migrate && yarn start:prod'],
   };
 

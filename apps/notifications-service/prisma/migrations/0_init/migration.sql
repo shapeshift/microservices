@@ -4,9 +4,8 @@ CREATE TABLE "notifications" (
     "title" TEXT NOT NULL,
     "body" TEXT NOT NULL,
     "type" TEXT NOT NULL,
-    "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "deliveredAt" DATETIME,
+    "sentAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deliveredAt" TIMESTAMP,
     "userId" TEXT NOT NULL,
     "swapId" TEXT
 );
-

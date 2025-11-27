@@ -5,9 +5,5 @@
   "private": true,
   "scripts": {
     "clean": "rm -rf node_modules"
-  },
-  "dependencies": {
-    "@pulumi/kubernetes": "4.23.0",
-    "@pulumi/pulumi": "3.160.0"
   }
 }
