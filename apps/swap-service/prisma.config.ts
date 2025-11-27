@@ -1,9 +1,7 @@
-import type { PrismaConfig } from "prisma";
+import 'dotenv/config';
 
-import dotenv from 'dotenv'
-
-dotenv.config({ path: '../../.env' })
+import type { PrismaConfig } from 'prisma';
 
 export default {
-  schema: "prisma/schema.prisma",
+  schema: 'prisma/schema.prisma',
 } satisfies PrismaConfig;
