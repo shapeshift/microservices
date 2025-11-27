@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { execSync } from 'child_process';
 import * as k8s from '@pulumi/kubernetes';
 import {
   Outputs,
@@ -21,9 +22,13 @@ export = async (): Promise<Outputs> => {
 
   createSecret({ name: assetName, env: sampleEnv, namespace }, { provider });
 
+  const gitSha = execSync('git rev-parse --short HEAD', {
+    encoding: 'utf8',
+  }).trim();
+
   const docker: DeployApiArgs['docker'] = {
     context: '../../../',
-    tag: 'test2',
+    tag: gitSha,
     command: ['sh', '-c', 'yarn db:migrate && yarn start:prod'],
   };
 
