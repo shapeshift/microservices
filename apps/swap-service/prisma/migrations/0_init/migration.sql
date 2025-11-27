@@ -20,9 +20,9 @@ CREATE TABLE "swaps" (
     "txLink" TEXT,
     "statusMessage" TEXT,
     "isStreaming" BOOLEAN NOT NULL DEFAULT false,
-    "estimatedCompletion" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "estimatedCompletion" TIMESTAMP,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL,
     "metadata" JSONB NOT NULL,
     "chainflipSwapId" INTEGER,
     "relayTransactionMetadata" JSONB,
@@ -39,8 +39,8 @@ CREATE TABLE "notifications" (
     "title" TEXT NOT NULL,
     "body" TEXT NOT NULL,
     "type" TEXT NOT NULL,
-    "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "deliveredAt" DATETIME,
+    "sentAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deliveredAt" TIMESTAMP,
     "userId" TEXT NOT NULL,
     "deviceId" TEXT,
     "swapId" TEXT,
@@ -49,4 +49,3 @@ CREATE TABLE "notifications" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "swaps_swapId_key" ON "swaps"("swapId");
-

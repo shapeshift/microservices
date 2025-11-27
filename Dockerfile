@@ -15,7 +15,6 @@ COPY apps/ ./apps
 
 RUN yarn install --immutable
 RUN yarn build
-RUN yarn workspaces focus --all --production
 
 # Production image
 FROM base AS runner

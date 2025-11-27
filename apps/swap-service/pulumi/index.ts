@@ -12,7 +12,7 @@ import {
 //https://www.pulumi.com/docs/intro/languages/javascript/#entrypoint
 export = async (): Promise<Outputs> => {
   const appName = 'shapeshift';
-  const coinstack = 'notifications-service';
+  const coinstack = 'swap-service';
 
   const { kubeconfig, config, namespace } = await getConfig();
   const sampleEnv = readFileSync('../.env.example');
