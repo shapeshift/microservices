@@ -9,13 +9,13 @@ FROM base AS builder
 
 ARG COINSTACK
 
-COPY package.json yarn.lock .yarnrc.yml turbo.json nest-cli.json tsconfig*.json ./
+COPY package.json yarn.lock .yarnrc.yml turbo.json tsconfig*.json ./
 COPY packages ./packages
 COPY apps/ ./apps
 
 RUN yarn install --immutable
 RUN yarn build
-RUN yarn workspaces focus @shapeshift/${COINSTACK} --production
+RUN yarn workspaces focus --all --production
 
 # Production image
 FROM base AS runner
@@ -37,5 +37,7 @@ COPY --from=builder /workspace/apps/${COINSTACK}/package.json ./apps/${COINSTACK
 COPY --from=builder /workspace/apps/${COINSTACK}/node_modules ./apps/${COINSTACK}/node_modules
 COPY --from=builder /workspace/apps/${COINSTACK}/dist ./apps/${COINSTACK}/dist
 COPY --from=builder /workspace/apps/${COINSTACK}/prisma ./apps/${COINSTACK}/prisma
+
+RUN corepack prepare
 
 WORKDIR /workspace/apps/${COINSTACK}

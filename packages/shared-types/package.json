@@ -6,14 +6,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "lint": "eslint src --ext .ts",
-    "test": "jest"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.7",
-    "eslint": "^9.18.0",
-    "typescript": "^5.7.3"
+    "dev": "tsc --watch"
   },
   "files": [
     "dist"

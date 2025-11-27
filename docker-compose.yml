@@ -2,15 +2,11 @@ x-build: &build
   build:
     context: .
     dockerfile: Dockerfile.dev
-    args:
-      USER_ID: ${USER_ID:-1000}
-      GROUP_ID: ${GROUP_ID:-1000}
 
 x-service-base: &service-base
   <<: *build
   volumes:
     - .:/workspace
-    - node_modules:/workspace/node_modules
 
 x-db-base: &db-base
   image: postgres:15-alpine
@@ -27,7 +23,6 @@ services:
     command: sh -c "yarn && yarn build"
     volumes:
       - .:/workspace
-      - node_modules:/workspace/node_modules
       - /workspace/apps/notifications-service/pulumi
 
   packages:
@@ -36,7 +31,6 @@ services:
     command: sh -c "yarn turbo run dev --filter='@shapeshift/shared-types' --filter='@shapeshift/shared-utils'"
     volumes:
       - .:/workspace
-      - node_modules:/workspace/node_modules
     depends_on:
       init:
         condition: service_completed_successfully
@@ -128,7 +122,6 @@ services:
       - notifications_db_data:/var/lib/postgresql/data
 
 volumes:
-  node_modules:
   user_db_data:
   swap_db_data:
   notifications_db_data:
