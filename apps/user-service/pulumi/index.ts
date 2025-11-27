@@ -22,8 +22,9 @@ export = async (): Promise<Outputs> => {
 
   createSecret({ name: assetName, env: sampleEnv, namespace }, { provider });
 
+  const gitRoot = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
   const gitSha = execSync(
-    `git log -1 --format=%h -- Dockerfile package.json yarn.lock apps/${coinstack} packages/`,
+    `git -C ${gitRoot} log -1 --format=%h -- Dockerfile package.json yarn.lock apps/${coinstack} packages/`,
     { encoding: 'utf8' },
   ).trim();
 
