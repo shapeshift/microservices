@@ -87,6 +87,13 @@ export class SwapsService {
     }
   }
 
+  private formatAmount(amount: string | number): string {
+    // Convert to number with up to 8 decimals, then remove trailing zeros
+    const num = bnOrZero(amount).toFixed(8);
+    // Remove trailing zeros and trailing decimal point
+    return num.replace(/\.?0+$/, '');
+  }
+
   private async sendStatusUpdateNotification(swap: Pick<Swap, 'id' | 'userId' | 'status' | 'sellAsset' | 'buyAsset' | 'sellAmountCryptoPrecision' | 'actualBuyAmountCryptoPrecision' | 'expectedBuyAmountCryptoPrecision'>) {
     let title: string;
     let body: string;
@@ -98,8 +105,8 @@ export class SwapsService {
     switch (swap.status) {
       case 'SUCCESS':
         title = 'Swap Completed!';
-        const buyAmount = bnOrZero(swap.actualBuyAmountCryptoPrecision || swap.expectedBuyAmountCryptoPrecision).toFixed(8);
-        body = `Your swap of ${bnOrZero(swap.sellAmountCryptoPrecision).toFixed(8)} ${sellAsset.symbol} to ${buyAmount} ${buyAsset.symbol} is complete.`;
+        const buyAmount = this.formatAmount(swap.actualBuyAmountCryptoPrecision || swap.expectedBuyAmountCryptoPrecision);
+        body = `Your swap of ${this.formatAmount(swap.sellAmountCryptoPrecision)} ${sellAsset.symbol} to ${buyAmount} ${buyAsset.symbol} is complete.`;
         type = 'SWAP_COMPLETED';
         break;
       case 'FAILED':

@@ -11,10 +11,15 @@ export const hashAccountId = (accountId: string, salt?: string): string => {
 // Validation utilities
 export const isValidAccountId = (accountId: string): boolean => {
   try {
+    // Try to parse using the library - this works for supported chains
     fromAccountId(accountId);
-    return true
+    return true;
   } catch (error) {
-    return false;
+    // If library parsing fails, check if it at least matches CAIP-10 format
+    // Format: chainNamespace:chainReference:accountAddress
+    // Example: eip155:1:0x1234567890abcdef1234567890abcdef12345678
+    const caip10Regex = /^[a-z0-9-]+:[a-z0-9-]+:0x[a-fA-F0-9]{40}$|^[a-z0-9-]+:[a-z0-9-]+:[a-zA-Z0-9]+$/;
+    return caip10Regex.test(accountId);
   }
 };
 
