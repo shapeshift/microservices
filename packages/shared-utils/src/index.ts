@@ -17,8 +17,15 @@ export const isValidAccountId = (accountId: string): boolean => {
   } catch (error) {
     // If library parsing fails, check if it at least matches CAIP-10 format
     // Format: chainNamespace:chainReference:accountAddress
-    // Example: eip155:1:0x1234567890abcdef1234567890abcdef12345678
-    const caip10Regex = /^[a-z0-9-]+:[a-z0-9-]+:0x[a-fA-F0-9]{40}$|^[a-z0-9-]+:[a-z0-9-]+:[a-zA-Z0-9]+$/;
+    // Examples:
+    // - EVM: eip155:1:0x1234567890abcdef1234567890abcdef12345678
+    // - Tron: tron:0x2b6653dc:TUrqPcjwrdz4u2tgSsrUoPHYYLe32u4Zea
+    // - Bitcoin: bip122:000000000019d6689c085ae165831e93:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
+    // - Solana: solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp:DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK
+    // - Cosmos: cosmos:cosmoshub-4:cosmos1..., cosmos:mayachain-mainnet:maya1...
+
+    // More permissive CAIP-10 regex that handles various address formats
+    const caip10Regex = /^[a-z0-9-]+:[a-z0-9-]+:[a-zA-Z0-9]+$/;
     return caip10Regex.test(accountId);
   }
 };

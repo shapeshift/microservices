@@ -24,7 +24,8 @@
     "db:migrate": "turbo run db:migrate",
     "db:push": "turbo run db:push",
     "db:setup": "yarn install && yarn db:generate",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "referral-rewards": "ts-node scripts/referral-rewards.ts"
   },
   "dependencies": {
     "@arbitrum/sdk": "^4.0.4",
