@@ -26,7 +26,8 @@
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
     "db:push": "turbo run db:push",
-    "clean": "turbo run clean && rm -rf .turbo node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "referral-rewards": "ts-node scripts/referral-rewards.ts"
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",

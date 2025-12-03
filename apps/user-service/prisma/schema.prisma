@@ -40,3 +40,31 @@ model Device {
 
   @@map("devices")
 }
+
+model ReferralCode {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  ownerAddress  String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  isActive      Boolean         @default(true)
+  maxUses       Int?
+  expiresAt     DateTime?
+  usages        ReferralUsage[]
+
+  @@index([ownerAddress])
+  @@map("referral_codes")
+}
+
+model ReferralUsage {
+  id              String        @id @default(cuid())
+  referralCode    String
+  refereeAddress  String        @unique
+  usedAt          DateTime      @default(now())
+  isActive        Boolean       @default(true)
+  code            ReferralCode  @relation(fields: [referralCode], references: [code])
+
+  @@index([referralCode])
+  @@index([refereeAddress])
+  @@map("referral_usages")
+}

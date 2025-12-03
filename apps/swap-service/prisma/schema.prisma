@@ -39,8 +39,12 @@ model Swap {
   stepIndex                        Int            @default(0)
   streamingSwapMetadata            Json?
   userId                           String
+  sellAmountUsd                    String?
+  referralCode                     String?
+  isReferralEligible               Boolean        @default(true)
   notifications                    Notification[]
 
+  @@index([referralCode])
   @@map("swaps")
 }
 
