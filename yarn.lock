@@ -14450,7 +14450,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"protobufjs@npm:^7.5.3":
+"protobufjs@npm:^7.5.3, protobufjs@npm:^7.5.4":
   version: 7.5.4
   resolution: "protobufjs@npm:7.5.4"
   dependencies:
@@ -15321,6 +15321,7 @@ __metadata:
     jest: "npm:^30.0.0"
     p-lazy: "npm:3.1.0"
     prettier: "npm:^3.4.2"
+    protobufjs: "npm:^7.5.4"
     socket.io: "npm:^4.8.1"
     ts-jest: "npm:^29.2.5"
     ts-loader: "npm:^9.5.2"
