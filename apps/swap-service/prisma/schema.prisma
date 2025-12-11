@@ -42,6 +42,9 @@ model Swap {
   sellAmountUsd                    String?
   referralCode                     String?
   isReferralEligible               Boolean        @default(true)
+  isAffiliateVerified              Boolean?
+  affiliateVerificationDetails     Json?
+  affiliateVerifiedAt              DateTime?
   notifications                    Notification[]
 
   @@index([referralCode])

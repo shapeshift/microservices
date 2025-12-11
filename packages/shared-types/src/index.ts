@@ -109,4 +109,28 @@ export interface SwapStatusResponse {
   sellTxHash?: string;
   buyTxHash?: string;
   statusMessage: string;
+  isAffiliateVerified?: boolean;
+  affiliateVerificationDetails?: {
+    hasAffiliate: boolean;
+    affiliateBps?: number;
+    affiliateAddress?: string;
+  };
+}
+
+// Swap verification types
+export interface SwapVerificationResult {
+  isVerified: boolean;
+  hasAffiliate: boolean;
+  affiliateBps?: number;
+  affiliateAddress?: string;
+  protocol: string;
+  swapId: string;
+  details?: Record<string, any>;
+  error?: string;
+}
+
+export interface VerifySwapAffiliateDto {
+  swapId: string;
+  protocol: string;
+  txHash?: string;
 }

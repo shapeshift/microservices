@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Put, Param, Body, Query } from '@nestjs/common';
 import { ReferralService } from './referral.service';
+import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils';
 
 type CreateReferralCodeDto = {
   code: string;
@@ -23,10 +24,14 @@ export class ReferralController {
 
   @Post('codes')
   async createReferralCode(@Body() data: CreateReferralCodeDto) {
+    if (!isValidAccountId(data.ownerAddress)) {
+      throw new Error('Invalid account ID');
+    }
+    const hashedOwnerAddress = hashAccountId(data.ownerAddress);
     const expiresAt = data.expiresAt ? new Date(data.expiresAt) : undefined;
     return this.referralService.createReferralCode({
       code: data.code,
-      ownerAddress: data.ownerAddress,
+      ownerAddress: hashedOwnerAddress,
       maxUses: data.maxUses,
       expiresAt,
     });
@@ -49,7 +54,11 @@ export class ReferralController {
 
   @Get('owner/:ownerAddress')
   async getReferralCodesByOwner(@Param('ownerAddress') ownerAddress: string) {
-    return this.referralService.getReferralCodesByOwner(ownerAddress);
+    if (!isValidAccountId(ownerAddress)) {
+      throw new Error('Invalid account ID');
+    }
+    const hashedOwnerAddress = hashAccountId(ownerAddress);
+    return this.referralService.getReferralCodesByOwner(hashedOwnerAddress);
   }
 
   @Get('usage/:refereeAddress')
@@ -62,6 +71,25 @@ export class ReferralController {
     @Param('code') code: string,
     @Body() data: DeactivateReferralCodeDto,
   ) {
-    return this.referralService.deactivateReferralCode(code, data.ownerAddress);
+    if (!isValidAccountId(data.ownerAddress)) {
+      throw new Error('Invalid account ID');
+    }
+    const hashedOwnerAddress = hashAccountId(data.ownerAddress);
+    return this.referralService.deactivateReferralCode(code, hashedOwnerAddress);
+  }
+
+  @Get('stats/:ownerAddress')
+  async getReferralStats(
+    @Param('ownerAddress') ownerAddress: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    if (!isValidAccountId(ownerAddress)) {
+      throw new Error('Invalid account ID');
+    }
+    const hashedOwnerAddress = hashAccountId(ownerAddress);
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.referralService.getReferralStatsByOwner(hashedOwnerAddress, start, end);
   }
 }

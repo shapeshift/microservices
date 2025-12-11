@@ -5,11 +5,12 @@ import { EvmChainAdapterService } from '../lib/chain-adapters/evm.service';
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service';
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service';
 import { SolanaChainAdapterService } from '../lib/chain-adapters/solana.service';
+import { SwapVerificationService } from '../verification/swap-verification.service';
 import { SwapperName, swappers, SwapSource, SwapStatus } from '@shapeshiftoss/swapper';
 import { ChainId } from '@shapeshiftoss/caip';
 import { Asset } from '@shapeshiftoss/types';
 import { hashAccountId } from '@shapeshift/shared-utils';
-import { NotificationsServiceClient } from '@shapeshift/shared-utils';
+import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils';
 import { CreateSwapDto, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types';
 import { bnOrZero } from '@shapeshiftoss/chain-adapters';
 
@@ -17,6 +18,7 @@ import { bnOrZero } from '@shapeshiftoss/chain-adapters';
 export class SwapsService {
   private readonly logger = new Logger(SwapsService.name);
   private readonly notificationsClient: NotificationsServiceClient;
+  private readonly userServiceClient: UserServiceClient;
 
   constructor(
     private prisma: PrismaService,
@@ -24,12 +26,28 @@ export class SwapsService {
     private utxoChainAdapterService: UtxoChainAdapterService,
     private cosmosSdkChainAdapterService: CosmosSdkChainAdapterService,
     private solanaChainAdapterService: SolanaChainAdapterService,
+    private swapVerificationService: SwapVerificationService,
   ) {
     this.notificationsClient = new NotificationsServiceClient();
+    this.userServiceClient = new UserServiceClient();
   }
 
   async createSwap(data: CreateSwapDto) {
     try {
+      // Fetch referral code from user-service if userId is provided
+      let referralCode: string | null = null;
+      if (data.userId) {
+        try {
+          referralCode = await this.userServiceClient.getUserReferralCode(data.userId);
+          if (referralCode) {
+            this.logger.log(`Found referral code ${referralCode} for user ${data.userId}`);
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to fetch referral code for user ${data.userId}:`, error);
+          // Continue swap creation even if referral code fetch fails
+        }
+      }
+
       const swap = await this.prisma.swap.create({
         data: {
           swapId: data.swapId,
@@ -48,10 +66,11 @@ export class SwapsService {
           isStreaming: data.isStreaming || false,
           metadata: data.metadata || {},
           userId: data.userId,
+          referralCode,
         },
       });
 
-      this.logger.log(`Swap created: ${swap.id}`);
+      this.logger.log(`Swap created: ${swap.id}${referralCode ? ` with referral code ${referralCode}` : ''}`);
       return swap;
     } catch (error) {
       this.logger.error('Failed to create swap', error);
@@ -183,6 +202,106 @@ export class SwapsService {
     }));
   }
 
+  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
+    this.logger.log(`Calculating referral fees for code: ${referralCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`);
+
+    const whereClause: any = {
+      referralCode,
+      isAffiliateVerified: true, // Only count verified affiliate swaps
+      status: 'SUCCESS', // Only count successful swaps
+    };
+
+    if (startDate && endDate) {
+      whereClause.createdAt = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
+    const swaps = await this.prisma.swap.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        swapId: true,
+        sellAsset: true,
+        sellAmountCryptoPrecision: true,
+        affiliateVerificationDetails: true,
+        createdAt: true,
+      },
+    });
+
+    let totalFeesCollectedUsd = 0;
+    let totalSwapVolumeUsd = 0;
+    const swapCount = swaps.length;
+
+    // Import pricing utilities dynamically
+    const { getAssetPriceUsd, calculateUsdValue } = await import('../utils/pricing');
+
+    // Fetch prices for all unique assets
+    const uniqueAssets = new Map<string, Asset>();
+    for (const swap of swaps) {
+      const sellAsset = swap.sellAsset as Asset;
+      if (!uniqueAssets.has(sellAsset.assetId)) {
+        uniqueAssets.set(sellAsset.assetId, sellAsset);
+      }
+    }
+
+    // Fetch all prices in parallel
+    const pricePromises = Array.from(uniqueAssets.values()).map(async (asset) => {
+      const price = await getAssetPriceUsd(asset);
+      return { assetId: asset.assetId, price };
+    });
+
+    const prices = await Promise.all(pricePromises);
+    const priceMap = new Map<string, number | null>();
+    prices.forEach(({ assetId, price }) => {
+      priceMap.set(assetId, price);
+    });
+
+    // Calculate fees with fetched prices
+    for (const swap of swaps) {
+      const sellAsset = swap.sellAsset as Asset;
+      const price = priceMap.get(sellAsset.assetId);
+
+      if (!price) {
+        this.logger.warn(`No price found for asset ${sellAsset.assetId}, skipping swap ${swap.swapId}`);
+        continue;
+      }
+
+      const sellAmountUsd = parseFloat(calculateUsdValue(swap.sellAmountCryptoPrecision, price));
+      totalSwapVolumeUsd += sellAmountUsd;
+
+      // Extract affiliateBps from verification details
+      const verificationDetails = swap.affiliateVerificationDetails as any;
+      const affiliateBps = verificationDetails?.affiliateBps;
+
+      if (affiliateBps && sellAmountUsd > 0) {
+        // Fee = (sellAmountUsd × affiliateBps) / 10,000
+        const feeUsd = (sellAmountUsd * affiliateBps) / 10000;
+        totalFeesCollectedUsd += feeUsd;
+      }
+    }
+
+    // Calculate referrer's 10% commission
+    const referrerCommissionUsd = totalFeesCollectedUsd * 0.1;
+
+    this.logger.log(
+      `Referral fee calculation for ${referralCode}: ${swapCount} swaps, ` +
+      `$${totalSwapVolumeUsd.toFixed(2)} volume, $${totalFeesCollectedUsd.toFixed(2)} fees, ` +
+      `$${referrerCommissionUsd.toFixed(2)} referrer commission`
+    );
+
+    return {
+      referralCode,
+      swapCount,
+      totalSwapVolumeUsd: totalSwapVolumeUsd.toFixed(2),
+      totalFeesCollectedUsd: totalFeesCollectedUsd.toFixed(2),
+      referrerCommissionUsd: referrerCommissionUsd.toFixed(2),
+      periodStart: startDate?.toISOString(),
+      periodEnd: endDate?.toISOString(),
+    };
+  }
+
   async pollSwapStatus(swapId: string): Promise<SwapStatusResponse> {
     try {
       this.logger.log(`Polling status for swap: ${swapId}`);
@@ -241,6 +360,7 @@ export class SwapsService {
           VITE_UNCHAINED_AVALANCHE_HTTP_URL: process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL || '',
           VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL: process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL || '',
           VITE_UNCHAINED_BASE_HTTP_URL: process.env.VITE_UNCHAINED_BASE_HTTP_URL || '',
+          VITE_NEAR_INTENTS_API_KEY: process.env.VITE_NEAR_INTENTS_API_KEY || '',
           VITE_FEATURE_THORCHAINSWAP_LONGTAIL: true,
           VITE_FEATURE_THORCHAINSWAP_L1_TO_LONGTAIL: true,
           VITE_FEATURE_CHAINFLIP_SWAP_DCA: true,
@@ -260,12 +380,63 @@ export class SwapsService {
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       });
 
+      // Verify affiliate usage
+      let isAffiliateVerified: boolean | undefined;
+      let affiliateVerificationDetails: { hasAffiliate: boolean; affiliateBps?: number; affiliateAddress?: string } | undefined;
+
+      try {
+        // Enrich metadata with swap fields needed for verification
+        const enrichedMetadata = {
+          ...(swap.metadata as Record<string, any>),
+          receiveAddress: swap.receiveAddress,
+          expectedBuyAmountCryptoPrecision: swap.expectedBuyAmountCryptoPrecision,
+          createdAt: swap.createdAt.getTime(),
+        };
+
+        const verificationResult = await this.swapVerificationService.verifySwapAffiliate(
+          swapId,
+          swap.swapperName,
+          sellAsset.chainId,
+          swap.sellTxHash || undefined,
+          enrichedMetadata,
+        );
+
+        isAffiliateVerified = verificationResult.isVerified && verificationResult.hasAffiliate;
+
+        if (verificationResult.isVerified) {
+          affiliateVerificationDetails = {
+            hasAffiliate: verificationResult.hasAffiliate,
+            affiliateBps: verificationResult.affiliateBps,
+            affiliateAddress: verificationResult.affiliateAddress,
+          };
+        }
+
+        this.logger.log(
+          `Affiliate verification for swap ${swapId}: verified=${verificationResult.isVerified}, hasAffiliate=${verificationResult.hasAffiliate}`,
+        );
+
+        // Update the database with verification result
+        await this.prisma.swap.update({
+          where: { swapId },
+          data: {
+            isAffiliateVerified,
+            affiliateVerificationDetails: affiliateVerificationDetails || {},
+            affiliateVerifiedAt: new Date(),
+          },
+        });
+      } catch (verificationError) {
+        this.logger.warn(`Failed to verify affiliate for swap ${swapId}:`, verificationError);
+        // Don't fail the entire status check if verification fails
+      }
+
       return {
-        status: status.status === 'Confirmed' ? 'SUCCESS' : 
+        status: status.status === 'Confirmed' ? 'SUCCESS' :
                 status.status === 'Failed' ? 'FAILED' : 'PENDING',
         sellTxHash: swap.sellTxHash,
         buyTxHash: status.buyTxHash,
         statusMessage: status.message,
+        isAffiliateVerified,
+        affiliateVerificationDetails,
       };
     } catch (error) {
       this.logger.error(`Failed to poll swap status for ${swapId}:`, error);

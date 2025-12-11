@@ -19,6 +19,7 @@
     "@prisma/client": "6.13.0",
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
+    "axios": "^1.6.2",
     "prisma": "6.13.0"
   }
 }

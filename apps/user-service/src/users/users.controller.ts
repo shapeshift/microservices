@@ -12,8 +12,8 @@ export class UsersController {
   }
 
   @Post('get-or-create')
-  async getOrCreateUser(@Body() data: { accountIds: string[] }) {
-    return this.usersService.getOrCreateUserByAccountIds(data.accountIds);
+  async getOrCreateUser(@Body() data: { accountIds: string[]; referralCode?: string }) {
+    return this.usersService.getOrCreateUserByAccountIds(data.accountIds, data.referralCode);
   }
 
   @Get()
