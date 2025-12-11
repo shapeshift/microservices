@@ -10,7 +10,7 @@ import { PrismaService } from './prisma/prisma.service';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '../../.env',
+      envFilePath: '../.env',
     }),
     HttpModule,
   ],
