@@ -34,6 +34,38 @@ export class UserServiceClient {
     const response = await this.axios.get<Device[]>(`/users/${userId}/devices`);
     return response.data;
   }
+
+  async getUserReferralCode(userId: string): Promise<string | null> {
+    try {
+      const user = await this.getUserById(userId);
+      if (!user || !user.userAccounts || user.userAccounts.length === 0) {
+        return null;
+      }
+
+      // Get the first account's hashed ID to check referral usage
+      const hashedAccountId = user.userAccounts[0].accountId;
+      const response = await this.axios.get<{ referralCode: string } | null>(
+        `/referrals/usage/${hashedAccountId}`
+      );
+      return response.data?.referralCode || null;
+    } catch (error) {
+      // If no referral usage found, return null
+      return null;
+    }
+  }
+
+  async getReferralUsages(referralCode: string): Promise<Array<{ refereeAddress: string; usedAt: string }>> {
+    try {
+      const response = await this.axios.get<{
+        code: string;
+        usages: Array<{ refereeAddress: string; usedAt: string }>;
+      }>(`/referrals/codes/${referralCode}`);
+      return response.data?.usages || [];
+    } catch (error) {
+      // If code not found or no usages, return empty array
+      return [];
+    }
+  }
 }
 
 export class NotificationsServiceClient {
@@ -61,6 +93,30 @@ export class NotificationsServiceClient {
     data?: any;
   }) {
     const response = await this.axios.post('/notifications/send-to-user', data);
+    return response.data;
+  }
+}
+
+export class SwapServiceClient {
+  private readonly axios: AxiosInstance;
+
+  constructor() {
+    const baseUrl = getRequiredEnvVar('SWAP_SERVICE_URL');
+    this.axios = axios.create({
+      baseURL: baseUrl,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+
+  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate.toISOString());
+    if (endDate) params.append('endDate', endDate.toISOString());
+
+    const url = `/swaps/referral-fees/${referralCode}${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await this.axios.get(url);
     return response.data;
   }
 }

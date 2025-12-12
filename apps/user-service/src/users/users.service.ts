@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ReferralService } from '../referral/referral.service';
 import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils';
-import { 
-  CreateUserDto, 
-  AddAccountIdDto, 
+import {
+  CreateUserDto,
+  AddAccountIdDto,
   RegisterDeviceDto,
   DeviceType
 } from '@shapeshift/shared-types';
@@ -14,7 +15,10 @@ import { User, UserAccount, Device } from '@prisma/client';
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private referralService: ReferralService,
+  ) {}
 
   // Type assertion helpers for Prisma results
   private assertDeviceType(deviceType: string): DeviceType {
@@ -235,9 +239,9 @@ export class UsersService {
     });
   }
 
-  async getOrCreateUserByAccountIds(accountIds: string[]): Promise<User> {
-    this.logger.log(`getOrCreateUserByAccountIds called with accountIds: ${JSON.stringify(accountIds)}`);
-    
+  async getOrCreateUserByAccountIds(accountIds: string[], referralCode?: string): Promise<User> {
+    this.logger.log(`getOrCreateUserByAccountIds called with accountIds: ${JSON.stringify(accountIds)}, referralCode: ${referralCode}`);
+
     if (!accountIds || accountIds.length === 0) {
       throw new Error('At least one account ID is required');
     }
@@ -251,20 +255,35 @@ export class UsersService {
 
     const hashedAccountIds = accountIds.map(id => hashAccountId(id));
     this.logger.log(`Hashed account IDs: ${JSON.stringify(hashedAccountIds)}`);
-    
+
     for (const hashedAccountId of hashedAccountIds) {
       const existingUser = await this.findUserByHashedAccountId(hashedAccountId);
       if (existingUser) {
         this.logger.log(`Found existing user: ${existingUser.id} for account ID`);
-        
-        const newAccountIds = hashedAccountIds.filter(id => 
+
+        const newAccountIds = hashedAccountIds.filter(id =>
           !existingUser.userAccounts.some(ua => ua.accountId === id)
         );
-        
+
         if (newAccountIds.length > 0) {
           await this.addHashedAccountIds(existingUser.id, newAccountIds);
         }
-        
+
+        // Try to apply referral code for existing user if provided
+        if (referralCode) {
+          try {
+            // Use the first hashed account ID as referee address for privacy
+            await this.referralService.useReferralCode({
+              code: referralCode,
+              refereeAddress: hashedAccountIds[0],
+            });
+            this.logger.log(`Successfully applied referral code ${referralCode} for existing user ${existingUser.id}`);
+          } catch (error) {
+            // Log but don't fail - user might already be referred or code might be invalid
+            this.logger.log(`Could not apply referral code ${referralCode} for existing user ${existingUser.id}: ${error.message}`);
+          }
+        }
+
         const result = await this.getUserById(existingUser.id);
         this.logger.log(`Returning existing user: ${result?.id}`);
         return result!;
@@ -275,7 +294,7 @@ export class UsersService {
     const user = await this.prisma.user.create({
       data: {
         userAccounts: {
-          create: hashedAccountIds.map(id => ({ 
+          create: hashedAccountIds.map(id => ({
             accountId: id,
           })),
         },
@@ -283,6 +302,22 @@ export class UsersService {
     });
 
     this.logger.log(`Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`);
+
+    // Handle referral code if provided
+    if (referralCode) {
+      try {
+        // Use the first hashed account ID as referee address for privacy
+        await this.referralService.useReferralCode({
+          code: referralCode,
+          refereeAddress: hashedAccountIds[0],
+        });
+        this.logger.log(`Successfully applied referral code ${referralCode} for new user ${user.id}`);
+      } catch (error) {
+        this.logger.warn(`Failed to apply referral code ${referralCode} for user ${user.id}:`, error);
+        // Don't fail user creation if referral code application fails
+      }
+    }
+
     const result = await this.getUserById(user.id);
     this.logger.log(`Returning new user: ${result?.id}`);
     return result!;

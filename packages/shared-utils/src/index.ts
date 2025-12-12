@@ -77,4 +77,4 @@ export const getOptionalEnvVar = (name: string, defaultValue?: string): string |
 };
 
 // Service clients
-export { UserServiceClient, NotificationsServiceClient } from './service-clients';
+export { UserServiceClient, NotificationsServiceClient, SwapServiceClient } from './service-clients';
