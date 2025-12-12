@@ -205,21 +205,22 @@ export class SwapsService {
   async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
     this.logger.log(`Calculating referral fees for code: ${referralCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`);
 
-    const whereClause: any = {
+    // Fetch swaps for the current period
+    const periodWhereClause: any = {
       referralCode,
-      isAffiliateVerified: true, // Only count verified affiliate swaps
-      status: 'SUCCESS', // Only count successful swaps
+      isAffiliateVerified: true,
+      status: 'SUCCESS',
     };
 
     if (startDate && endDate) {
-      whereClause.createdAt = {
+      periodWhereClause.createdAt = {
         gte: startDate,
         lte: endDate,
       };
     }
 
-    const swaps = await this.prisma.swap.findMany({
-      where: whereClause,
+    const periodSwaps = await this.prisma.swap.findMany({
+      where: periodWhereClause,
       select: {
         id: true,
         swapId: true,
@@ -230,16 +231,35 @@ export class SwapsService {
       },
     });
 
-    let totalFeesCollectedUsd = 0;
+    // Fetch ALL swaps since the start (for total fees collected by referrer)
+    const allTimeSwaps = await this.prisma.swap.findMany({
+      where: {
+        referralCode,
+        isAffiliateVerified: true,
+        status: 'SUCCESS',
+      },
+      select: {
+        id: true,
+        swapId: true,
+        sellAsset: true,
+        sellAmountCryptoPrecision: true,
+        affiliateVerificationDetails: true,
+        createdAt: true,
+      },
+    });
+
+    this.logger.log(`Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for referral code ${referralCode}`);
+
+    let periodFeesUsd = 0;
     let totalSwapVolumeUsd = 0;
-    const swapCount = swaps.length;
+    const swapCount = periodSwaps.length;
 
     // Import pricing utilities dynamically
     const { getAssetPriceUsd, calculateUsdValue } = await import('../utils/pricing');
 
-    // Fetch prices for all unique assets
+    // Fetch prices for all unique assets from both period and all-time swaps
     const uniqueAssets = new Map<string, Asset>();
-    for (const swap of swaps) {
+    for (const swap of [...periodSwaps, ...allTimeSwaps]) {
       const sellAsset = swap.sellAsset as Asset;
       if (!uniqueAssets.has(sellAsset.assetId)) {
         uniqueAssets.set(sellAsset.assetId, sellAsset);
@@ -258,8 +278,8 @@ export class SwapsService {
       priceMap.set(assetId, price);
     });
 
-    // Calculate fees with fetched prices
-    for (const swap of swaps) {
+    // Calculate period fees and volume
+    for (const swap of periodSwaps) {
       const sellAsset = swap.sellAsset as Asset;
       const price = priceMap.get(sellAsset.assetId);
 
@@ -278,25 +298,44 @@ export class SwapsService {
       if (affiliateBps && sellAmountUsd > 0) {
         // Fee = (sellAmountUsd × affiliateBps) / 10,000
         const feeUsd = (sellAmountUsd * affiliateBps) / 10000;
-        totalFeesCollectedUsd += feeUsd;
+        periodFeesUsd += feeUsd;
+      }
+    }
+
+    // Calculate all-time fees (for totalFeesCollectedUsd which represents total referrer earnings)
+    let allTimeFeesUsd = 0;
+    for (const swap of allTimeSwaps) {
+      const sellAsset = swap.sellAsset as Asset;
+      const price = priceMap.get(sellAsset.assetId);
+
+      if (!price) continue;
+
+      const sellAmountUsd = parseFloat(calculateUsdValue(swap.sellAmountCryptoPrecision, price));
+      const verificationDetails = swap.affiliateVerificationDetails as any;
+      const affiliateBps = verificationDetails?.affiliateBps;
+
+      if (affiliateBps && sellAmountUsd > 0) {
+        const feeUsd = (sellAmountUsd * affiliateBps) / 10000;
+        allTimeFeesUsd += feeUsd;
       }
     }
 
     // Calculate referrer's 10% commission
-    const referrerCommissionUsd = totalFeesCollectedUsd * 0.1;
+    const periodReferrerCommissionUsd = periodFeesUsd * 0.1;
+    const allTimeReferrerCommissionUsd = allTimeFeesUsd * 0.1;
 
     this.logger.log(
-      `Referral fee calculation for ${referralCode}: ${swapCount} swaps, ` +
-      `$${totalSwapVolumeUsd.toFixed(2)} volume, $${totalFeesCollectedUsd.toFixed(2)} fees, ` +
-      `$${referrerCommissionUsd.toFixed(2)} referrer commission`
+      `Referral fee calculation for ${referralCode}: ` +
+      `Period: ${swapCount} swaps, $${totalSwapVolumeUsd.toFixed(2)} volume, $${periodReferrerCommissionUsd.toFixed(2)} commission | ` +
+      `All-time: ${allTimeSwaps.length} swaps, $${allTimeReferrerCommissionUsd.toFixed(2)} total commission`
     );
 
     return {
       referralCode,
       swapCount,
       totalSwapVolumeUsd: totalSwapVolumeUsd.toFixed(2),
-      totalFeesCollectedUsd: totalFeesCollectedUsd.toFixed(2),
-      referrerCommissionUsd: referrerCommissionUsd.toFixed(2),
+      totalFeesCollectedUsd: allTimeReferrerCommissionUsd.toFixed(2), // Total referrer earnings all-time
+      referrerCommissionUsd: periodReferrerCommissionUsd.toFixed(2), // Period referrer earnings
       periodStart: startDate?.toISOString(),
       periodEnd: endDate?.toISOString(),
     };

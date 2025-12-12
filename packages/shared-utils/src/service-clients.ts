@@ -53,6 +53,19 @@ export class UserServiceClient {
       return null;
     }
   }
+
+  async getReferralUsages(referralCode: string): Promise<Array<{ refereeAddress: string; usedAt: string }>> {
+    try {
+      const response = await this.axios.get<{
+        code: string;
+        usages: Array<{ refereeAddress: string; usedAt: string }>;
+      }>(`/referrals/codes/${referralCode}`);
+      return response.data?.usages || [];
+    } catch (error) {
+      // If code not found or no usages, return empty array
+      return [];
+    }
+  }
 }
 
 export class NotificationsServiceClient {
