@@ -3,6 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from './prisma/prisma.service';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { PrismaService } from './prisma/prisma.service';
     ConfigModule.forRoot({
       envFilePath: '../../.env',
     }),
+    WalletModule,
   ],
   controllers: [],
   providers: [PrismaService],

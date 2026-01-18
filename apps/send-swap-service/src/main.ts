@@ -1,9 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import type { Response } from 'express';
 import { AppModule } from './app.module';
+import { WalletInitService } from './wallet/wallet-init.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Initialize wallets before starting HTTP listener
+  const walletInitService = app.get(WalletInitService);
+  await walletInitService.initializeWallets();
 
   // Enable CORS
   app.enableCors({
