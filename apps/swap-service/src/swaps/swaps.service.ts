@@ -503,11 +503,34 @@ export class SwapsService {
    * - Aggregating quotes (chaining outputs as inputs for subsequent steps)
    * - Finding alternative routes for comparison
    *
+   * Error handling includes:
+   * - Input validation (missing/invalid asset IDs, zero amounts)
+   * - No route available between asset pairs
+   * - Quote generation failures
+   * - Network/API errors
+   *
    * @param request Multi-step quote request with sell/buy assets and amount
    * @returns MultiStepQuoteResponse with route details, alternatives, or error
    */
   async getMultiStepQuote(request: MultiStepQuoteRequest): Promise<MultiStepQuoteResponse> {
+    const startTime = Date.now();
+    const expiresAt = new Date(Date.now() + 30000).toISOString();
+
     try {
+      // Input validation
+      const validationError = this.validateMultiStepQuoteRequest(request);
+      if (validationError) {
+        this.logger.warn(
+          `Multi-step quote request validation failed: ${validationError}`,
+        );
+        return {
+          success: false,
+          route: null,
+          expiresAt,
+          error: validationError,
+        };
+      }
+
       this.logger.log(
         `Generating multi-step quote: ${request.sellAssetId} -> ${request.buyAssetId} ` +
         `(amount: ${request.sellAmountCryptoBaseUnit})`,
@@ -516,25 +539,286 @@ export class SwapsService {
       const response = await this.quoteAggregatorService.getMultiStepQuote(request);
 
       if (response.success && response.route) {
+        const duration = Date.now() - startTime;
         this.logger.log(
-          `Multi-step quote generated successfully: ${response.route.totalSteps} steps, ` +
+          `Multi-step quote generated successfully in ${duration}ms: ${response.route.totalSteps} steps, ` +
           `estimated output: ${response.route.estimatedOutputCryptoPrecision}`,
         );
       } else {
+        // Handle no-route-available and other error scenarios with detailed logging
+        const errorCode = this.categorizeQuoteError(response.error);
         this.logger.warn(
-          `Multi-step quote failed: ${request.sellAssetId} -> ${request.buyAssetId} - ${response.error}`,
+          `Multi-step quote failed [${errorCode}]: ${request.sellAssetId} -> ${request.buyAssetId} - ${response.error}`,
         );
+
+        // Return response with categorized error
+        return {
+          success: false,
+          route: null,
+          expiresAt: response.expiresAt,
+          error: this.formatQuoteError(errorCode, response.error, request),
+        };
       }
 
       return response;
     } catch (error) {
-      this.logger.error('Failed to generate multi-step quote', error);
+      const duration = Date.now() - startTime;
+      this.logger.error(
+        `Failed to generate multi-step quote after ${duration}ms: ${request.sellAssetId} -> ${request.buyAssetId}`,
+        error,
+      );
+
+      // Categorize and format the error for the response
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorCode = this.categorizeQuoteError(errorMessage);
+
       return {
         success: false,
         route: null,
-        expiresAt: new Date(Date.now() + 30000).toISOString(),
-        error: error instanceof Error ? error.message : 'Unknown error generating multi-step quote',
+        expiresAt,
+        error: this.formatQuoteError(errorCode, errorMessage, request),
       };
+    }
+  }
+
+  /**
+   * Validate the multi-step quote request parameters.
+   *
+   * @param request The quote request to validate
+   * @returns Error message if validation fails, null if valid
+   */
+  private validateMultiStepQuoteRequest(request: MultiStepQuoteRequest): string | null {
+    // Check required fields
+    if (!request.sellAssetId || request.sellAssetId.trim() === '') {
+      return 'Missing required field: sellAssetId';
+    }
+
+    if (!request.buyAssetId || request.buyAssetId.trim() === '') {
+      return 'Missing required field: buyAssetId';
+    }
+
+    if (!request.sellAmountCryptoBaseUnit || request.sellAmountCryptoBaseUnit.trim() === '') {
+      return 'Missing required field: sellAmountCryptoBaseUnit';
+    }
+
+    // Check sell amount is valid and non-zero
+    try {
+      const sellAmount = BigInt(request.sellAmountCryptoBaseUnit);
+      if (sellAmount <= 0n) {
+        return 'Sell amount must be greater than zero';
+      }
+    } catch {
+      return 'Invalid sell amount format: must be a valid integer string';
+    }
+
+    // Check asset IDs are not the same
+    if (request.sellAssetId === request.buyAssetId) {
+      return 'Sell and buy assets cannot be the same';
+    }
+
+    // Validate asset ID format (should be CAIP format)
+    if (!this.isValidAssetId(request.sellAssetId)) {
+      return `Invalid sell asset ID format: ${request.sellAssetId}`;
+    }
+
+    if (!this.isValidAssetId(request.buyAssetId)) {
+      return `Invalid buy asset ID format: ${request.buyAssetId}`;
+    }
+
+    // Validate optional constraints
+    if (request.maxHops !== undefined) {
+      if (typeof request.maxHops !== 'number' || request.maxHops < 1 || request.maxHops > 10) {
+        return 'maxHops must be a number between 1 and 10';
+      }
+    }
+
+    if (request.maxCrossChainHops !== undefined) {
+      if (typeof request.maxCrossChainHops !== 'number' || request.maxCrossChainHops < 0 || request.maxCrossChainHops > 5) {
+        return 'maxCrossChainHops must be a number between 0 and 5';
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Check if an asset ID follows a valid CAIP format.
+   *
+   * @param assetId The asset ID to validate
+   * @returns true if the format is valid
+   */
+  private isValidAssetId(assetId: string): boolean {
+    // Basic CAIP format validation
+    // Examples:
+    // - eip155:1/slip44:60 (ETH)
+    // - eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 (USDC)
+    // - bip122:000000000019d6689c085ae165831e93/slip44:0 (BTC)
+    // - solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501 (SOL)
+    // - cosmos:cosmoshub-4/slip44:118 (ATOM)
+
+    // Must contain a slash separating chain and asset reference
+    if (!assetId.includes('/')) {
+      return false;
+    }
+
+    const parts = assetId.split('/');
+    if (parts.length !== 2) {
+      return false;
+    }
+
+    const [chainPart, assetPart] = parts;
+
+    // Chain part should contain a colon (e.g., "eip155:1")
+    if (!chainPart.includes(':')) {
+      return false;
+    }
+
+    // Asset part should contain a colon (e.g., "slip44:60" or "erc20:0x...")
+    if (!assetPart.includes(':')) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Categorize quote errors into standard error codes for consistent handling.
+   *
+   * @param errorMessage The error message to categorize
+   * @returns Error code string
+   */
+  private categorizeQuoteError(errorMessage: string | undefined): string {
+    if (!errorMessage) {
+      return 'UNKNOWN_ERROR';
+    }
+
+    const lowerError = errorMessage.toLowerCase();
+
+    // No route available scenarios
+    if (
+      lowerError.includes('no route') ||
+      lowerError.includes('no path') ||
+      lowerError.includes('path not found') ||
+      lowerError.includes('route not found') ||
+      lowerError.includes('no valid path')
+    ) {
+      return 'NO_ROUTE_AVAILABLE';
+    }
+
+    // Constraint violations
+    if (
+      lowerError.includes('max hops') ||
+      lowerError.includes('hop limit') ||
+      lowerError.includes('cross-chain limit') ||
+      lowerError.includes('constraint')
+    ) {
+      return 'ROUTE_CONSTRAINT_VIOLATED';
+    }
+
+    // Circular route detection
+    if (lowerError.includes('circular') || lowerError.includes('loop')) {
+      return 'CIRCULAR_ROUTE_DETECTED';
+    }
+
+    // Quote generation failures
+    if (
+      lowerError.includes('quote failed') ||
+      lowerError.includes('failed to generate') ||
+      lowerError.includes('failed to fetch')
+    ) {
+      return 'QUOTE_GENERATION_FAILED';
+    }
+
+    // Liquidity issues
+    if (
+      lowerError.includes('liquidity') ||
+      lowerError.includes('insufficient') ||
+      lowerError.includes('not enough')
+    ) {
+      return 'INSUFFICIENT_LIQUIDITY';
+    }
+
+    // Network/API errors
+    if (
+      lowerError.includes('timeout') ||
+      lowerError.includes('network') ||
+      lowerError.includes('api error') ||
+      lowerError.includes('econnrefused')
+    ) {
+      return 'NETWORK_ERROR';
+    }
+
+    // Unsupported asset/chain
+    if (
+      lowerError.includes('unsupported') ||
+      lowerError.includes('not supported') ||
+      lowerError.includes('unknown asset') ||
+      lowerError.includes('unknown chain')
+    ) {
+      return 'UNSUPPORTED_ASSET_OR_CHAIN';
+    }
+
+    // Price impact
+    if (
+      lowerError.includes('price impact') ||
+      lowerError.includes('slippage')
+    ) {
+      return 'HIGH_PRICE_IMPACT';
+    }
+
+    return 'UNKNOWN_ERROR';
+  }
+
+  /**
+   * Format a user-friendly error message based on the error code.
+   *
+   * @param errorCode The categorized error code
+   * @param originalError The original error message
+   * @param request The original request for context
+   * @returns Formatted error message
+   */
+  private formatQuoteError(
+    errorCode: string,
+    originalError: string | undefined,
+    request: MultiStepQuoteRequest,
+  ): string {
+    switch (errorCode) {
+      case 'NO_ROUTE_AVAILABLE':
+        return `No route available between ${request.sellAssetId} and ${request.buyAssetId}. ` +
+          `No direct or multi-hop swap path could be found for this asset pair.`;
+
+      case 'ROUTE_CONSTRAINT_VIOLATED':
+        return `Route constraints could not be satisfied. ` +
+          `Try increasing maxHops or maxCrossChainHops, or choose different assets. ` +
+          `Current constraints: maxHops=${request.maxHops || 4}, maxCrossChainHops=${request.maxCrossChainHops || 2}`;
+
+      case 'CIRCULAR_ROUTE_DETECTED':
+        return `A circular route was detected in the path. ` +
+          `The routing algorithm prevented a loop that would revisit the same asset.`;
+
+      case 'QUOTE_GENERATION_FAILED':
+        return `Failed to generate quotes for the route. ` +
+          `One or more swappers could not provide a quote. ` +
+          `Original error: ${originalError || 'Unknown'}`;
+
+      case 'INSUFFICIENT_LIQUIDITY':
+        return `Insufficient liquidity for this swap. ` +
+          `Try a smaller amount or choose different assets with more liquidity.`;
+
+      case 'NETWORK_ERROR':
+        return `Network error while fetching quotes. ` +
+          `Please try again later. Original error: ${originalError || 'Unknown'}`;
+
+      case 'UNSUPPORTED_ASSET_OR_CHAIN':
+        return `One or both assets are not supported for multi-step routing. ` +
+          `Asset pair: ${request.sellAssetId} -> ${request.buyAssetId}`;
+
+      case 'HIGH_PRICE_IMPACT':
+        return `Route has high price impact. ` +
+          `Consider trading a smaller amount or waiting for better market conditions.`;
+
+      default:
+        return originalError || 'An unknown error occurred while generating the quote';
     }
   }
 }
