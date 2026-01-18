@@ -6,12 +6,19 @@ import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service';
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service';
 import { SolanaChainAdapterService } from '../lib/chain-adapters/solana.service';
 import { SwapVerificationService } from '../verification/swap-verification.service';
+import { QuoteAggregatorService } from '../routing/quote-aggregator.service';
 import { SwapperName, swappers, SwapSource, SwapStatus } from '@shapeshiftoss/swapper';
 import { ChainId } from '@shapeshiftoss/caip';
 import { Asset } from '@shapeshiftoss/types';
 import { hashAccountId } from '@shapeshift/shared-utils';
 import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils';
-import { CreateSwapDto, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types';
+import {
+  CreateSwapDto,
+  SwapStatusResponse,
+  UpdateSwapStatusDto,
+  MultiStepQuoteRequest,
+  MultiStepQuoteResponse,
+} from '@shapeshift/shared-types';
 import { bnOrZero } from '@shapeshiftoss/chain-adapters';
 
 @Injectable()
@@ -27,6 +34,7 @@ export class SwapsService {
     private cosmosSdkChainAdapterService: CosmosSdkChainAdapterService,
     private solanaChainAdapterService: SolanaChainAdapterService,
     private swapVerificationService: SwapVerificationService,
+    private quoteAggregatorService: QuoteAggregatorService,
   ) {
     this.notificationsClient = new NotificationsServiceClient();
     this.userServiceClient = new UserServiceClient();
@@ -482,6 +490,50 @@ export class SwapsService {
       return {
         status: 'PENDING',
         statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  /**
+   * Generate a multi-step quote for swapping between two assets when no direct route exists.
+   *
+   * This method delegates to the QuoteAggregatorService which handles:
+   * - Finding optimal paths between assets using the pathfinder
+   * - Fetching quotes for each step from the appropriate swappers
+   * - Aggregating quotes (chaining outputs as inputs for subsequent steps)
+   * - Finding alternative routes for comparison
+   *
+   * @param request Multi-step quote request with sell/buy assets and amount
+   * @returns MultiStepQuoteResponse with route details, alternatives, or error
+   */
+  async getMultiStepQuote(request: MultiStepQuoteRequest): Promise<MultiStepQuoteResponse> {
+    try {
+      this.logger.log(
+        `Generating multi-step quote: ${request.sellAssetId} -> ${request.buyAssetId} ` +
+        `(amount: ${request.sellAmountCryptoBaseUnit})`,
+      );
+
+      const response = await this.quoteAggregatorService.getMultiStepQuote(request);
+
+      if (response.success && response.route) {
+        this.logger.log(
+          `Multi-step quote generated successfully: ${response.route.totalSteps} steps, ` +
+          `estimated output: ${response.route.estimatedOutputCryptoPrecision}`,
+        );
+      } else {
+        this.logger.warn(
+          `Multi-step quote failed: ${request.sellAssetId} -> ${request.buyAssetId} - ${response.error}`,
+        );
+      }
+
+      return response;
+    } catch (error) {
+      this.logger.error('Failed to generate multi-step quote', error);
+      return {
+        success: false,
+        route: null,
+        expiresAt: new Date(Date.now() + 30000).toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error generating multi-step quote',
       };
     }
   }
