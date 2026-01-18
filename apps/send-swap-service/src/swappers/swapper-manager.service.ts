@@ -6,6 +6,18 @@ import {
   AvailableSwapper,
   SwapperQuoteRequest,
 } from './swapper.types';
+import {
+  SWAPPER_CONFIGS,
+  EXCLUDED_SWAPPERS,
+  VALID_SWAPPERS,
+  DIRECT_SWAPPERS,
+  SERVICE_WALLET_SWAPPERS,
+  isExcludedSwapper,
+  isValidSwapper,
+  filterValidSwappers,
+  getSwapperConfig,
+  getSwapperTypeFromConfig,
+} from './swapper-config';
 
 /**
  * SwapperManagerService handles swapper classification, filtering, and management.
@@ -14,172 +26,18 @@ import {
  * - Classify swappers as DIRECT or SERVICE_WALLET
  * - Filter out swappers that don't support destination addresses
  * - Provide swapper configuration for quote generation
+ *
+ * Configuration is externalized to swapper-config.ts for easy updates.
  */
 @Injectable()
 export class SwapperManagerService {
   private readonly logger = new Logger(SwapperManagerService.name);
 
   /**
-   * Swapper classification configuration
-   * Based on spec.md Swapper Classification Reference section
-   */
-  private readonly swapperConfigs: Map<SwapperName, SwapperConfig> = new Map([
-    // Direct execution swappers - provide their own deposit addresses
-    [
-      SwapperName.Chainflip,
-      {
-        name: SwapperName.Chainflip,
-        type: SwapperType.DIRECT,
-        supportsDestinationAddress: true,
-        description: 'Uses requestDepositAddressV2() API with fillOrKillParams',
-      },
-    ],
-    [
-      SwapperName.NearIntents,
-      {
-        name: SwapperName.NearIntents,
-        type: SwapperType.DIRECT,
-        supportsDestinationAddress: true,
-        description: 'Uses 1Click REST API with JWT authentication',
-      },
-    ],
-
-    // Service-wallet swappers - require service to custody and execute
-    [
-      SwapperName.THORChain,
-      {
-        name: SwapperName.THORChain,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: true,
-        description: 'Memo-based routing, rate limited 1 req/sec on /quote',
-      },
-    ],
-    [
-      SwapperName.Jupiter,
-      {
-        name: SwapperName.Jupiter,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: true,
-        description: 'Solana swap execution (Solana only)',
-      },
-    ],
-    [
-      SwapperName.Relay,
-      {
-        name: SwapperName.Relay,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: true,
-        description: 'Cross-chain bridging',
-      },
-    ],
-    [
-      SwapperName.Mayachain,
-      {
-        name: SwapperName.Mayachain,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: true,
-        description: 'Maya protocol swaps',
-      },
-    ],
-    [
-      SwapperName.ButterSwap,
-      {
-        name: SwapperName.ButterSwap,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: true,
-        description: 'Multi-chain swaps',
-      },
-    ],
-    [
-      SwapperName.Bebop,
-      {
-        name: SwapperName.Bebop,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: true,
-        description: 'Intent-based swaps',
-      },
-    ],
-
-    // Excluded swappers - no destination address support
-    [
-      SwapperName.Zrx,
-      {
-        name: SwapperName.Zrx,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'No receiveAddress support - EXCLUDED',
-      },
-    ],
-    [
-      SwapperName.CowSwap,
-      {
-        name: SwapperName.CowSwap,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'No receiveAddress support - EXCLUDED',
-      },
-    ],
-    [
-      SwapperName.ArbitrumBridge,
-      {
-        name: SwapperName.ArbitrumBridge,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'Disabled for simplicity - EXCLUDED',
-      },
-    ],
-    [
-      SwapperName.Portals,
-      {
-        name: SwapperName.Portals,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'No receiveAddress support - EXCLUDED',
-      },
-    ],
-    [
-      SwapperName.Cetus,
-      {
-        name: SwapperName.Cetus,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'No receiveAddress support - EXCLUDED',
-      },
-    ],
-    [
-      SwapperName.Sunio,
-      {
-        name: SwapperName.Sunio,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'No receiveAddress support - EXCLUDED',
-      },
-    ],
-    [
-      SwapperName.Avnu,
-      {
-        name: SwapperName.Avnu,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'No receiveAddress support - EXCLUDED',
-      },
-    ],
-    [
-      SwapperName.Stonfi,
-      {
-        name: SwapperName.Stonfi,
-        type: SwapperType.SERVICE_WALLET,
-        supportsDestinationAddress: false,
-        description: 'No receiveAddress support - EXCLUDED',
-      },
-    ],
-  ]);
-
-  /**
    * Get swapper type classification (DIRECT or SERVICE_WALLET)
    */
   getSwapperType(swapperName: SwapperName): SwapperType {
-    const config = this.swapperConfigs.get(swapperName);
+    const config = getSwapperConfig(swapperName);
     if (!config) {
       this.logger.warn(
         `Unknown swapper: ${swapperName}, defaulting to SERVICE_WALLET`,
@@ -207,7 +65,7 @@ export class SwapperManagerService {
    * Check if a swapper supports destination addresses (required for send-swap)
    */
   supportsDestinationAddress(swapperName: SwapperName): boolean {
-    const config = this.swapperConfigs.get(swapperName);
+    const config = getSwapperConfig(swapperName);
     if (!config) {
       this.logger.warn(
         `Unknown swapper: ${swapperName}, assuming no destination address support`,
@@ -218,10 +76,24 @@ export class SwapperManagerService {
   }
 
   /**
+   * Check if a swapper is excluded (doesn't support destination addresses)
+   */
+  isExcludedSwapper(swapperName: SwapperName): boolean {
+    return isExcludedSwapper(swapperName);
+  }
+
+  /**
+   * Check if a swapper is valid for send-swap operations
+   */
+  isValidSwapper(swapperName: SwapperName): boolean {
+    return isValidSwapper(swapperName);
+  }
+
+  /**
    * Get configuration for a specific swapper
    */
   getSwapperConfig(swapperName: SwapperName): SwapperConfig | undefined {
-    return this.swapperConfigs.get(swapperName);
+    return getSwapperConfig(swapperName);
   }
 
   /**
@@ -230,7 +102,7 @@ export class SwapperManagerService {
   getValidSwappers(): AvailableSwapper[] {
     const validSwappers: AvailableSwapper[] = [];
 
-    for (const [name, config] of this.swapperConfigs.entries()) {
+    for (const [name, config] of SWAPPER_CONFIGS.entries()) {
       if (config.supportsDestinationAddress) {
         validSwappers.push({
           name,
@@ -270,7 +142,7 @@ export class SwapperManagerService {
   getExcludedSwappers(): SwapperConfig[] {
     const excluded: SwapperConfig[] = [];
 
-    for (const config of this.swapperConfigs.values()) {
+    for (const config of SWAPPER_CONFIGS.values()) {
       if (!config.supportsDestinationAddress) {
         excluded.push(config);
       }
@@ -280,10 +152,38 @@ export class SwapperManagerService {
   }
 
   /**
+   * Get list of excluded swapper names
+   */
+  getExcludedSwapperNames(): readonly SwapperName[] {
+    return EXCLUDED_SWAPPERS;
+  }
+
+  /**
+   * Get list of valid swapper names
+   */
+  getValidSwapperNames(): readonly SwapperName[] {
+    return VALID_SWAPPERS;
+  }
+
+  /**
+   * Get list of direct swapper names
+   */
+  getDirectSwapperNames(): readonly SwapperName[] {
+    return DIRECT_SWAPPERS;
+  }
+
+  /**
+   * Get list of service-wallet swapper names
+   */
+  getServiceWalletSwapperNames(): readonly SwapperName[] {
+    return SERVICE_WALLET_SWAPPERS;
+  }
+
+  /**
    * Filter a list of swapper names to only include valid ones
    */
   filterValidSwapperNames(swapperNames: SwapperName[]): SwapperName[] {
-    return swapperNames.filter((name) => this.supportsDestinationAddress(name));
+    return filterValidSwappers(swapperNames);
   }
 
   /**
@@ -313,7 +213,7 @@ export class SwapperManagerService {
     swapperName: SwapperName,
     _request: SwapperQuoteRequest,
   ): { valid: boolean; reason?: string } {
-    const config = this.swapperConfigs.get(swapperName);
+    const config = getSwapperConfig(swapperName);
 
     if (!config) {
       return { valid: false, reason: `Unknown swapper: ${swapperName}` };
