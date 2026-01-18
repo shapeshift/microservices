@@ -8,9 +8,16 @@ import { Quote, QuoteStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 /**
- * Quote expiration time in minutes
+ * Quote expiration time in minutes (30-minute TTL)
+ * Quotes automatically expire after this duration and cannot accept deposits.
  */
 const QUOTE_EXPIRATION_MINUTES = 30;
+
+/**
+ * Quote expiration time in milliseconds (1800000ms = 30 minutes)
+ * Used for precise time calculations and comparisons.
+ */
+const QUOTE_EXPIRATION_MS = 1800000;
 
 /**
  * Chain family identifiers for deposit address generation
@@ -500,18 +507,64 @@ export class QuotesService {
 
   /**
    * Check if a quote has expired and update its status if needed.
+   * Uses the 30-minute TTL defined by QUOTE_EXPIRATION_MINUTES.
    *
    * @param quote - The quote to check
    * @returns The quote with updated status if expired
    */
   private async checkAndUpdateExpiration(quote: Quote): Promise<Quote> {
-    if (quote.status === QuoteStatus.ACTIVE && quote.expiresAt < new Date()) {
+    if (quote.status === QuoteStatus.ACTIVE && this.isQuoteExpired(quote)) {
+      this.logger.log(`Quote ${quote.quoteId} has expired (30-minute TTL exceeded)`);
       return this.prisma.quote.update({
         where: { id: quote.id },
         data: { status: QuoteStatus.EXPIRED },
       });
     }
     return quote;
+  }
+
+  /**
+   * Check if a quote has expired based on its expiresAt timestamp.
+   * Quotes have a 30-minute TTL from creation.
+   *
+   * @param quote - The quote to check
+   * @returns True if the quote has expired
+   */
+  isQuoteExpired(quote: Quote): boolean {
+    return quote.expiresAt < new Date();
+  }
+
+  /**
+   * Get the remaining time in milliseconds before a quote expires.
+   * Returns 0 if the quote has already expired.
+   *
+   * @param quote - The quote to check
+   * @returns Remaining time in milliseconds (max 1800000ms for 30 minutes)
+   */
+  getRemainingTimeMs(quote: Quote): number {
+    const remaining = quote.expiresAt.getTime() - Date.now();
+    return Math.max(0, remaining);
+  }
+
+  /**
+   * Check if a quote can still accept deposits.
+   * A quote can accept deposits only if it's ACTIVE and not expired.
+   *
+   * @param quote - The quote to check
+   * @returns True if the quote can accept deposits
+   */
+  canAcceptDeposit(quote: Quote): boolean {
+    return quote.status === QuoteStatus.ACTIVE && !this.isQuoteExpired(quote);
+  }
+
+  /**
+   * Get the expiration duration in milliseconds (30 minutes = 1800000ms).
+   * Useful for clients that need to know the TTL duration.
+   *
+   * @returns Expiration duration in milliseconds
+   */
+  getExpirationDurationMs(): number {
+    return QUOTE_EXPIRATION_MS;
   }
 
   /**
