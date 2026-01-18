@@ -134,3 +134,79 @@ export interface VerifySwapAffiliateDto {
   protocol: string;
   txHash?: string;
 }
+
+// Quote types for send-swap-service
+export type QuoteStatus = 'ACTIVE' | 'EXPIRED' | 'DEPOSIT_RECEIVED' | 'EXECUTING' | 'COMPLETED' | 'FAILED';
+export type SwapperType = 'DIRECT' | 'SERVICE_WALLET';
+
+export interface Quote {
+  id: string;
+  quoteId: string;
+  status: QuoteStatus;
+
+  // Assets
+  sellAsset: Asset;
+  buyAsset: Asset;
+  sellAmountCryptoBaseUnit: string;
+  expectedBuyAmountCryptoBaseUnit: string;
+
+  // Addresses
+  depositAddress: string;
+  receiveAddress: string;
+
+  // Swapper info
+  swapperName: string;
+  swapperType: SwapperType;
+
+  // Gas overhead (for service-wallet swappers)
+  gasOverheadBaseUnit?: string;
+
+  // Timing
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+
+  // Execution
+  depositTxHash?: string;
+  executionTxHash?: string;
+  executedAt?: Date;
+}
+
+export interface CreateQuoteDto {
+  sellAssetId: string;
+  buyAssetId: string;
+  sellAmountCryptoBaseUnit: string;
+  receiveAddress: string;
+  preferredSwapper?: string;
+}
+
+export interface QuoteResponse {
+  quoteId: string;
+  depositAddress: string;
+  sellAmount: string;
+  sellAsset: Asset;
+  expectedBuyAmount: string;
+  buyAsset: Asset;
+  expiresAt: string;
+  qrData: string;
+  gasOverhead?: string;
+  swapperName: string;
+  swapperType: SwapperType;
+}
+
+export interface QuoteStatusResponse {
+  quoteId: string;
+  status: QuoteStatus;
+  depositTxHash?: string;
+  executionTxHash?: string;
+  statusMessage: string;
+  executedAt?: string;
+}
+
+export interface UpdateQuoteStatusDto {
+  quoteId: string;
+  status: QuoteStatus;
+  depositTxHash?: string;
+  executionTxHash?: string;
+  statusMessage?: string;
+}

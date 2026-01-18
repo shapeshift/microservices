@@ -1,0 +1,37 @@
+{
+  "name": "@shapeshift/send-swap-service",
+  "version": "0.0.1",
+  "description": "Send swap microservice",
+  "main": "dist/main.js",
+  "scripts": {
+    "clean": "rm -rf .turbo dist node_modules",
+    "build": "yarn run -T nest build",
+    "start": "yarn run -T nest start",
+    "start:dev": "yarn run -T nest start --watch",
+    "start:debug": "yarn run -T nest start --debug --watch",
+    "start:prod": "node dist/main.js",
+    "test": "yarn run -T jest",
+    "test:watch": "yarn run -T jest --watch",
+    "test:cov": "yarn run -T jest --coverage",
+    "test:api": "./scripts/test-quotes-api.sh",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "6.13.0",
+    "@shapeshift/shared-types": "workspace:*",
+    "@shapeshift/shared-utils": "workspace:*",
+    "@shapeshiftoss/hdwallet-core": "^1.62.21",
+    "@shapeshiftoss/hdwallet-native": "^1.62.21",
+    "axios": "^1.6.2",
+    "prisma": "6.13.0",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2"
+  }
+}
