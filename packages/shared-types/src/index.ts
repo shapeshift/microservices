@@ -134,3 +134,26 @@ export interface VerifySwapAffiliateDto {
   protocol: string;
   txHash?: string;
 }
+
+// Multi-step routing types
+export interface RouteStep {
+  stepIndex: number;
+  swapperName: string;
+  sellAsset: Asset;
+  buyAsset: Asset;
+  sellAmountCryptoBaseUnit: string;
+  expectedBuyAmountCryptoBaseUnit: string;
+  feeUsd: string;
+  slippagePercent: string;
+  estimatedTimeSeconds: number;
+}
+
+export interface MultiStepRoute {
+  totalSteps: number;
+  estimatedOutputCryptoBaseUnit: string;
+  estimatedOutputCryptoPrecision: string;
+  totalFeesUsd: string;
+  totalSlippagePercent: string;
+  estimatedTimeSeconds: number;
+  steps: RouteStep[];
+}
