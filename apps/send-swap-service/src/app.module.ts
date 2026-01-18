@@ -4,7 +4,9 @@ import { HttpModule } from '@nestjs/axios';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from './prisma/prisma.service';
 import { WalletModule } from './wallet/wallet.module';
+import { QuotesModule } from './quotes/quotes.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { SwappersModule } from './swappers/swappers.module';
 
 @Module({
   imports: [
@@ -14,7 +16,9 @@ import { MonitoringModule } from './monitoring/monitoring.module';
       envFilePath: '../../.env',
     }),
     WalletModule,
+    QuotesModule,
     MonitoringModule,
+    SwappersModule,
   ],
   controllers: [],
   providers: [PrismaService],
