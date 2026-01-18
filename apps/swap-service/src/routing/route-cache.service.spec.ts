@@ -1,16 +1,34 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RouteCacheService } from './route-cache.service';
 import { MultiStepRoute, RouteStep } from '@shapeshift/shared-types';
+import { Asset } from '@shapeshiftoss/types';
 
 describe('RouteCacheService', () => {
   let service: RouteCacheService;
+
+  // Mock Asset objects for testing
+  const mockSellAsset: Asset = {
+    assetId: 'eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    chainId: 'eip155:1',
+    symbol: 'USDC',
+    name: 'USD Coin',
+    precision: 6,
+  } as Asset;
+
+  const mockBuyAsset: Asset = {
+    assetId: 'eip155:1/erc20:0xdac17f958d2ee523a2206206994597c13d831ec7',
+    chainId: 'eip155:1',
+    symbol: 'USDT',
+    name: 'Tether USD',
+    precision: 6,
+  } as Asset;
 
   // Mock data for testing
   const mockRouteStep: RouteStep = {
     stepIndex: 0,
     swapperName: 'Thorchain',
-    sellAssetId: 'eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    buyAssetId: 'eip155:1/erc20:0xdac17f958d2ee523a2206206994597c13d831ec7',
+    sellAsset: mockSellAsset,
+    buyAsset: mockBuyAsset,
     sellAmountCryptoBaseUnit: '1000000000',
     expectedBuyAmountCryptoBaseUnit: '999000000',
     feeUsd: '0.50',
