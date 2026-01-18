@@ -13,6 +13,7 @@ import {
 } from '@shapeshift/shared-types';
 import { SwapperName } from '@shapeshiftoss/swapper';
 import { Asset } from '@shapeshiftoss/types';
+import { getAssetPriceUsd, calculateUsdValue } from '../utils/pricing';
 
 /**
  * Result of fetching a quote for a single step
@@ -35,7 +36,7 @@ interface QuoteConfig {
   quoteExpiryMs: number;
   /** Price impact warning threshold percent (default: 2) */
   priceImpactWarningPercent: number;
-  /** Price impact flag threshold percent (default: 10) */
+  /** Price impact flag threshold percent (default: 5) */
   priceImpactFlagPercent: number;
 }
 
@@ -45,7 +46,7 @@ interface QuoteConfig {
 const DEFAULT_QUOTE_CONFIG: QuoteConfig = {
   quoteExpiryMs: 30_000, // 30 seconds
   priceImpactWarningPercent: 2,
-  priceImpactFlagPercent: 10,
+  priceImpactFlagPercent: 5, // Flag routes with >5% price impact
 };
 
 /**
@@ -1084,15 +1085,45 @@ export class QuoteAggregatorService {
         steps,
       };
 
+      // Calculate price impact using USD values
+      const priceImpactResult = await this.calculateRoutePriceImpact(
+        steps[0].sellAsset,
+        steps[steps.length - 1].buyAsset,
+        sellAmountCryptoBaseUnit,
+        finalOutputBaseUnit,
+      );
+
+      // Log price impact warnings and flags
+      if (priceImpactResult.priceImpactPercent !== null) {
+        if (this.isPriceImpactFlag(priceImpactResult.priceImpactPercent)) {
+          this.logger.warn(
+            `HIGH PRICE IMPACT FLAG: ${priceImpactResult.priceImpactPercent.toFixed(2)}% exceeds ${this.quoteConfig.priceImpactFlagPercent}% threshold ` +
+            `for route ${path.assetIds.join(' -> ')} (input: $${priceImpactResult.inputValueUsd}, output: $${priceImpactResult.outputValueUsd})`,
+          );
+        } else if (this.isPriceImpactWarning(priceImpactResult.priceImpactPercent)) {
+          this.logger.warn(
+            `Price impact warning: ${priceImpactResult.priceImpactPercent.toFixed(2)}% exceeds ${this.quoteConfig.priceImpactWarningPercent}% threshold ` +
+            `for route ${path.assetIds.join(' -> ')}`,
+          );
+        } else {
+          this.logger.debug(
+            `Price impact calculated: ${priceImpactResult.priceImpactPercent.toFixed(2)}% for route ${path.assetIds.join(' -> ')}`,
+          );
+        }
+      }
+
       // Cache the aggregated quote for potential reuse
       const cacheKey = this.generateQuoteCacheKey(path, sellAmountCryptoBaseUnit);
       this.cacheService.set(cacheKey, route, this.quoteConfig.quoteExpiryMs);
 
       const totalDuration = Date.now() - startTime;
+      const priceImpactLog = priceImpactResult.priceImpactPercent !== null
+        ? `, price impact: ${priceImpactResult.priceImpactPercent.toFixed(2)}%`
+        : '';
       this.logger.log(
         `Quote aggregation complete in ${totalDuration}ms: ${steps.length} steps, ` +
         `input: ${sellAmountCryptoBaseUnit}, output: ${finalOutputBaseUnit}, ` +
-        `total fees: $${totalFeesUsd.toFixed(2)}, total slippage: ${totalSlippagePercent.toFixed(2)}%`,
+        `total fees: $${totalFeesUsd.toFixed(2)}, total slippage: ${totalSlippagePercent.toFixed(2)}%${priceImpactLog}`,
       );
 
       return route;
@@ -1315,6 +1346,90 @@ export class QuoteAggregatorService {
    */
   isPriceImpactFlag(priceImpactPercent: number): boolean {
     return priceImpactPercent > this.quoteConfig.priceImpactFlagPercent;
+  }
+
+  /**
+   * Calculate the price impact for an entire multi-step route.
+   *
+   * This method fetches USD prices for the sell and buy assets,
+   * calculates their USD values, and determines the price impact.
+   * Price impact represents how much value is lost due to fees,
+   * slippage, and market inefficiencies across all hops.
+   *
+   * @param sellAsset The asset being sold (first step input)
+   * @param buyAsset The asset being bought (last step output)
+   * @param sellAmountBaseUnit Amount being sold in base units
+   * @param buyAmountBaseUnit Expected buy amount in base units
+   * @returns RoutePriceImpactResult with calculated values
+   */
+  private async calculateRoutePriceImpact(
+    sellAsset: Asset,
+    buyAsset: Asset,
+    sellAmountBaseUnit: string,
+    buyAmountBaseUnit: string,
+  ): Promise<{
+    priceImpactPercent: number | null;
+    inputValueUsd: string;
+    outputValueUsd: string;
+    isHighPriceImpact: boolean;
+    isPriceImpactWarning: boolean;
+  }> {
+    try {
+      // Fetch USD prices for both assets in parallel
+      const [sellPriceUsd, buyPriceUsd] = await Promise.all([
+        getAssetPriceUsd(sellAsset),
+        getAssetPriceUsd(buyAsset),
+      ]);
+
+      // If we can't get prices for both assets, return null price impact
+      if (sellPriceUsd === null || buyPriceUsd === null) {
+        this.logger.debug(
+          `Unable to calculate price impact: missing price data ` +
+          `(sellAsset: ${sellAsset.assetId} price=${sellPriceUsd}, ` +
+          `buyAsset: ${buyAsset.assetId} price=${buyPriceUsd})`,
+        );
+        return {
+          priceImpactPercent: null,
+          inputValueUsd: '0',
+          outputValueUsd: '0',
+          isHighPriceImpact: false,
+          isPriceImpactWarning: false,
+        };
+      }
+
+      // Convert base unit amounts to human-readable amounts using precision
+      const sellPrecision = sellAsset.precision || 18;
+      const buyPrecision = buyAsset.precision || 18;
+
+      const sellAmountHuman = this.formatPrecision(sellAmountBaseUnit, sellPrecision);
+      const buyAmountHuman = this.formatPrecision(buyAmountBaseUnit, buyPrecision);
+
+      // Calculate USD values
+      const inputValueUsd = calculateUsdValue(sellAmountHuman, sellPriceUsd);
+      const outputValueUsd = calculateUsdValue(buyAmountHuman, buyPriceUsd);
+
+      // Calculate price impact
+      const inputUsdNum = parseFloat(inputValueUsd);
+      const outputUsdNum = parseFloat(outputValueUsd);
+      const priceImpactPercent = this.calculatePriceImpact(inputUsdNum, outputUsdNum);
+
+      return {
+        priceImpactPercent,
+        inputValueUsd,
+        outputValueUsd,
+        isHighPriceImpact: this.isPriceImpactFlag(priceImpactPercent),
+        isPriceImpactWarning: this.isPriceImpactWarning(priceImpactPercent),
+      };
+    } catch (error) {
+      this.logger.error('Failed to calculate route price impact', error);
+      return {
+        priceImpactPercent: null,
+        inputValueUsd: '0',
+        outputValueUsd: '0',
+        isHighPriceImpact: false,
+        isPriceImpactWarning: false,
+      };
+    }
   }
 
   /**
