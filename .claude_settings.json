@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/**)",
+      "Write(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/**)",
+      "Edit(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/**)",
+      "Glob(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/**)",
+      "Grep(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/**)",
+      "Read(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/.auto-claude/specs/001-i-would-like-to-do-a-poc/**)",
+      "Write(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/.auto-claude/specs/001-i-would-like-to-do-a-poc/**)",
+      "Edit(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/001-i-would-like-to-do-a-poc/.auto-claude/specs/001-i-would-like-to-do-a-poc/**)",
+      "Read(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Write(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Edit(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Glob(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Grep(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}
