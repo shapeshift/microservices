@@ -932,12 +932,16 @@ export class QuoteAggregatorService {
    * Aggregate quotes across all hops in a multi-step path.
    *
    * This method chains quotes together where the output of each step
-   * becomes the input of the next step.
+   * becomes the input of the next step. The aggregation process:
+   * 1. For each hop, fetch a quote from the appropriate swapper
+   * 2. Chain the output amount of step N as the input for step N+1
+   * 3. Accumulate fees, slippage, and time across all steps
+   * 4. Return the complete multi-step route with aggregated totals
    *
-   * @param path The found path with edges
+   * @param path The found path with edges from PathfinderService
    * @param sellAmountCryptoBaseUnit Initial sell amount in base units
-   * @param userAddress The user's address
-   * @param receiveAddress The final receive address
+   * @param userAddress The user's address for intermediate steps
+   * @param receiveAddress The final receive address for the last step
    * @returns MultiStepRoute with aggregated quote data, or null on failure
    */
   async aggregateMultiStepQuote(
@@ -946,58 +950,95 @@ export class QuoteAggregatorService {
     userAddress: string,
     receiveAddress: string,
   ): Promise<MultiStepRoute | null> {
+    const startTime = Date.now();
+
     try {
       this.logger.debug(
         `Aggregating quotes for path: ${path.assetIds.join(' -> ')} (${path.hopCount} hops)`,
       );
 
-      // TODO: Implement full quote aggregation in subtask-7-3
-      // This is a placeholder structure
+      // Validate input amount
+      if (!sellAmountCryptoBaseUnit || sellAmountCryptoBaseUnit === '0') {
+        this.logger.warn('Invalid sell amount provided for quote aggregation');
+        return null;
+      }
+
+      // Validate path has edges
+      if (!path.edges || path.edges.length === 0) {
+        this.logger.warn('Path has no edges for quote aggregation');
+        return null;
+      }
 
       const steps: RouteStep[] = [];
       let currentSellAmount = sellAmountCryptoBaseUnit;
       let totalFeesUsd = 0;
       let totalSlippagePercent = 0;
       let totalEstimatedTimeSeconds = 0;
+      const failedSteps: number[] = [];
 
-      // Process each hop in the path
+      // Process each hop in the path sequentially
+      // Sequential processing is required because each step's output becomes the next step's input
       for (let i = 0; i < path.edges.length; i++) {
         const edge = path.edges[i];
         const isLastStep = i === path.edges.length - 1;
+        const stepStartTime = Date.now();
+
+        this.logger.debug(
+          `Fetching quote for step ${i + 1}/${path.edges.length}: ${edge.sellAssetId} -> ${edge.buyAssetId} via ${edge.swapperName} (amount: ${currentSellAmount})`,
+        );
 
         // Get quote for this step
+        // Intermediate steps receive to the user's address
+        // Final step receives to the specified receive address
         const stepQuote = await this.getQuoteForStep(
           edge,
           currentSellAmount,
           userAddress,
-          isLastStep ? receiveAddress : userAddress, // Intermediate steps go to user address
+          isLastStep ? receiveAddress : userAddress,
         );
+
+        const stepDuration = Date.now() - stepStartTime;
+        this.logger.debug(`Step ${i + 1} quote fetched in ${stepDuration}ms`);
 
         if (!stepQuote.success) {
           this.logger.warn(
-            `Quote failed for step ${i + 1}: ${edge.sellAssetId} -> ${edge.buyAssetId} - ${stepQuote.error}`,
+            `Quote failed for step ${i + 1}: ${edge.sellAssetId} -> ${edge.buyAssetId} via ${edge.swapperName} - ${stepQuote.error}`,
+          );
+          failedSteps.push(i + 1);
+          // Fail fast: if any step fails, the entire route is invalid
+          return null;
+        }
+
+        // Validate the quote returned a non-zero output
+        if (!stepQuote.expectedBuyAmountCryptoBaseUnit || stepQuote.expectedBuyAmountCryptoBaseUnit === '0') {
+          this.logger.warn(
+            `Step ${i + 1} returned zero output amount: ${edge.sellAssetId} -> ${edge.buyAssetId}`,
           );
           return null;
         }
 
-        // Create step data
-        // TODO: Fetch actual asset data from asset service
+        // Create asset representations for the step
+        // Note: Asset precision is derived from the asset ID where available
+        const sellAssetPrecision = this.getAssetPrecision(edge.sellAssetId);
+        const buyAssetPrecision = this.getAssetPrecision(edge.buyAssetId);
+
         const sellAsset: Asset = {
           assetId: edge.sellAssetId,
           chainId: edge.sellChainId,
-          name: edge.sellAssetId,
-          symbol: edge.sellAssetId.split('/').pop() || '',
-          precision: 18,
+          name: this.getAssetSymbolFromId(edge.sellAssetId),
+          symbol: this.getAssetSymbolFromId(edge.sellAssetId),
+          precision: sellAssetPrecision,
         } as Asset;
 
         const buyAsset: Asset = {
           assetId: edge.buyAssetId,
           chainId: edge.buyChainId,
-          name: edge.buyAssetId,
-          symbol: edge.buyAssetId.split('/').pop() || '',
-          precision: 18,
+          name: this.getAssetSymbolFromId(edge.buyAssetId),
+          symbol: this.getAssetSymbolFromId(edge.buyAssetId),
+          precision: buyAssetPrecision,
         } as Asset;
 
+        // Build the step data
         steps.push({
           stepIndex: i,
           swapperName: edge.swapperName,
@@ -1010,34 +1051,200 @@ export class QuoteAggregatorService {
           estimatedTimeSeconds: stepQuote.estimatedTimeSeconds,
         });
 
-        // Chain: output becomes input for next step
+        // Chain: output of this step becomes input for next step
         currentSellAmount = stepQuote.expectedBuyAmountCryptoBaseUnit;
 
         // Aggregate totals
+        // Fees are additive across steps
         totalFeesUsd += parseFloat(stepQuote.feeUsd) || 0;
+        // Slippage compounds across steps (simplified: additive for now)
         totalSlippagePercent += parseFloat(stepQuote.slippagePercent) || 0;
+        // Time is sequential - each step must complete before the next
         totalEstimatedTimeSeconds += stepQuote.estimatedTimeSeconds;
+
+        this.logger.debug(
+          `Step ${i + 1} complete: ${stepQuote.sellAmountCryptoBaseUnit} -> ${stepQuote.expectedBuyAmountCryptoBaseUnit} (fee: $${stepQuote.feeUsd}, slippage: ${stepQuote.slippagePercent}%)`,
+        );
       }
 
-      // Calculate final output
+      // Calculate final output with proper precision
       const finalOutputBaseUnit = currentSellAmount;
-      const finalOutputPrecision = this.formatPrecision(finalOutputBaseUnit, 18);
+      const lastEdge = path.edges[path.edges.length - 1];
+      const outputPrecision = this.getAssetPrecision(lastEdge.buyAssetId);
+      const finalOutputPrecisionStr = this.formatPrecision(finalOutputBaseUnit, outputPrecision);
 
+      // Build the complete multi-step route
       const route: MultiStepRoute = {
         totalSteps: steps.length,
         estimatedOutputCryptoBaseUnit: finalOutputBaseUnit,
-        estimatedOutputCryptoPrecision: finalOutputPrecision,
+        estimatedOutputCryptoPrecision: finalOutputPrecisionStr,
         totalFeesUsd: totalFeesUsd.toFixed(2),
         totalSlippagePercent: totalSlippagePercent.toFixed(2),
         estimatedTimeSeconds: totalEstimatedTimeSeconds,
         steps,
       };
 
+      // Cache the aggregated quote for potential reuse
+      const cacheKey = this.generateQuoteCacheKey(path, sellAmountCryptoBaseUnit);
+      this.cacheService.set(cacheKey, route, this.quoteConfig.quoteExpiryMs);
+
+      const totalDuration = Date.now() - startTime;
+      this.logger.log(
+        `Quote aggregation complete in ${totalDuration}ms: ${steps.length} steps, ` +
+        `input: ${sellAmountCryptoBaseUnit}, output: ${finalOutputBaseUnit}, ` +
+        `total fees: $${totalFeesUsd.toFixed(2)}, total slippage: ${totalSlippagePercent.toFixed(2)}%`,
+      );
+
       return route;
     } catch (error) {
       this.logger.error('Failed to aggregate multi-step quote', error);
       return null;
     }
+  }
+
+  /**
+   * Generate a cache key for a quote based on path and amount.
+   *
+   * @param path The found path
+   * @param sellAmount The sell amount in base units
+   * @returns Cache key string
+   */
+  private generateQuoteCacheKey(path: FoundPath, sellAmount: string): string {
+    // Create a unique key based on the path signature and sell amount
+    const pathKey = path.assetIds.join(':');
+    const swappers = path.edges.map(e => e.swapperName).join(':');
+    return `quote:${pathKey}:${swappers}:${sellAmount}`;
+  }
+
+  /**
+   * Get the precision (decimal places) for an asset based on its ID.
+   *
+   * @param assetId The CAIP asset ID
+   * @returns Number of decimal places (defaults to 18 for EVM, varies by chain)
+   */
+  private getAssetPrecision(assetId: string): number {
+    // Default precisions based on asset type/chain
+    if (assetId.includes('/slip44:0')) {
+      // Bitcoin and Bitcoin-like
+      return 8;
+    }
+    if (assetId.includes('/slip44:501')) {
+      // Solana
+      return 9;
+    }
+    if (assetId.includes('/spl:')) {
+      // Solana SPL tokens - typically 6 for USDC/USDT, 9 for others
+      if (assetId.includes('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') ||
+          assetId.includes('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB')) {
+        return 6; // USDC and USDT on Solana
+      }
+      return 9;
+    }
+    if (assetId.includes('/erc20:')) {
+      // ERC20 tokens - check for known stablecoins with 6 decimals
+      const contractAddress = assetId.split('/erc20:')[1]?.toLowerCase();
+      if (contractAddress) {
+        // Common 6-decimal stablecoins
+        const sixDecimalTokens = [
+          '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC (Ethereum)
+          '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT (Ethereum)
+          '0xaf88d065e77c8cc2239327c5edb3a432268e5831', // USDC (Arbitrum)
+          '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9', // USDT (Arbitrum)
+          '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDC (Base)
+          '0x2791bca1f2de4661ed88a30c99a7a9449aa84174', // USDC (Polygon)
+          '0xddafbb505ad214d7b80b1f830fccc89b60fb7a83', // USDC (Gnosis)
+        ];
+        if (sixDecimalTokens.includes(contractAddress)) {
+          return 6;
+        }
+        // WBTC has 8 decimals
+        if (contractAddress === '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599') {
+          return 8;
+        }
+      }
+      return 18; // Default for most ERC20 tokens
+    }
+    if (assetId.includes('cosmos:')) {
+      // Cosmos chains typically use 6 decimals
+      return 6;
+    }
+    // Default to 18 for EVM native assets and unknown types
+    return 18;
+  }
+
+  /**
+   * Extract a human-readable symbol from a CAIP asset ID.
+   *
+   * @param assetId The CAIP asset ID
+   * @returns Symbol string
+   */
+  private getAssetSymbolFromId(assetId: string): string {
+    // Known asset mappings
+    const knownSymbols: Record<string, string> = {
+      'eip155:1/slip44:60': 'ETH',
+      'eip155:42161/slip44:60': 'ETH',
+      'eip155:8453/slip44:60': 'ETH',
+      'eip155:10/slip44:60': 'ETH',
+      'eip155:137/slip44:966': 'MATIC',
+      'eip155:56/slip44:60': 'BNB',
+      'eip155:43114/slip44:60': 'AVAX',
+      'bip122:000000000019d6689c085ae165831e93/slip44:0': 'BTC',
+      'bip122:12a765e31ffd4059bada1e25190f6e98/slip44:2': 'LTC',
+      'bip122:000000000000000000651ef99cb9fcbe/slip44:145': 'BCH',
+      'bip122:1a91e3dace36e2be3bf030a65679fe82/slip44:3': 'DOGE',
+      'cosmos:cosmoshub-4/slip44:118': 'ATOM',
+      'cosmos:thorchain-mainnet-v1/slip44:931': 'RUNE',
+      'cosmos:mayachain-mainnet-v1/slip44:931': 'CACAO',
+      'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501': 'SOL',
+      'polkadot:91b171bb158e2d3848fa23a9f1c25182/slip44:354': 'DOT',
+    };
+
+    if (knownSymbols[assetId]) {
+      return knownSymbols[assetId];
+    }
+
+    // Known ERC20/SPL token symbols by contract address
+    const knownTokenSymbols: Record<string, string> = {
+      '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'USDC',
+      '0xdac17f958d2ee523a2206206994597c13d831ec7': 'USDT',
+      '0x6b175474e89094c44da98b954eedeac495271d0f': 'DAI',
+      '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 'WBTC',
+      '0xaf88d065e77c8cc2239327c5edb3a432268e5831': 'USDC',
+      '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9': 'USDT',
+      '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': 'USDC',
+      '0x2791bca1f2de4661ed88a30c99a7a9449aa84174': 'USDC',
+      '0xddafbb505ad214d7b80b1f830fccc89b60fb7a83': 'USDC',
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 'USDC',
+      'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+      'So11111111111111111111111111111111111111112': 'WSOL',
+    };
+
+    // Try to extract contract address and look up
+    if (assetId.includes('/erc20:')) {
+      const contractAddress = assetId.split('/erc20:')[1]?.toLowerCase();
+      if (contractAddress && knownTokenSymbols[contractAddress]) {
+        return knownTokenSymbols[contractAddress];
+      }
+    }
+    if (assetId.includes('/spl:')) {
+      const mintAddress = assetId.split('/spl:')[1];
+      if (mintAddress && knownTokenSymbols[mintAddress]) {
+        return knownTokenSymbols[mintAddress];
+      }
+    }
+
+    // Fallback: extract the last part of the asset ID
+    const parts = assetId.split('/');
+    const lastPart = parts[parts.length - 1] || '';
+    if (lastPart.includes(':')) {
+      // e.g., "erc20:0x1234..." -> use truncated address
+      const value = lastPart.split(':')[1] || '';
+      if (value.startsWith('0x') && value.length > 10) {
+        return `${value.slice(0, 6)}...${value.slice(-4)}`;
+      }
+      return value.slice(0, 10);
+    }
+    return lastPart.slice(0, 10) || 'UNKNOWN';
   }
 
   /**
