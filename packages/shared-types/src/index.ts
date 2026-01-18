@@ -157,3 +157,21 @@ export interface MultiStepRoute {
   estimatedTimeSeconds: number;
   steps: RouteStep[];
 }
+
+export interface MultiStepQuoteRequest {
+  sellAssetId: string;
+  buyAssetId: string;
+  sellAmountCryptoBaseUnit: string;
+  userAddress: string;
+  receiveAddress: string;
+  maxHops?: number;
+  maxCrossChainHops?: number;
+}
+
+export interface MultiStepQuoteResponse {
+  success: boolean;
+  route: MultiStepRoute | null;
+  alternativeRoutes?: MultiStepRoute[];
+  expiresAt: string;
+  error?: string;
+}
