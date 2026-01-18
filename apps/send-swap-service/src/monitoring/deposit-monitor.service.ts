@@ -278,6 +278,16 @@ export class DepositMonitorService {
   /**
    * Update quote status after swap execution attempt.
    *
+   * This method handles the status transition after swap execution:
+   * - Success: Updates status to COMPLETED with execution tx hash
+   * - Failure: Updates status to FAILED with error logging
+   * - Pending: Keeps current status for retry in next monitoring cycle
+   *
+   * Status transitions handled:
+   * - DEPOSIT_RECEIVED → COMPLETED (successful swap)
+   * - DEPOSIT_RECEIVED → FAILED (swap error)
+   * - DEPOSIT_RECEIVED → DEPOSIT_RECEIVED (pending external check)
+   *
    * @param quoteId - The quote identifier
    * @param result - The execution result from SwapExecutorService
    */
@@ -286,11 +296,8 @@ export class DepositMonitorService {
     result: SwapExecutionResult,
   ): Promise<void> {
     if (result.success && result.executionTxHash) {
-      // Swap completed successfully
-      this.logger.log(
-        `Swap completed for quote ${quoteId}: ${result.executionTxHash}`,
-      );
-      await this.quotesService.markCompleted(quoteId, result.executionTxHash);
+      // Swap completed successfully - transition to COMPLETED status
+      await this.updateQuoteStatus(quoteId, 'COMPLETED', result.executionTxHash);
     } else if (result.metadata?.pendingExternalCheck) {
       // For DIRECT swappers, the swap may still be processing on their end
       // Keep quote in DEPOSIT_RECEIVED status for next monitoring cycle
@@ -305,11 +312,47 @@ export class DepositMonitorService {
       );
       // For POC, keep in DEPOSIT_RECEIVED for manual handling
     } else {
-      // Swap failed
+      // Swap failed - transition to FAILED status
+      await this.updateQuoteStatus(quoteId, 'FAILED', undefined, result.error);
+    }
+  }
+
+  /**
+   * Update quote status to COMPLETED or FAILED.
+   *
+   * Centralizes status update logic with consistent logging and error handling.
+   * Only handles terminal states (COMPLETED, FAILED) as these are final outcomes.
+   *
+   * @param quoteId - The quote identifier
+   * @param status - The target status ('COMPLETED' or 'FAILED')
+   * @param executionTxHash - Transaction hash for COMPLETED status
+   * @param errorMessage - Error message for FAILED status
+   */
+  private async updateQuoteStatus(
+    quoteId: string,
+    status: 'COMPLETED' | 'FAILED',
+    executionTxHash?: string,
+    errorMessage?: string,
+  ): Promise<void> {
+    try {
+      if (status === 'COMPLETED' && executionTxHash) {
+        this.logger.log(
+          `Quote ${quoteId} status → COMPLETED: ${executionTxHash}`,
+        );
+        await this.quotesService.markCompleted(quoteId, executionTxHash);
+      } else if (status === 'FAILED') {
+        this.logger.error(
+          `Quote ${quoteId} status → FAILED: ${errorMessage || 'Unknown error'}`,
+        );
+        await this.quotesService.markFailed(quoteId);
+      }
+    } catch (error) {
       this.logger.error(
-        `Swap failed for quote ${quoteId}: ${result.error}`,
+        `Failed to update quote ${quoteId} status to ${status}:`,
+        error,
       );
-      await this.quotesService.markFailed(quoteId);
+      // Rethrow to ensure caller is aware of the failure
+      throw error;
     }
   }
 
