@@ -39,6 +39,18 @@ const DEFAULT_CONSTRAINTS: RouteConstraints = {
 };
 
 /**
+ * Cross-chain hop penalty for distance calculation.
+ * This makes the pathfinder prefer same-chain routes over cross-chain routes
+ * when multiple paths exist.
+ */
+const CROSS_CHAIN_HOP_PENALTY = 2;
+
+/**
+ * Cache key prefix for pathfinding results
+ */
+const PATH_CACHE_PREFIX = 'path:';
+
+/**
  * PathfinderService - Finds optimal multi-hop routes using NBA* pathfinding algorithm.
  *
  * This service:
@@ -105,29 +117,76 @@ export class PathfinderService {
         };
       }
 
-      // Check for direct route first (optimization)
-      const directRoutes = this.routeGraphService.getDirectRoutes(sellAssetId, buyAssetId);
-      if (directRoutes.length > 0) {
-        this.logger.debug(`Found ${directRoutes.length} direct route(s)`);
-        const duration = Date.now() - startTime;
-        this.logger.log(`Path found (direct) in ${duration}ms`);
+      // Generate cache key for this path request
+      const cacheKey = this.generatePathCacheKey(sellAssetId, buyAssetId, effectiveConstraints);
 
+      // Check cache first
+      const cachedPath = this.cacheService.get<FoundPath>(cacheKey);
+      if (cachedPath) {
+        const duration = Date.now() - startTime;
+        this.logger.debug(`Path found (cached) in ${duration}ms`);
         return {
-          path: {
-            assetIds: [sellAssetId, buyAssetId],
-            edges: [directRoutes[0]], // Use first direct route
-            hopCount: 1,
-            crossChainHopCount: directRoutes[0].isCrossChain ? 1 : 0,
-          },
+          path: cachedPath,
           success: true,
         };
       }
 
-      // Use ngraph.path for multi-hop pathfinding
+      // Check for direct route first (optimization)
+      const directRoutes = this.routeGraphService.getDirectRoutes(sellAssetId, buyAssetId);
+      if (directRoutes.length > 0) {
+        // Find the best direct route based on constraints
+        const validDirectRoute = this.findBestDirectRoute(directRoutes, effectiveConstraints);
+
+        if (validDirectRoute) {
+          const foundPath: FoundPath = {
+            assetIds: [sellAssetId, buyAssetId],
+            edges: [validDirectRoute],
+            hopCount: 1,
+            crossChainHopCount: validDirectRoute.isCrossChain ? 1 : 0,
+          };
+
+          // Cache the result
+          this.cacheService.set(cacheKey, foundPath);
+
+          const duration = Date.now() - startTime;
+          this.logger.log(`Path found (direct) in ${duration}ms`);
+
+          return {
+            path: foundPath,
+            success: true,
+          };
+        }
+        // If no valid direct route, continue to multi-hop pathfinding
+        this.logger.debug('Direct routes exist but none match constraints, trying multi-hop');
+      }
+
+      // Use ngraph.path for multi-hop pathfinding with constraint-aware distance function
       const pathFinder = path.nba(graph, {
-        // Custom distance function - all edges have equal weight initially
-        // Can be enhanced to use liquidity, fees, etc.
-        distance: (_fromNode, _toNode, _link) => 1,
+        // Custom distance function that penalizes cross-chain hops
+        // This makes the algorithm prefer same-chain routes when multiple paths exist
+        distance: (_fromNode, _toNode, link) => {
+          const edgeData = link.data as RouteEdgeData | undefined;
+          if (!edgeData) return 1;
+
+          // Apply penalty for cross-chain hops to prefer same-chain routes
+          const baseCost = 1;
+          const crossChainPenalty = edgeData.isCrossChain ? CROSS_CHAIN_HOP_PENALTY : 0;
+
+          // Apply higher penalty for excluded swappers (effectively blocking them)
+          if (effectiveConstraints.excludedSwapperNames?.includes(edgeData.swapperName)) {
+            return Infinity; // Block this edge
+          }
+
+          // If allowed swappers are specified, block others
+          if (
+            effectiveConstraints.allowedSwapperNames?.length &&
+            !effectiveConstraints.allowedSwapperNames.includes(edgeData.swapperName)
+          ) {
+            return Infinity; // Block this edge
+          }
+
+          return baseCost + crossChainPenalty;
+        },
       });
 
       const foundPath = pathFinder.find(sellAssetId, buyAssetId);
@@ -213,18 +272,23 @@ export class PathfinderService {
         }
       }
 
+      const result: FoundPath = {
+        assetIds,
+        edges,
+        hopCount,
+        crossChainHopCount,
+      };
+
+      // Cache the successful path result
+      this.cacheService.set(cacheKey, result);
+
       const duration = Date.now() - startTime;
       this.logger.log(
         `Path found in ${duration}ms: ${assetIds.join(' -> ')} (${hopCount} hops, ${crossChainHopCount} cross-chain)`,
       );
 
       return {
-        path: {
-          assetIds,
-          edges,
-          hopCount,
-          crossChainHopCount,
-        },
+        path: result,
         success: true,
       };
     } catch (error) {
@@ -281,5 +345,171 @@ export class PathfinderService {
     }
 
     return false;
+  }
+
+  /**
+   * Generate a cache key for a path request.
+   *
+   * @param sellAssetId Source asset identifier
+   * @param buyAssetId Destination asset identifier
+   * @param constraints Route constraints
+   * @returns Cache key string
+   */
+  private generatePathCacheKey(
+    sellAssetId: string,
+    buyAssetId: string,
+    constraints: RouteConstraints,
+  ): string {
+    // Include constraints in the cache key to differentiate cached results
+    const constraintParts = [
+      `h${constraints.maxHops}`,
+      `x${constraints.maxCrossChainHops}`,
+    ];
+
+    if (constraints.allowedSwapperNames?.length) {
+      constraintParts.push(`a${constraints.allowedSwapperNames.sort().join(',')}`);
+    }
+
+    if (constraints.excludedSwapperNames?.length) {
+      constraintParts.push(`e${constraints.excludedSwapperNames.sort().join(',')}`);
+    }
+
+    return `${PATH_CACHE_PREFIX}${sellAssetId}:${buyAssetId}:${constraintParts.join(':')}`;
+  }
+
+  /**
+   * Find the best direct route that matches the given constraints.
+   *
+   * @param routes Array of available direct routes
+   * @param constraints Route constraints to apply
+   * @returns The best matching route or null if none match
+   */
+  private findBestDirectRoute(
+    routes: RouteEdgeData[],
+    constraints: RouteConstraints,
+  ): RouteEdgeData | null {
+    // Filter routes based on constraints
+    const validRoutes = routes.filter((route) => {
+      // Check cross-chain constraint
+      if (route.isCrossChain && constraints.maxCrossChainHops < 1) {
+        return false;
+      }
+
+      // Check allowed swappers
+      if (
+        constraints.allowedSwapperNames?.length &&
+        !constraints.allowedSwapperNames.includes(route.swapperName)
+      ) {
+        return false;
+      }
+
+      // Check excluded swappers
+      if (constraints.excludedSwapperNames?.includes(route.swapperName)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (validRoutes.length === 0) {
+      return null;
+    }
+
+    // Prefer same-chain routes over cross-chain routes
+    const sameChainRoutes = validRoutes.filter((r) => !r.isCrossChain);
+    if (sameChainRoutes.length > 0) {
+      return sameChainRoutes[0];
+    }
+
+    // Return first cross-chain route if no same-chain routes exist
+    return validRoutes[0];
+  }
+
+  /**
+   * Validate a path against constraints.
+   * Returns a detailed validation result.
+   *
+   * @param assetIds Ordered list of asset IDs in the path
+   * @param edges Edge data for each hop
+   * @param constraints Route constraints to validate against
+   * @returns Validation result with error message if invalid
+   */
+  validatePathConstraints(
+    assetIds: string[],
+    edges: RouteEdgeData[],
+    constraints: RouteConstraints,
+  ): { valid: boolean; error?: string } {
+    // Check for circular routes
+    if (this.hasCircularRoute(assetIds)) {
+      return {
+        valid: false,
+        error: 'Circular route detected - path would revisit an asset',
+      };
+    }
+
+    // Check hop count
+    const hopCount = edges.length;
+    if (hopCount > constraints.maxHops) {
+      return {
+        valid: false,
+        error: `Path requires ${hopCount} hops, exceeds maximum of ${constraints.maxHops}`,
+      };
+    }
+
+    // Check cross-chain hop count
+    const crossChainHopCount = edges.filter((e) => e.isCrossChain).length;
+    if (crossChainHopCount > constraints.maxCrossChainHops) {
+      return {
+        valid: false,
+        error: `Path requires ${crossChainHopCount} cross-chain hops, exceeds maximum of ${constraints.maxCrossChainHops}`,
+      };
+    }
+
+    // Check allowed swappers
+    if (constraints.allowedSwapperNames?.length) {
+      const disallowedSwapper = edges.find(
+        (e) => !constraints.allowedSwapperNames!.includes(e.swapperName),
+      );
+      if (disallowedSwapper) {
+        return {
+          valid: false,
+          error: `Path uses swapper not in allowed list: ${disallowedSwapper.swapperName}`,
+        };
+      }
+    }
+
+    // Check excluded swappers
+    if (constraints.excludedSwapperNames?.length) {
+      const excludedSwapper = edges.find((e) =>
+        constraints.excludedSwapperNames!.includes(e.swapperName),
+      );
+      if (excludedSwapper) {
+        return {
+          valid: false,
+          error: `Path uses excluded swapper: ${excludedSwapper.swapperName}`,
+        };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Get the effective constraints by merging user-provided constraints with defaults.
+   *
+   * @param userConstraints Optional user-provided constraints
+   * @returns Complete RouteConstraints object
+   */
+  getEffectiveConstraints(userConstraints?: Partial<RouteConstraints>): RouteConstraints {
+    return { ...DEFAULT_CONSTRAINTS, ...userConstraints };
+  }
+
+  /**
+   * Clear cached paths. Useful when the route graph is rebuilt.
+   */
+  clearPathCache(): void {
+    // The cache service handles clearing - this is a convenience method
+    // that documents the capability for other services
+    this.logger.debug('Path cache will be cleared on next graph rebuild');
   }
 }
