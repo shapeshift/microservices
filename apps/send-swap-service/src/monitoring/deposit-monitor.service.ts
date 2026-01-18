@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { QuotesService } from '../quotes/quotes.service';
+import { SwapExecutorService, SwapExecutionResult } from '../execution/swap-executor.service';
 import { Quote, QuoteStatus } from '@prisma/client';
 import { firstValueFrom } from 'rxjs';
 
@@ -69,6 +70,7 @@ export class DepositMonitorService {
     private quotesService: QuotesService,
     private configService: ConfigService,
     private httpService: HttpService,
+    private swapExecutor: SwapExecutorService,
   ) {}
 
   /**
@@ -102,6 +104,11 @@ export class DepositMonitorService {
           // Only check ACTIVE quotes for new deposits
           if (quote.status === QuoteStatus.ACTIVE) {
             await this.checkDepositForQuote(quote);
+          }
+          // For DEPOSIT_RECEIVED quotes, check if swap execution is complete
+          // This is mainly for DIRECT swappers where execution happens externally
+          else if (quote.status === QuoteStatus.DEPOSIT_RECEIVED) {
+            await this.checkPendingSwapExecution(quote);
           }
         } catch (error) {
           this.logger.error(
@@ -195,6 +202,114 @@ export class DepositMonitorService {
       );
 
       await this.quotesService.markDepositReceived(quoteId, depositResult.txHash);
+
+      // Execute the swap
+      await this.executeSwapForQuote(lockedQuote, depositResult.txHash);
+    }
+  }
+
+  /**
+   * Execute swap for a quote after deposit is confirmed.
+   *
+   * Routes to the appropriate execution flow based on swapper type:
+   * - DIRECT: Swapper handles execution, we monitor for completion
+   * - SERVICE_WALLET: We initiate and broadcast the swap transaction
+   *
+   * @param quote - The quote with confirmed deposit
+   * @param depositTxHash - The deposit transaction hash
+   */
+  private async executeSwapForQuote(quote: Quote, depositTxHash: string): Promise<void> {
+    const { quoteId } = quote;
+
+    try {
+      this.logger.log(`Initiating swap execution for quote ${quoteId}`);
+
+      // Execute the swap via appropriate swapper flow
+      const executionResult = await this.swapExecutor.executeSwap(quote);
+
+      // Update quote status based on execution result
+      await this.updateQuoteAfterExecution(quoteId, executionResult);
+    } catch (error) {
+      this.logger.error(
+        `Swap execution failed for quote ${quoteId}:`,
+        error,
+      );
+
+      // Mark quote as failed
+      await this.quotesService.markFailed(quoteId);
+    }
+  }
+
+  /**
+   * Check pending swap execution for DEPOSIT_RECEIVED quotes.
+   *
+   * For DIRECT swappers, the swap execution happens on the swapper's infrastructure.
+   * This method re-checks the swap status to see if it has completed.
+   *
+   * @param quote - The quote with DEPOSIT_RECEIVED status
+   */
+  private async checkPendingSwapExecution(quote: Quote): Promise<void> {
+    const { quoteId } = quote;
+
+    this.logger.debug(`Checking pending swap execution for quote ${quoteId}`);
+
+    try {
+      // Check if swap is still pending
+      const isPending = await this.swapExecutor.isSwapPending(quote);
+
+      if (!isPending) {
+        // Swap already completed or failed
+        return;
+      }
+
+      // Re-execute/check the swap (for DIRECT swappers, this checks status)
+      const executionResult = await this.swapExecutor.executeSwap(quote);
+
+      // Update quote status based on result
+      await this.updateQuoteAfterExecution(quoteId, executionResult);
+    } catch (error) {
+      this.logger.error(
+        `Failed to check pending swap execution for quote ${quoteId}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Update quote status after swap execution attempt.
+   *
+   * @param quoteId - The quote identifier
+   * @param result - The execution result from SwapExecutorService
+   */
+  private async updateQuoteAfterExecution(
+    quoteId: string,
+    result: SwapExecutionResult,
+  ): Promise<void> {
+    if (result.success && result.executionTxHash) {
+      // Swap completed successfully
+      this.logger.log(
+        `Swap completed for quote ${quoteId}: ${result.executionTxHash}`,
+      );
+      await this.quotesService.markCompleted(quoteId, result.executionTxHash);
+    } else if (result.metadata?.pendingExternalCheck) {
+      // For DIRECT swappers, the swap may still be processing on their end
+      // Keep quote in DEPOSIT_RECEIVED status for next monitoring cycle
+      this.logger.log(
+        `Swap pending external check for quote ${quoteId} (${result.swapperName})`,
+      );
+      // Quote remains in DEPOSIT_RECEIVED - will be checked again next cycle
+    } else if (result.metadata?.needsImplementation) {
+      // SERVICE_WALLET swapper not yet implemented
+      this.logger.warn(
+        `Swap execution not implemented for ${result.swapperName}, quote ${quoteId}`,
+      );
+      // For POC, keep in DEPOSIT_RECEIVED for manual handling
+    } else {
+      // Swap failed
+      this.logger.error(
+        `Swap failed for quote ${quoteId}: ${result.error}`,
+      );
+      await this.quotesService.markFailed(quoteId);
     }
   }
 
