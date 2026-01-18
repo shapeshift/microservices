@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "001-i-would-like-to-do-a-poc",
+  "state": "building",
+  "subtasks": {
+    "completed": 1,
+    "total": 29,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "Infrastructure Setup",
+    "id": null,
+    "total": 5
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 2,
+    "started_at": "2026-01-18T02:37:10.520239"
+  },
+  "last_update": "2026-01-18T02:38:14.445626"
+}

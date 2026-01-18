@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+model Quote {
+  id                             String      @id @default(cuid())
+  quoteId                        String      @unique
+  status                         QuoteStatus @default(ACTIVE)
+
+  // Assets
+  sellAsset                      Json
+  buyAsset                       Json
+  sellAmountCryptoBaseUnit       String
+  expectedBuyAmountCryptoBaseUnit String
+
+  // Addresses
+  depositAddress                 String      // Service wallet address for deposits
+  receiveAddress                 String      // User's destination address
+
+  // Swapper info
+  swapperName                    String
+  swapperType                    SwapperType // DIRECT or SERVICE_WALLET
+
+  // Gas overhead (for service-wallet swappers)
+  gasOverheadBaseUnit            String?
+
+  // Timing
+  expiresAt                      DateTime
+  createdAt                      DateTime    @default(now())
+  updatedAt                      DateTime    @updatedAt
+
+  // Execution
+  depositTxHash                  String?
+  executionTxHash                String?
+  executedAt                     DateTime?
+
+  @@index([depositAddress])
+  @@index([quoteId])
+  @@index([status])
+  @@map("quotes")
+}
+
+enum QuoteStatus {
+  ACTIVE
+  EXPIRED
+  DEPOSIT_RECEIVED
+  EXECUTING
+  COMPLETED
+  FAILED
+}
+
+enum SwapperType {
+  DIRECT
+  SERVICE_WALLET
+}
