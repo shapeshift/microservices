@@ -19,6 +19,8 @@
     "@prisma/client": "6.13.0",
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
+    "@shapeshiftoss/hdwallet-core": "^1.62.21",
+    "@shapeshiftoss/hdwallet-native": "^1.62.21",
     "axios": "^1.6.2",
     "prisma": "6.13.0"
   }
