@@ -24,6 +24,15 @@
 # 10. "All wallets initialized successfully"
 # 11. "Send-swap service is running on: http://localhost:3004"
 #
+# Expected Cron Job Logs (every 30 seconds):
+# ==========================================
+# - "[DepositMonitorService] Starting deposit check..."
+# - "[DepositMonitorService] No quotes to monitor" (if no active quotes)
+#   OR "[DepositMonitorService] Found X quotes to monitor for deposits"
+# - "[DepositMonitorService] Deposit check completed"
+#
+# These logs confirm the deposit monitoring cron job is running correctly.
+#
 # Verification Checklist:
 # ======================
 # [ ] Service starts without errors
@@ -32,6 +41,8 @@
 # [ ] ATOM address generated (cosmos1 prefix)
 # [ ] Solana address generated (base58 encoded)
 # [ ] Health endpoint responds: curl http://localhost:3004/health
+# [ ] Cron job logs appear every 30 seconds (Starting deposit check...)
+# [ ] Quote monitoring status logged (No quotes or Found X quotes)
 #
 
 set -e
@@ -71,6 +82,11 @@ echo "  - 'BTC deposit address:'"
 echo "  - 'ATOM deposit address:'"
 echo "  - 'Solana deposit address:'"
 echo "  - 'All wallets initialized successfully'"
+echo ""
+echo "After ~30 seconds, look for cron job logs:"
+echo "  - 'Starting deposit check...'"
+echo "  - 'No quotes to monitor' or 'Found X quotes to monitor'"
+echo "  - 'Deposit check completed'"
 echo ""
 echo "=========================================="
 echo ""
