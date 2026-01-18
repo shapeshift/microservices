@@ -512,4 +512,260 @@ export class PathfinderService {
     // that documents the capability for other services
     this.logger.debug('Path cache will be cleared on next graph rebuild');
   }
+
+  /**
+   * Find alternative routes between two assets.
+   *
+   * Uses an iterative approach to find diverse alternative paths by temporarily
+   * blocking edges from previously found paths and re-running pathfinding.
+   *
+   * @param sellAssetId Source asset identifier (CAIP format)
+   * @param buyAssetId Destination asset identifier (CAIP format)
+   * @param constraints Optional route constraints
+   * @param maxAlternatives Maximum number of alternatives to find (default: 3)
+   * @returns Array of alternative paths (excluding the primary path)
+   */
+  async findAlternativeRoutes(
+    sellAssetId: string,
+    buyAssetId: string,
+    constraints?: Partial<RouteConstraints>,
+    maxAlternatives: number = 3,
+  ): Promise<FoundPath[]> {
+    const startTime = Date.now();
+    const effectiveConstraints = { ...DEFAULT_CONSTRAINTS, ...constraints };
+
+    this.logger.log(
+      `Finding alternative routes: ${sellAssetId} -> ${buyAssetId} (max: ${maxAlternatives})`,
+    );
+
+    // First, find the primary path
+    const primaryResult = await this.findPath(sellAssetId, buyAssetId, constraints);
+
+    if (!primaryResult.success || !primaryResult.path) {
+      this.logger.debug('No primary path found, no alternatives possible');
+      return [];
+    }
+
+    const alternatives: FoundPath[] = [];
+    const seenPathSignatures = new Set<string>();
+
+    // Create a signature for the primary path to avoid duplicates
+    seenPathSignatures.add(this.getPathSignature(primaryResult.path));
+
+    // Collect edges to block from the primary path
+    const edgesToBlock: Array<{ from: string; to: string; swapperName: string }> = [];
+    for (let i = 0; i < primaryResult.path.edges.length; i++) {
+      edgesToBlock.push({
+        from: primaryResult.path.assetIds[i],
+        to: primaryResult.path.assetIds[i + 1],
+        swapperName: primaryResult.path.edges[i].swapperName,
+      });
+    }
+
+    // Try to find alternatives by blocking each edge from the primary path
+    for (const edgeToBlock of edgesToBlock) {
+      if (alternatives.length >= maxAlternatives) {
+        break;
+      }
+
+      const altPath = await this.findPathWithBlockedEdges(
+        sellAssetId,
+        buyAssetId,
+        effectiveConstraints,
+        [edgeToBlock],
+      );
+
+      if (altPath) {
+        const signature = this.getPathSignature(altPath);
+        if (!seenPathSignatures.has(signature)) {
+          seenPathSignatures.add(signature);
+          alternatives.push(altPath);
+          this.logger.debug(
+            `Found alternative ${alternatives.length}: ${altPath.assetIds.join(' -> ')}`,
+          );
+        }
+      }
+    }
+
+    // If we still need more alternatives, try blocking combinations of edges
+    if (alternatives.length < maxAlternatives && alternatives.length > 0) {
+      // Block edges from found alternatives to discover more diverse routes
+      for (const altPath of [...alternatives]) {
+        if (alternatives.length >= maxAlternatives) {
+          break;
+        }
+
+        const altEdgesToBlock: Array<{ from: string; to: string; swapperName: string }> = [];
+        for (let i = 0; i < altPath.edges.length; i++) {
+          altEdgesToBlock.push({
+            from: altPath.assetIds[i],
+            to: altPath.assetIds[i + 1],
+            swapperName: altPath.edges[i].swapperName,
+          });
+        }
+
+        for (const edgeToBlock of altEdgesToBlock) {
+          if (alternatives.length >= maxAlternatives) {
+            break;
+          }
+
+          const newAltPath = await this.findPathWithBlockedEdges(
+            sellAssetId,
+            buyAssetId,
+            effectiveConstraints,
+            [edgeToBlock],
+          );
+
+          if (newAltPath) {
+            const signature = this.getPathSignature(newAltPath);
+            if (!seenPathSignatures.has(signature)) {
+              seenPathSignatures.add(signature);
+              alternatives.push(newAltPath);
+              this.logger.debug(
+                `Found alternative ${alternatives.length}: ${newAltPath.assetIds.join(' -> ')}`,
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // Sort alternatives by preference: fewer hops first, then fewer cross-chain hops
+    alternatives.sort((a, b) => {
+      if (a.hopCount !== b.hopCount) {
+        return a.hopCount - b.hopCount;
+      }
+      return a.crossChainHopCount - b.crossChainHopCount;
+    });
+
+    const duration = Date.now() - startTime;
+    this.logger.log(
+      `Found ${alternatives.length} alternative routes in ${duration}ms`,
+    );
+
+    return alternatives.slice(0, maxAlternatives);
+  }
+
+  /**
+   * Find a path with specific edges blocked.
+   *
+   * @param sellAssetId Source asset identifier
+   * @param buyAssetId Destination asset identifier
+   * @param constraints Route constraints
+   * @param blockedEdges Edges to block during pathfinding
+   * @returns Found path or null if no path exists
+   */
+  private async findPathWithBlockedEdges(
+    sellAssetId: string,
+    buyAssetId: string,
+    constraints: RouteConstraints,
+    blockedEdges: Array<{ from: string; to: string; swapperName: string }>,
+  ): Promise<FoundPath | null> {
+    const graph = this.routeGraphService.getGraph();
+
+    // Create a set of blocked edge keys for fast lookup
+    const blockedEdgeKeys = new Set(
+      blockedEdges.map((e) => `${e.from}:${e.to}:${e.swapperName}`),
+    );
+
+    const pathFinder = path.nba(graph, {
+      distance: (_fromNode, _toNode, link) => {
+        const edgeData = link.data as RouteEdgeData | undefined;
+        if (!edgeData) return 1;
+
+        // Block the specified edges
+        const edgeKey = `${link.fromId}:${link.toId}:${edgeData.swapperName}`;
+        if (blockedEdgeKeys.has(edgeKey)) {
+          return Infinity;
+        }
+
+        // Apply penalty for cross-chain hops
+        const baseCost = 1;
+        const crossChainPenalty = edgeData.isCrossChain ? CROSS_CHAIN_HOP_PENALTY : 0;
+
+        // Apply higher penalty for excluded swappers
+        if (constraints.excludedSwapperNames?.includes(edgeData.swapperName)) {
+          return Infinity;
+        }
+
+        // If allowed swappers are specified, block others
+        if (
+          constraints.allowedSwapperNames?.length &&
+          !constraints.allowedSwapperNames.includes(edgeData.swapperName)
+        ) {
+          return Infinity;
+        }
+
+        return baseCost + crossChainPenalty;
+      },
+    });
+
+    const foundPath = pathFinder.find(sellAssetId, buyAssetId);
+
+    if (!foundPath || foundPath.length === 0) {
+      return null;
+    }
+
+    // Convert ngraph path to our format
+    const assetIds = foundPath.map((node) => node.id as string);
+    const edges = this.extractEdgesFromPath(assetIds);
+
+    // Check for circular routes
+    if (this.hasCircularRoute(assetIds)) {
+      return null;
+    }
+
+    // Calculate hop counts
+    const hopCount = edges.length;
+    const crossChainHopCount = edges.filter((e) => e.isCrossChain).length;
+
+    // Validate against constraints
+    if (hopCount > constraints.maxHops) {
+      return null;
+    }
+
+    if (crossChainHopCount > constraints.maxCrossChainHops) {
+      return null;
+    }
+
+    // Check allowed/excluded swappers
+    if (constraints.allowedSwapperNames?.length) {
+      const disallowedSwapper = edges.find(
+        (e) => !constraints.allowedSwapperNames!.includes(e.swapperName),
+      );
+      if (disallowedSwapper) {
+        return null;
+      }
+    }
+
+    if (constraints.excludedSwapperNames?.length) {
+      const excludedSwapper = edges.find((e) =>
+        constraints.excludedSwapperNames!.includes(e.swapperName),
+      );
+      if (excludedSwapper) {
+        return null;
+      }
+    }
+
+    return {
+      assetIds,
+      edges,
+      hopCount,
+      crossChainHopCount,
+    };
+  }
+
+  /**
+   * Generate a unique signature for a path.
+   * Used to detect duplicate paths when finding alternatives.
+   *
+   * @param foundPath The path to generate a signature for
+   * @returns A string signature representing the path
+   */
+  private getPathSignature(foundPath: FoundPath): string {
+    // Create a signature based on asset IDs and swapper names
+    // This ensures two paths with the same assets but different swappers are treated as different
+    const edgeSignatures = foundPath.edges.map((e) => e.swapperName);
+    return `${foundPath.assetIds.join('->')}_${edgeSignatures.join(',')}`;
+  }
 }
