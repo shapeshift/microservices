@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   Keyring,
   bip32ToAddressNList,
-  slip44ByCoin,
   ETHGetAddress,
   BTCGetAddress,
   BTCInputScriptType,
@@ -172,15 +171,19 @@ export class WalletManagerService implements OnModuleInit {
       await nativeAdapter.initialize();
 
       // Create and load the wallet with the mnemonic
-      const wallet = await nativeAdapter.pairDevice();
+      // Generate a unique device ID for this wallet instance
+      const deviceId = 'shapeshift-send-swap-service';
+      const wallet = await nativeAdapter.pairDevice(deviceId);
       if (!wallet) {
         throw new Error('Failed to pair native wallet device');
       }
 
       // Load the mnemonic into the wallet
+      // Note: passphrase parameter indicates whether to use a passphrase, not the passphrase itself
       await wallet.loadDevice({
         mnemonic,
-        passphrase,
+        passphrase: passphrase.length > 0, // true if passphrase is provided
+        label: 'ShapeShift Send Swap Service',
       });
 
       this.wallet = wallet;
@@ -230,7 +233,7 @@ export class WalletManagerService implements OnModuleInit {
    * @returns The derivation path string
    */
   private getEvmDerivationPath(accountIndex = 0, addressIndex = 0): string {
-    const coinType = slip44ByCoin('ETH'); // 60 for all EVM chains
+    const coinType = 60; // SLIP44 coin type for Ethereum (used by all EVM chains)
     return `m/44'/${coinType}'/${accountIndex}'/0/${addressIndex}`;
   }
 
@@ -348,7 +351,14 @@ export class WalletManagerService implements OnModuleInit {
     addressIndex = 0,
   ): string {
     const config = UTXO_CHAIN_CONFIG[chain];
-    const coinType = slip44ByCoin(config.coinName);
+    // SLIP44 coin types: BTC=0, LTC=2, DOGE=3, BCH=145
+    const coinTypes: Record<UtxoChain, number> = {
+      BTC: 0,
+      LTC: 2,
+      DOGE: 3,
+      BCH: 145,
+    };
+    const coinType = coinTypes[chain];
     return `m/${config.purpose}'/${coinType}'/${accountIndex}'/0/${addressIndex}`;
   }
 
@@ -456,8 +466,7 @@ export class WalletManagerService implements OnModuleInit {
     accountIndex = 0,
     addressIndex = 0,
   ): string {
-    const config = COSMOS_CHAIN_CONFIG[chain];
-    const coinType = slip44ByCoin(config.coinName);
+    const coinType = 118; // SLIP44 coin type for Cosmos (used by both ATOM and OSMO)
     return `m/44'/${coinType}'/${accountIndex}'/0/${addressIndex}`;
   }
 
@@ -556,7 +565,7 @@ export class WalletManagerService implements OnModuleInit {
    * @returns The derivation path string
    */
   private getSolanaDerivationPath(accountIndex = 0): string {
-    const coinType = slip44ByCoin(SOLANA_COIN_NAME); // 501 for Solana
+    const coinType = 501; // SLIP44 coin type for Solana
     return `m/44'/${coinType}'/${accountIndex}'/0'`;
   }
 

@@ -26,7 +26,8 @@
     "@shapeshiftoss/hdwallet-core": "^1.62.21",
     "@shapeshiftoss/hdwallet-native": "^1.62.21",
     "axios": "^1.6.2",
-    "prisma": "6.13.0"
+    "prisma": "6.13.0",
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
