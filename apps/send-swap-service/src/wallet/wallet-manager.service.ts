@@ -8,6 +8,7 @@ import {
   BTCGetAddress,
   BTCInputScriptType,
   CosmosGetAddress,
+  SolanaGetAddress,
 } from '@shapeshiftoss/hdwallet-core';
 import { NativeHDWallet, NativeAdapter } from '@shapeshiftoss/hdwallet-native';
 
@@ -108,6 +109,23 @@ const COSMOS_CHAIN_CONFIG: Record<CosmosChain, { coinName: string }> = {
     coinName: 'Osmo', // Osmosis also uses SLIP44 coin type 118
   },
 };
+
+/**
+ * Solana address result with metadata
+ */
+export interface SolanaAddressResult {
+  address: string;
+  derivationPath: string;
+  accountIndex: number;
+}
+
+/**
+ * Solana uses SLIP44 coin type 501.
+ * Standard derivation path: m/44'/501'/account'/0'
+ * Note: Solana uses a slightly different derivation scheme than most BIP44 chains,
+ * with the hardened address index at the end.
+ */
+const SOLANA_COIN_NAME = 'Solana'; // Maps to SLIP44 coin type 501
 
 /**
  * WalletManagerService manages the HD wallet for all supported chains.
@@ -526,6 +544,83 @@ export class WalletManagerService implements OnModuleInit {
    */
   async getCosmosDepositAddress(chain: CosmosChain, quoteIndex: number): Promise<string> {
     const result = await this.getCosmosAddress(chain, 0, quoteIndex);
+    return result.address;
+  }
+
+  /**
+   * Get the BIP44 derivation path for Solana.
+   * Standard path format: m/44'/501'/account'/0'
+   * Solana uses SLIP44 coin type 501 with a hardened address index.
+   *
+   * @param accountIndex - Account index (default: 0)
+   * @returns The derivation path string
+   */
+  private getSolanaDerivationPath(accountIndex = 0): string {
+    const coinType = slip44ByCoin(SOLANA_COIN_NAME); // 501 for Solana
+    return `m/44'/${coinType}'/${accountIndex}'/0'`;
+  }
+
+  /**
+   * Generate a Solana wallet address for deposit purposes.
+   * Solana addresses are base58-encoded public keys derived using Ed25519.
+   *
+   * @param accountIndex - Account index for address derivation (default: 0)
+   * @returns The generated address with metadata
+   * @throws Error if wallet is not initialized
+   */
+  async getSolanaAddress(accountIndex = 0): Promise<SolanaAddressResult> {
+    const wallet = this.getWallet();
+    const derivationPath = this.getSolanaDerivationPath(accountIndex);
+
+    this.logger.debug(`Generating Solana address at path: ${derivationPath}`);
+
+    const addressNList = bip32ToAddressNList(derivationPath);
+
+    const params: SolanaGetAddress = {
+      addressNList,
+      showDisplay: false, // Don't require user confirmation (server-side)
+    };
+
+    const address = await wallet.solanaGetAddress(params);
+
+    if (!address) {
+      throw new Error(`Failed to generate Solana address at path ${derivationPath}`);
+    }
+
+    return {
+      address,
+      derivationPath,
+      accountIndex,
+    };
+  }
+
+  /**
+   * Generate a Solana deposit address.
+   * Useful for initializing deposit address at startup.
+   *
+   * @param accountIndex - Account index for address derivation (default: 0)
+   * @returns The generated Solana address with metadata
+   */
+  async getSolanaDepositAddressInfo(accountIndex = 0): Promise<SolanaAddressResult> {
+    try {
+      const result = await this.getSolanaAddress(accountIndex);
+      this.logger.log(`Generated Solana deposit address: ${result.address}`);
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to generate Solana address:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Solana address for a specific quote.
+   * Uses accountIndex to generate unique deposit addresses per quote.
+   *
+   * @param quoteIndex - Index to derive unique address for this quote
+   * @returns The generated address
+   */
+  async getSolanaDepositAddress(quoteIndex: number): Promise<string> {
+    const result = await this.getSolanaAddress(quoteIndex);
     return result.address;
   }
 }
