@@ -7,6 +7,7 @@ import {
   ETHGetAddress,
   BTCGetAddress,
   BTCInputScriptType,
+  CosmosGetAddress,
 } from '@shapeshiftoss/hdwallet-core';
 import { NativeHDWallet, NativeAdapter } from '@shapeshiftoss/hdwallet-native';
 
@@ -72,6 +73,39 @@ const UTXO_CHAIN_CONFIG: Record<
     coinName: 'BitcoinCash',
     scriptType: BTCInputScriptType.SpendAddress, // Legacy P2PKH
     purpose: 44, // BIP44 for legacy
+  },
+};
+
+/**
+ * Supported Cosmos-SDK chains and their identifiers.
+ * Each Cosmos-SDK chain has its own address prefix (bech32) but shares
+ * the same SLIP44 coin type (118) for most chains.
+ */
+export type CosmosChain = 'ATOM' | 'OSMO';
+
+/**
+ * Cosmos-SDK address result with metadata
+ */
+export interface CosmosAddressResult {
+  address: string;
+  chain: CosmosChain;
+  derivationPath: string;
+  accountIndex: number;
+}
+
+/**
+ * Cosmos-SDK chain configuration including coin name for SLIP44 lookup.
+ * - ATOM: Cosmos Hub with 'cosmos' bech32 prefix, SLIP44 coin type 118
+ * - OSMO: Osmosis with 'osmo' bech32 prefix, also uses SLIP44 coin type 118
+ *
+ * Both chains use BIP44 standard derivation: m/44'/118'/account'/0/addressIndex
+ */
+const COSMOS_CHAIN_CONFIG: Record<CosmosChain, { coinName: string }> = {
+  ATOM: {
+    coinName: 'Atom', // Maps to SLIP44 coin type 118
+  },
+  OSMO: {
+    coinName: 'Osmo', // Osmosis also uses SLIP44 coin type 118
   },
 };
 
@@ -386,6 +420,112 @@ export class WalletManagerService implements OnModuleInit {
    */
   async getUtxoDepositAddress(chain: UtxoChain, quoteIndex: number): Promise<string> {
     const result = await this.getUtxoAddress(chain, 0, quoteIndex);
+    return result.address;
+  }
+
+  /**
+   * Get the BIP44 derivation path for Cosmos-SDK chains.
+   * Standard path format: m/44'/118'/account'/0/addressIndex
+   * Both ATOM and OSMO use coin type 118 (Cosmos).
+   *
+   * @param chain - The Cosmos-SDK chain
+   * @param accountIndex - Account index (default: 0)
+   * @param addressIndex - Address index within the account (default: 0)
+   * @returns The derivation path string
+   */
+  private getCosmosDerivationPath(
+    chain: CosmosChain,
+    accountIndex = 0,
+    addressIndex = 0,
+  ): string {
+    const config = COSMOS_CHAIN_CONFIG[chain];
+    const coinType = slip44ByCoin(config.coinName);
+    return `m/44'/${coinType}'/${accountIndex}'/0/${addressIndex}`;
+  }
+
+  /**
+   * Generate a Cosmos-SDK wallet address for deposit purposes.
+   * Each Cosmos-SDK chain uses its own bech32 address prefix:
+   * - ATOM: cosmos1...
+   * - OSMO: osmo1...
+   *
+   * @param chain - The Cosmos-SDK chain identifier
+   * @param accountIndex - Account index for address derivation (default: 0)
+   * @param addressIndex - Address index within the account (default: 0)
+   * @returns The generated address with metadata
+   * @throws Error if wallet is not initialized
+   */
+  async getCosmosAddress(
+    chain: CosmosChain,
+    accountIndex = 0,
+    addressIndex = 0,
+  ): Promise<CosmosAddressResult> {
+    const wallet = this.getWallet();
+    const derivationPath = this.getCosmosDerivationPath(chain, accountIndex, addressIndex);
+
+    this.logger.debug(`Generating ${chain} address at path: ${derivationPath}`);
+
+    const addressNList = bip32ToAddressNList(derivationPath);
+
+    const params: CosmosGetAddress = {
+      addressNList,
+      showDisplay: false, // Don't require user confirmation (server-side)
+    };
+
+    const address = await wallet.cosmosGetAddress(params);
+
+    if (!address) {
+      throw new Error(`Failed to generate ${chain} address at path ${derivationPath}`);
+    }
+
+    return {
+      address,
+      chain,
+      derivationPath,
+      accountIndex,
+    };
+  }
+
+  /**
+   * Generate deposit addresses for all supported Cosmos-SDK chains.
+   * Useful for initializing deposit addresses at startup.
+   *
+   * @param accountIndex - Account index for address derivation (default: 0)
+   * @returns Array of addresses for all Cosmos-SDK chains
+   */
+  async getAllCosmosAddresses(accountIndex = 0): Promise<CosmosAddressResult[]> {
+    const cosmosChains: CosmosChain[] = ['ATOM', 'OSMO'];
+
+    const addresses: CosmosAddressResult[] = [];
+
+    for (const chain of cosmosChains) {
+      try {
+        const result = await this.getCosmosAddress(chain, accountIndex);
+        addresses.push(result);
+        this.logger.debug(`Generated ${chain} address: ${result.address}`);
+      } catch (error) {
+        this.logger.error(`Failed to generate address for ${chain}:`, error);
+        throw error;
+      }
+    }
+
+    this.logger.log(
+      `Generated Cosmos-SDK deposit addresses: ATOM=${addresses[0]?.address}, OSMO=${addresses[1]?.address}`,
+    );
+
+    return addresses;
+  }
+
+  /**
+   * Get Cosmos-SDK address for a specific quote.
+   * Uses addressIndex to generate unique deposit addresses per quote.
+   *
+   * @param chain - The Cosmos-SDK chain
+   * @param quoteIndex - Index to derive unique address for this quote
+   * @returns The generated address
+   */
+  async getCosmosDepositAddress(chain: CosmosChain, quoteIndex: number): Promise<string> {
+    const result = await this.getCosmosAddress(chain, 0, quoteIndex);
     return result.address;
   }
 }
