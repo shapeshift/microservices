@@ -176,7 +176,19 @@ export class DepositMonitorService {
         // TODO: In future, implement excess amount refund logic
       }
 
-      // Mark deposit as received
+      // Acquire lock on quote before processing to prevent race conditions
+      // Uses optimistic locking: atomically transitions ACTIVE → EXECUTING
+      const lockedQuote = await this.quotesService.lockQuote(quoteId);
+
+      if (!lockedQuote) {
+        // Quote is already being processed by another iteration or status changed
+        this.logger.debug(
+          `Skipping deposit for quote ${quoteId}: could not acquire lock (already processing)`,
+        );
+        return;
+      }
+
+      // Mark deposit as received (quote is now locked in EXECUTING state)
       this.logger.log(
         `Deposit confirmed for quote ${quoteId}: ${depositResult.txHash} ` +
         `(${depositResult.confirmations} confirmations)`,

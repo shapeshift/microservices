@@ -254,7 +254,58 @@ export class QuotesService {
   }
 
   /**
+   * Lock a quote for processing using optimistic locking.
+   *
+   * This method atomically transitions a quote from ACTIVE to EXECUTING status,
+   * preventing race conditions when multiple deposit monitor iterations might
+   * detect the same deposit simultaneously.
+   *
+   * Uses a database-level atomic update with status guard to ensure only one
+   * process can acquire the lock.
+   *
+   * @param quoteId - The quote identifier to lock
+   * @returns The locked quote, or null if lock could not be acquired
+   */
+  async lockQuote(quoteId: string): Promise<Quote | null> {
+    try {
+      // Optimistic locking: atomically update ONLY if status is ACTIVE
+      // This prevents race conditions where multiple processes try to lock
+      // the same quote simultaneously
+      const updatedQuote = await this.prisma.quote.updateMany({
+        where: {
+          quoteId,
+          status: QuoteStatus.ACTIVE,
+          expiresAt: { gt: new Date() }, // Also ensure not expired
+        },
+        data: {
+          status: QuoteStatus.EXECUTING,
+        },
+      });
+
+      // If no rows were updated, the quote was already locked or not in ACTIVE state
+      if (updatedQuote.count === 0) {
+        this.logger.debug(
+          `Failed to lock quote ${quoteId}: not in ACTIVE state or already locked`,
+        );
+        return null;
+      }
+
+      this.logger.log(`Quote ${quoteId} locked for execution`);
+
+      // Fetch and return the locked quote
+      return this.prisma.quote.findUnique({ where: { quoteId } });
+    } catch (error) {
+      this.logger.error(`Failed to lock quote ${quoteId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Update quote status when deposit is received.
+   * Accepts quotes in either ACTIVE or EXECUTING status.
+   *
+   * When called after lockQuote(), the quote will be in EXECUTING status.
+   * For backwards compatibility, also accepts ACTIVE status for direct calls.
    *
    * @param quoteId - The quote identifier
    * @param depositTxHash - The deposit transaction hash
@@ -275,9 +326,10 @@ export class QuotesService {
     }
 
     // Check if quote is in valid state for deposit
-    if (quote.status !== QuoteStatus.ACTIVE) {
+    // Accept both ACTIVE (legacy/direct calls) and EXECUTING (after lockQuote)
+    if (quote.status !== QuoteStatus.ACTIVE && quote.status !== QuoteStatus.EXECUTING) {
       throw new BadRequestException(
-        `Quote ${quoteId} is not in ACTIVE status (current: ${quote.status})`,
+        `Quote ${quoteId} is not in ACTIVE or EXECUTING status (current: ${quote.status})`,
       );
     }
 
