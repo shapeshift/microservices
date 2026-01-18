@@ -1,31 +1,34 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
+import { RouteCacheService } from './route-cache.service';
+import { RouteGraphService } from './route-graph.service';
+import { PathfinderService } from './pathfinder.service';
+import { QuoteAggregatorService } from './quote-aggregator.service';
 
 /**
  * RoutingModule - NestJS module for multi-step swap routing services.
  *
- * This module will provide services for:
- * - Route caching with configurable TTL
- * - Route graph construction from swapper pairs
- * - Pathfinding using NBA* algorithm
- * - Quote aggregation across multi-hop paths
+ * This module provides services for:
+ * - Route caching with configurable TTL (RouteCacheService)
+ * - Route graph construction from swapper pairs (RouteGraphService)
+ * - Pathfinding using NBA* algorithm (PathfinderService)
+ * - Quote aggregation across multi-hop paths (QuoteAggregatorService)
  *
- * Services will be registered as they are implemented in subsequent phases.
+ * All services are exported for use by SwapsService and other consuming modules.
  */
 @Module({
-  imports: [],
+  imports: [HttpModule],
   providers: [
-    // Services will be added as they are created:
-    // - RouteCacheService (Phase 4)
-    // - RouteGraphService (Phase 5)
-    // - PathfinderService (Phase 6)
-    // - QuoteAggregatorService (Phase 7)
+    RouteCacheService,
+    RouteGraphService,
+    PathfinderService,
+    QuoteAggregatorService,
   ],
   exports: [
-    // Services will be exported for use by SwapsService:
-    // - RouteCacheService
-    // - RouteGraphService
-    // - PathfinderService
-    // - QuoteAggregatorService
+    RouteCacheService,
+    RouteGraphService,
+    PathfinderService,
+    QuoteAggregatorService,
   ],
 })
 export class RoutingModule {}
