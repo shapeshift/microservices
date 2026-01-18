@@ -5,6 +5,8 @@ import {
   bip32ToAddressNList,
   slip44ByCoin,
   ETHGetAddress,
+  BTCGetAddress,
+  BTCInputScriptType,
 } from '@shapeshiftoss/hdwallet-core';
 import { NativeHDWallet, NativeAdapter } from '@shapeshiftoss/hdwallet-native';
 
@@ -24,6 +26,54 @@ export interface EvmAddressResult {
   derivationPath: string;
   accountIndex: number;
 }
+
+/**
+ * Supported UTXO chains and their identifiers.
+ * Each UTXO chain has its own SLIP44 coin type and address format.
+ */
+export type UtxoChain = 'BTC' | 'LTC' | 'DOGE' | 'BCH';
+
+/**
+ * UTXO address result with metadata
+ */
+export interface UtxoAddressResult {
+  address: string;
+  chain: UtxoChain;
+  derivationPath: string;
+  accountIndex: number;
+  scriptType: BTCInputScriptType;
+}
+
+/**
+ * UTXO chain configuration including SLIP44 coin type and preferred script type.
+ * - BTC/LTC: Use SegWit (P2WPKH) with BIP84 derivation for modern address format
+ * - DOGE/BCH: Use Legacy (P2PKH) with BIP44 derivation as they don't support SegWit
+ */
+const UTXO_CHAIN_CONFIG: Record<
+  UtxoChain,
+  { coinName: string; scriptType: BTCInputScriptType; purpose: number }
+> = {
+  BTC: {
+    coinName: 'Bitcoin',
+    scriptType: BTCInputScriptType.SpendWitness, // Native SegWit (bech32)
+    purpose: 84, // BIP84 for native SegWit
+  },
+  LTC: {
+    coinName: 'Litecoin',
+    scriptType: BTCInputScriptType.SpendWitness, // Native SegWit (bech32)
+    purpose: 84, // BIP84 for native SegWit
+  },
+  DOGE: {
+    coinName: 'Dogecoin',
+    scriptType: BTCInputScriptType.SpendAddress, // Legacy P2PKH
+    purpose: 44, // BIP44 for legacy
+  },
+  BCH: {
+    coinName: 'BitcoinCash',
+    scriptType: BTCInputScriptType.SpendAddress, // Legacy P2PKH
+    purpose: 44, // BIP44 for legacy
+  },
+};
 
 /**
  * WalletManagerService manages the HD wallet for all supported chains.
@@ -227,6 +277,115 @@ export class WalletManagerService implements OnModuleInit {
    */
   async getEvmDepositAddress(chain: EvmChain, quoteIndex: number): Promise<string> {
     const result = await this.getEvmAddress(chain, 0, quoteIndex);
+    return result.address;
+  }
+
+  /**
+   * Get the BIP32 derivation path for UTXO chains.
+   * - BIP84 (m/84'/coin'/account'/0/index) for SegWit chains (BTC, LTC)
+   * - BIP44 (m/44'/coin'/account'/0/index) for legacy chains (DOGE, BCH)
+   *
+   * @param chain - The UTXO chain
+   * @param accountIndex - Account index (default: 0)
+   * @param addressIndex - Address index within the account (default: 0)
+   * @returns The derivation path string
+   */
+  private getUtxoDerivationPath(
+    chain: UtxoChain,
+    accountIndex = 0,
+    addressIndex = 0,
+  ): string {
+    const config = UTXO_CHAIN_CONFIG[chain];
+    const coinType = slip44ByCoin(config.coinName);
+    return `m/${config.purpose}'/${coinType}'/${accountIndex}'/0/${addressIndex}`;
+  }
+
+  /**
+   * Generate a UTXO-chain wallet address for deposit purposes.
+   * Each UTXO chain uses its own SLIP44 coin type and may use different
+   * address formats (SegWit for BTC/LTC, Legacy for DOGE/BCH).
+   *
+   * @param chain - The UTXO chain identifier
+   * @param accountIndex - Account index for address derivation (default: 0)
+   * @param addressIndex - Address index within the account (default: 0)
+   * @returns The generated address with metadata
+   * @throws Error if wallet is not initialized
+   */
+  async getUtxoAddress(
+    chain: UtxoChain,
+    accountIndex = 0,
+    addressIndex = 0,
+  ): Promise<UtxoAddressResult> {
+    const wallet = this.getWallet();
+    const config = UTXO_CHAIN_CONFIG[chain];
+    const derivationPath = this.getUtxoDerivationPath(chain, accountIndex, addressIndex);
+
+    this.logger.debug(`Generating ${chain} address at path: ${derivationPath}`);
+
+    const addressNList = bip32ToAddressNList(derivationPath);
+
+    const params: BTCGetAddress = {
+      addressNList,
+      coin: config.coinName,
+      scriptType: config.scriptType,
+      showDisplay: false, // Don't require user confirmation (server-side)
+    };
+
+    const address = await wallet.btcGetAddress(params);
+
+    if (!address) {
+      throw new Error(`Failed to generate ${chain} address at path ${derivationPath}`);
+    }
+
+    return {
+      address,
+      chain,
+      derivationPath,
+      accountIndex,
+      scriptType: config.scriptType,
+    };
+  }
+
+  /**
+   * Generate deposit addresses for all supported UTXO chains.
+   * Useful for initializing deposit addresses at startup.
+   *
+   * @param accountIndex - Account index for address derivation (default: 0)
+   * @returns Array of addresses for all UTXO chains
+   */
+  async getAllUtxoAddresses(accountIndex = 0): Promise<UtxoAddressResult[]> {
+    const utxoChains: UtxoChain[] = ['BTC', 'LTC', 'DOGE', 'BCH'];
+
+    const addresses: UtxoAddressResult[] = [];
+
+    for (const chain of utxoChains) {
+      try {
+        const result = await this.getUtxoAddress(chain, accountIndex);
+        addresses.push(result);
+        this.logger.debug(`Generated ${chain} address: ${result.address}`);
+      } catch (error) {
+        this.logger.error(`Failed to generate address for ${chain}:`, error);
+        throw error;
+      }
+    }
+
+    this.logger.log(
+      `Generated UTXO deposit addresses: BTC=${addresses[0]?.address}, LTC=${addresses[1]?.address}, DOGE=${addresses[2]?.address}, BCH=${addresses[3]?.address}`,
+    );
+
+    return addresses;
+  }
+
+  /**
+   * Get UTXO address for a specific quote.
+   * Uses addressIndex to generate unique deposit addresses per quote.
+   *
+   * @param chain - The UTXO chain
+   * @param quoteIndex - Index to derive unique address for this quote
+   * @returns The generated address
+   */
+  async getUtxoDepositAddress(chain: UtxoChain, quoteIndex: number): Promise<string> {
+    const result = await this.getUtxoAddress(chain, 0, quoteIndex);
     return result.address;
   }
 }
