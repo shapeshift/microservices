@@ -23,7 +23,7 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' });
   });
 
-  const port = process.env.PORT || 3002;
+  const port = process.env.PORT || 3004;
   await app.listen(port);
 
   console.log(`Send-swap service is running on: http://localhost:${port}`);
