@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "002-using-swappers-sometime-a-user-doesn-t-have-a-rout",
+  "state": "building",
+  "subtasks": {
+    "completed": 29,
+    "total": 30,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "Unit and Integration Tests",
+    "id": null,
+    "total": 5
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 30,
+    "started_at": "2026-01-18T02:39:20.131928"
+  },
+  "last_update": "2026-01-18T03:54:27.170625"
+}

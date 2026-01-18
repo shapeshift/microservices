@@ -134,3 +134,64 @@ export interface VerifySwapAffiliateDto {
   protocol: string;
   txHash?: string;
 }
+
+// Multi-step routing types
+export interface RouteStep {
+  stepIndex: number;
+  swapperName: string;
+  sellAsset: Asset;
+  buyAsset: Asset;
+  sellAmountCryptoBaseUnit: string;
+  expectedBuyAmountCryptoBaseUnit: string;
+  feeUsd: string;
+  slippagePercent: string;
+  estimatedTimeSeconds: number;
+}
+
+export interface MultiStepRoute {
+  totalSteps: number;
+  estimatedOutputCryptoBaseUnit: string;
+  estimatedOutputCryptoPrecision: string;
+  totalFeesUsd: string;
+  totalSlippagePercent: string;
+  estimatedTimeSeconds: number;
+  steps: RouteStep[];
+}
+
+export interface MultiStepQuoteRequest {
+  sellAssetId: string;
+  buyAssetId: string;
+  sellAmountCryptoBaseUnit: string;
+  userAddress: string;
+  receiveAddress: string;
+  maxHops?: number;
+  maxCrossChainHops?: number;
+}
+
+export interface MultiStepQuoteResponse {
+  success: boolean;
+  route: MultiStepRoute | null;
+  alternativeRoutes?: MultiStepRoute[];
+  expiresAt: string;
+  error?: string;
+}
+
+// Route constraints for configurable limits
+export interface RouteConstraints {
+  maxHops: number;
+  maxCrossChainHops: number;
+  maxSlippagePercent?: number;
+  maxPriceImpactPercent?: number;
+  allowedSwapperNames?: string[];
+  excludedSwapperNames?: string[];
+}
+
+// Route configuration for system-wide settings
+export interface RouteConfig {
+  cacheTtlMs: number;
+  quoteExpiryMs: number;
+  priceImpactWarningPercent: number;
+  priceImpactFlagPercent: number;
+  defaultConstraints: RouteConstraints;
+  maxAlternativeRoutes: number;
+}

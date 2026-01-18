@@ -20,6 +20,8 @@
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
     "axios": "^1.6.2",
+    "ngraph.graph": "^20.0.1",
+    "ngraph.path": "^1.5.0",
     "prisma": "6.13.0"
   }
 }
