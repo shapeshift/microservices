@@ -175,3 +175,23 @@ export interface MultiStepQuoteResponse {
   expiresAt: string;
   error?: string;
 }
+
+// Route constraints for configurable limits
+export interface RouteConstraints {
+  maxHops: number;
+  maxCrossChainHops: number;
+  maxSlippagePercent?: number;
+  maxPriceImpactPercent?: number;
+  allowedSwapperNames?: string[];
+  excludedSwapperNames?: string[];
+}
+
+// Route configuration for system-wide settings
+export interface RouteConfig {
+  cacheTtlMs: number;
+  quoteExpiryMs: number;
+  priceImpactWarningPercent: number;
+  priceImpactFlagPercent: number;
+  defaultConstraints: RouteConstraints;
+  maxAlternativeRoutes: number;
+}
