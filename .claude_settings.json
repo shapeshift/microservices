@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Write(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Edit(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Glob(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Grep(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Read(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/.auto-claude/specs/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Write(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/.auto-claude/specs/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Edit(/Users/mini/Projects/microservices/.auto-claude/worktrees/tasks/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/.auto-claude/specs/002-using-swappers-sometime-a-user-doesn-t-have-a-rout/**)",
+      "Read(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Write(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Edit(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Glob(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Grep(/Users/mini/Projects/microservices/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}

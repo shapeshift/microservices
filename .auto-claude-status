@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "002-using-swappers-sometime-a-user-doesn-t-have-a-rout",
+  "state": "building",
+  "subtasks": {
+    "completed": 5,
+    "total": 30,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "Routing Module Skeleton",
+    "id": null,
+    "total": 2
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 6,
+    "started_at": "2026-01-18T02:39:20.131928"
+  },
+  "last_update": "2026-01-18T02:47:59.892086"
+}

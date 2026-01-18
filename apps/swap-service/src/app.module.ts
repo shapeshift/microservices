@@ -14,6 +14,7 @@ import { UtxoChainAdapterService } from './lib/chain-adapters/utxo.service';
 import { CosmosSdkChainAdapterService } from './lib/chain-adapters/cosmos-sdk.service';
 import { SolanaChainAdapterService } from './lib/chain-adapters/solana.service';
 import { ConfigModule } from '@nestjs/config';
+import { RoutingModule } from './routing/routing.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ConfigModule } from '@nestjs/config';
     ConfigModule.forRoot({
       envFilePath: '../../.env',
     }),
+    RoutingModule,
   ],
   controllers: [SwapsController],
   providers: [
