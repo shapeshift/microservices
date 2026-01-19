@@ -1,0 +1,16 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "../../Dockerfile"
+dockerContext = "../../"
+
+[build.args]
+COINSTACK = "user-service"
+
+[deploy]
+numReplicas=1
+preDeployCommand = "./node_modules/.bin/prisma migrate deploy"
+startCommand = "yarn start:prod"
+#healthcheckPath = "/health"
+#healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
