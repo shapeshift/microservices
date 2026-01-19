@@ -1,10 +1,6 @@
-x-build: &build
-  build:
-    context: .
-    dockerfile: Dockerfile.dev
-
-x-service-base: &service-base
-  <<: *build
+x-node-base: &node-base
+  image: node:22-alpine
+  working_dir: /workspace
   volumes:
     - .:/workspace
 
@@ -18,27 +14,20 @@ x-db-base: &db-base
 
 services:
   init:
-    <<: *build
-    working_dir: /workspace
-    command: sh -c "yarn && yarn build"
-    volumes:
-      - .:/workspace
-      - /workspace/apps/notifications-service/pulumi
+    <<: *node-base
+    command: sh -c "corepack yarn && corepack yarn build"
 
   packages:
-    <<: *build
-    working_dir: /workspace
-    command: sh -c "yarn turbo run dev --filter='@shapeshift/shared-types' --filter='@shapeshift/shared-utils'"
-    volumes:
-      - .:/workspace
+    <<: *node-base
+    command: sh -c "corepack yarn turbo run dev --filter='@shapeshift/shared-types' --filter='@shapeshift/shared-utils'"
     depends_on:
       init:
         condition: service_completed_successfully
 
   user-service:
-    <<: *service-base
+    <<: *node-base
     working_dir: /workspace/apps/user-service
-    command: sh -c "yarn db:push && yarn start:dev"
+    command: sh -c "corepack yarn db:push && corepack yarn start:dev"
     ports:
       - "3002:3002"
     env_file:
@@ -53,9 +42,9 @@ services:
         condition: service_healthy
 
   swap-service:
-    <<: *service-base
+    <<: *node-base
     working_dir: /workspace/apps/swap-service
-    command: sh -c "yarn db:push && yarn start:dev"
+    command: sh -c "corepack yarn db:push && corepack yarn start:dev"
     ports:
       - "3001:3001"
     env_file:
@@ -70,9 +59,9 @@ services:
         condition: service_healthy
 
   notifications-service:
-    <<: *service-base
+    <<: *node-base
     working_dir: /workspace/apps/notifications-service
-    command: sh -c "yarn db:push && yarn start:dev"
+    command: sh -c "corepack yarn db:push && corepack yarn start:dev"
     ports:
       - "3003:3003"
     env_file:
