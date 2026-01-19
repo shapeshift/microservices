@@ -1,11 +1,11 @@
 [build]
 builder = "railpack"
 buildCommand = "yarn build"
-watchPatterns = ["apps/user-service/**", "packages/**"]
+watchPatterns = ["apps/swap-service/**", "packages/**"]
 
 [deploy]
-preDeployCommand = "cd apps/user-service && yarn db:migrate"
-startCommand = "cd apps/user-service && yarn start:prod"
+preDeployCommand = "cd apps/swap-service && yarn db:migrate"
+startCommand = "cd apps/swap-service && yarn start:prod"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
