@@ -1,7 +1,7 @@
 [build]
 builder = "railpack"
 buildCommand = "yarn build"
-watchPatterns = ["apps/notifications-service/**", "packages/**"]
+watchPatterns = ["yarn.lock", "apps/notifications-service/**", "packages/**"]
 
 [deploy]
 preDeployCommand = "cd apps/notifications-service && yarn db:migrate"

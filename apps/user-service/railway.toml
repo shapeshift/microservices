@@ -1,7 +1,7 @@
 [build]
 builder = "railpack"
 buildCommand = "yarn build"
-watchPatterns = ["apps/user-service/**", "packages/**"]
+watchPatterns = ["yarn.lock", "apps/user-service/**", "packages/**"]
 
 [deploy]
 preDeployCommand = "cd apps/user-service && yarn db:migrate"
