@@ -1,16 +1,9 @@
 x-node-base: &node-base
   image: node:22-alpine
+  user: node
   working_dir: /workspace
   volumes:
     - .:/workspace
-
-x-db-base: &db-base
-  image: postgres:15-alpine
-  healthcheck:
-    test: ["CMD-SHELL", "pg_isready -U postgres"]
-    interval: 5s
-    timeout: 5s
-    retries: 5
 
 services:
   init:
@@ -38,7 +31,7 @@ services:
     depends_on:
       packages:
         condition: service_started
-      user-db:
+      db:
         condition: service_healthy
 
   swap-service:
@@ -55,7 +48,7 @@ services:
     depends_on:
       packages:
         condition: service_started
-      swap-db:
+      db:
         condition: service_healthy
 
   notifications-service:
@@ -74,43 +67,24 @@ services:
         condition: service_started
       user-service:
         condition: service_started
-      notifications-db:
+      db:
         condition: service_healthy
 
-  user-db:
-    <<: *db-base
+  db:
+    image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=user_service
+      - POSTGRES_DB=microservices
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
     ports:
       - "5432:5432"
     volumes:
-      - user_db_data:/var/lib/postgresql/data
-
-  swap-db:
-    <<: *db-base
-    environment:
-      - POSTGRES_DB=swap_service
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    ports:
-      - "5433:5432"
-    volumes:
-      - swap_db_data:/var/lib/postgresql/data
-
-  notifications-db:
-    <<: *db-base
-    environment:
-      - POSTGRES_DB=notifications_service
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    ports:
-      - "5434:5432"
-    volumes:
-      - notifications_db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  user_db_data:
-  swap_db_data:
-  notifications_db_data:
+  db_data:
