@@ -153,12 +153,6 @@ export class SwapsService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
-      include: {
-        notifications: {
-          orderBy: { sentAt: 'desc' },
-          take: 5,
-        },
-      },
     });
 
     return swaps.map(swap => ({

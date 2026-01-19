@@ -4,7 +4,6 @@ import { SwapPollingService } from '../polling/swap-polling.service';
 import { SwapVerificationService } from '../verification/swap-verification.service';
 export {
   Swap,
-  Notification,
   Prisma
 } from '@prisma/client';
 import { Asset } from '@shapeshiftoss/types';
@@ -70,11 +69,6 @@ export class SwapsController {
   async getSwap(@Param('swapId') swapId: string) {
     const swap = await this.swapsService['prisma'].swap.findUnique({
       where: { swapId },
-      include: {
-        notifications: {
-          orderBy: { sentAt: 'desc' },
-        },
-      },
     });
 
     if (!swap) {

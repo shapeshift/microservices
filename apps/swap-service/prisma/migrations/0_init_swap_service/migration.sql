@@ -41,26 +41,8 @@ CREATE TABLE "public"."swaps" (
     CONSTRAINT "swaps_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "public"."notifications" (
-    "id" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "body" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "deliveredAt" TIMESTAMP(3),
-    "userId" TEXT NOT NULL,
-    "deviceId" TEXT,
-    "swapId" TEXT,
-
-    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX "swaps_swapId_key" ON "public"."swaps"("swapId");
 
 -- CreateIndex
 CREATE INDEX "swaps_referralCode_idx" ON "public"."swaps"("referralCode");
-
--- AddForeignKey
-ALTER TABLE "public"."notifications" ADD CONSTRAINT "notifications_swapId_fkey" FOREIGN KEY ("swapId") REFERENCES "public"."swaps"("id") ON DELETE SET NULL ON UPDATE CASCADE;
