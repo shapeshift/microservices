@@ -7,7 +7,7 @@ export {
   Prisma
 } from '@prisma/client';
 import { Asset } from '@shapeshiftoss/types';
-import { CreateSwapDto, UpdateSwapStatusDto, VerifySwapAffiliateDto } from '@shapeshift/shared-types';
+import { CreateSwapDto, UpdateSwapStatusDto, VerifySwapAffiliateDto, MultiStepQuoteRequest } from '@shapeshift/shared-types';
 
 @Controller('swaps')
 export class SwapsController {
@@ -63,6 +63,11 @@ export class SwapsController {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
     return this.swapsService.calculateReferralFees(referralCode, start, end);
+  }
+
+  @Post('multi-step-quote')
+  async getMultiStepQuote(@Body() data: MultiStepQuoteRequest) {
+    return this.swapsService.getMultiStepQuote(data);
   }
 
   @Get(':swapId')
