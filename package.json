@@ -45,7 +45,7 @@
     "@nestjs/websockets": "^11.1.6",
     "@pulumi/kubernetes": "4.23.0",
     "@pulumi/pulumi": "3.160.0",
-    "@shapeshiftoss/caip": "8.16.6",
+    "@shapeshiftoss/caip": "8.16.7",
     "@shapeshiftoss/chain-adapters": "11.3.6",
     "@shapeshiftoss/swapper": "17.6.7",
     "@shapeshiftoss/types": "8.6.5",

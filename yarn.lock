@@ -4839,12 +4839,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@shapeshiftoss/caip@npm:8.16.6":
-  version: 8.16.6
-  resolution: "@shapeshiftoss/caip@npm:8.16.6"
+"@shapeshiftoss/caip@npm:8.16.7":
+  version: 8.16.7
+  resolution: "@shapeshiftoss/caip@npm:8.16.7"
   dependencies:
     axios: "npm:^1.13.0"
-  checksum: 10/abab81c5d8e48975c4e1ee4e1cefb329b57ae25e912ce1d45a7de1e3218566d0c71fc44e27064b4f2d5ac853918eef6efa53524e2bcf18fa6a297ead9b217603
+  checksum: 10/e67e3aa42d1d69fec488f36de1f7dc2e476e3c64cf71105ba9538dd3a696f5740035fa9caab807b126910017f0e3348ad28680e256041a27be5dfbb80eb50f3b
   languageName: node
   linkType: hard
 
@@ -15404,7 +15404,7 @@ __metadata:
     "@nestjs/websockets": "npm:^11.1.6"
     "@pulumi/kubernetes": "npm:4.23.0"
     "@pulumi/pulumi": "npm:3.160.0"
-    "@shapeshiftoss/caip": "npm:8.16.6"
+    "@shapeshiftoss/caip": "npm:8.16.7"
     "@shapeshiftoss/chain-adapters": "npm:11.3.6"
     "@shapeshiftoss/swapper": "npm:17.6.7"
     "@shapeshiftoss/types": "npm:8.6.5"
