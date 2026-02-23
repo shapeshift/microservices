@@ -2,12 +2,13 @@ import { Controller, Post, Get, Put, Param, Body, Query } from '@nestjs/common';
 import { SwapsService } from './swaps.service';
 import { SwapPollingService } from '../polling/swap-polling.service';
 import { SwapVerificationService } from '../verification/swap-verification.service';
-export {
-  Swap,
-  Prisma
-} from '@prisma/client';
+export { Swap, Prisma } from '@prisma/client';
 import { Asset } from '@shapeshiftoss/types';
-import { CreateSwapDto, UpdateSwapStatusDto, VerifySwapAffiliateDto } from '@shapeshift/shared-types';
+import {
+  CreateSwapDto,
+  UpdateSwapStatusDto,
+  VerifySwapAffiliateDto,
+} from '@shapeshift/shared-types';
 
 @Controller('swaps')
 export class SwapsController {
@@ -63,6 +64,21 @@ export class SwapsController {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
     return this.swapsService.calculateReferralFees(referralCode, start, end);
+  }
+
+  @Get('affiliate-fees/:affiliateAddress')
+  async getAffiliateFees(
+    @Param('affiliateAddress') affiliateAddress: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return this.swapsService.calculateAffiliateFees(
+      affiliateAddress,
+      start,
+      end,
+    );
   }
 
   @Get(':swapId')

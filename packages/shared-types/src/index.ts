@@ -2,7 +2,10 @@ import { Asset } from '@shapeshiftoss/types';
 
 export type DeviceType = 'MOBILE' | 'WEB';
 export type SwapStatus = 'IDLE' | 'PENDING' | 'SUCCESS' | 'FAILED';
-export type NotificationType = 'SWAP_STATUS_UPDATE' | 'SWAP_COMPLETED' | 'SWAP_FAILED';
+export type NotificationType =
+  | 'SWAP_STATUS_UPDATE'
+  | 'SWAP_COMPLETED'
+  | 'SWAP_FAILED';
 
 export interface Device {
   id: string;
@@ -77,6 +80,7 @@ export interface CreateSwapDto {
   receiveAddress?: string;
   isStreaming?: boolean;
   metadata?: Record<string, any>;
+  affiliateAddress?: string;
 }
 
 export interface UpdateSwapStatusDto {

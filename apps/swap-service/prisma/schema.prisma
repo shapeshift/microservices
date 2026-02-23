@@ -45,7 +45,9 @@ model Swap {
   isAffiliateVerified              Boolean?
   affiliateVerificationDetails     Json?
   affiliateVerifiedAt              DateTime?
+  affiliateAddress                 String?
 
   @@index([referralCode])
+  @@index([affiliateAddress])
   @@map("swaps")
 }
