@@ -17,17 +17,17 @@ export class ChainAdapterInitService {
     private solanaChainAdapterService: SolanaChainAdapterService,
   ) {}
 
-  async initializeChainAdapters() {
+  initializeChainAdapters() {
     this.logger.log('Initializing chain adapters...');
 
     try {
-      await this.evmChainAdapterService.initializeEvmChainAdapters();
-      
-      await this.utxoChainAdapterService.initializeUtxoChainAdapters();
-      
-      await this.cosmosSdkChainAdapterService.initializeCosmosSdkChainAdapters();
-      
-      await this.solanaChainAdapterService.initializeSolanaChainAdapter();
+      this.evmChainAdapterService.initializeEvmChainAdapters();
+
+      this.utxoChainAdapterService.initializeUtxoChainAdapters();
+
+      this.cosmosSdkChainAdapterService.initializeCosmosSdkChainAdapters();
+
+      this.solanaChainAdapterService.initializeSolanaChainAdapter();
 
       this.logger.log('All chain adapters initialized successfully');
     } catch (error) {

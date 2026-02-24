@@ -6,10 +6,9 @@ import {
   CreateUserDto,
   AddAccountIdDto,
   RegisterDeviceDto,
-  DeviceType
+  DeviceType,
 } from '@shapeshift/shared-types';
 import { User, UserAccount, Device } from '@prisma/client';
-
 
 @Injectable()
 export class UsersService {
@@ -47,21 +46,25 @@ export class UsersService {
 
   async createUser(data: CreateUserDto): Promise<User> {
     try {
-      const hashedAccountIds = data.accountIds.map(id => hashAccountId(id));
-      
+      const hashedAccountIds = data.accountIds.map((id) => hashAccountId(id));
+
       for (const hashedAccountId of hashedAccountIds) {
-        const existingUser = await this.findUserByHashedAccountId(hashedAccountId);
+        const existingUser =
+          await this.findUserByHashedAccountId(hashedAccountId);
         if (existingUser) {
-          this.logger.log(`User already exists with account ID: ${existingUser.id}`);
-          
-          const newAccountIds = hashedAccountIds.filter(id => 
-            !existingUser.userAccounts.some(ua => ua.accountId === id)
+          this.logger.log(
+            `User already exists with account ID: ${existingUser.id}`,
           );
-          
+
+          const newAccountIds = hashedAccountIds.filter(
+            (id) =>
+              !existingUser.userAccounts.some((ua) => ua.accountId === id),
+          );
+
           if (newAccountIds.length > 0) {
             await this.addHashedAccountIds(existingUser.id, newAccountIds);
           }
-          
+
           return this.getUserById(existingUser.id);
         }
       }
@@ -69,14 +72,16 @@ export class UsersService {
       const user = await this.prisma.user.create({
         data: {
           userAccounts: {
-            create: hashedAccountIds.map(id => ({ 
+            create: hashedAccountIds.map((id) => ({
               accountId: id,
             })),
           },
         },
       });
 
-      this.logger.log(`Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`);
+      this.logger.log(
+        `Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`,
+      );
       return this.getUserById(user.id);
     } catch (error) {
       this.logger.error('Failed to create user', error);
@@ -84,9 +89,12 @@ export class UsersService {
     }
   }
 
-  async addAccountIds(userId: string, accountIds: string[]): Promise<UserAccount[]> {
+  async addAccountIds(
+    userId: string,
+    accountIds: string[],
+  ): Promise<UserAccount[]> {
     try {
-      const hashedAccountIds = accountIds.map(id => {
+      const hashedAccountIds = accountIds.map((id) => {
         if (!isValidAccountId(id)) {
           throw new Error('Invalid account ID');
         }
@@ -100,10 +108,13 @@ export class UsersService {
     }
   }
 
-  private async addHashedAccountIds(userId: string, hashedAccountIds: string[]): Promise<UserAccount[]> {
+  private async addHashedAccountIds(
+    userId: string,
+    hashedAccountIds: string[],
+  ): Promise<UserAccount[]> {
     try {
       const userAccounts = await Promise.all(
-        hashedAccountIds.map(hashedAccountId =>
+        hashedAccountIds.map((hashedAccountId) =>
           this.prisma.userAccount.upsert({
             where: {
               userId_accountId: {
@@ -116,11 +127,13 @@ export class UsersService {
               userId,
               accountId: hashedAccountId,
             },
-          })
-        )
+          }),
+        ),
       );
 
-      this.logger.log(`Added ${userAccounts.length} account IDs for user ${userId}`);
+      this.logger.log(
+        `Added ${userAccounts.length} account IDs for user ${userId}`,
+      );
       return userAccounts;
     } catch (error) {
       this.logger.error('Failed to add hashed account IDs', error);
@@ -135,10 +148,13 @@ export class UsersService {
       }
 
       const hashedAccountId = hashAccountId(data.accountId);
-      
-      const existingUser = await this.findUserByHashedAccountId(hashedAccountId);
+
+      const existingUser =
+        await this.findUserByHashedAccountId(hashedAccountId);
       if (existingUser && existingUser.id !== data.userId) {
-        throw new Error(`Account ID already belongs to user ${existingUser.id}`);
+        throw new Error(
+          `Account ID already belongs to user ${existingUser.id}`,
+        );
       }
 
       const userAccount = await this.prisma.userAccount.upsert({
@@ -180,7 +196,7 @@ export class UsersService {
     }
 
     const hashedAccountId = hashAccountId(accountId);
-    
+
     const user = await this.prisma.user.findFirst({
       where: {
         userAccounts: {
@@ -228,7 +244,7 @@ export class UsersService {
 
     const hashedAccountId = hashAccountId(accountId);
     const existingUser = await this.findUserByHashedAccountId(hashedAccountId);
-    
+
     if (existingUser) {
       this.logger.log(`Found existing user: ${existingUser.id} for account ID`);
       return existingUser;
@@ -239,30 +255,38 @@ export class UsersService {
     });
   }
 
-  async getOrCreateUserByAccountIds(accountIds: string[], referralCode?: string): Promise<User> {
-    this.logger.log(`getOrCreateUserByAccountIds called with accountIds: ${JSON.stringify(accountIds)}, referralCode: ${referralCode}`);
+  async getOrCreateUserByAccountIds(
+    accountIds: string[],
+    referralCode?: string,
+  ): Promise<User> {
+    this.logger.log(
+      `getOrCreateUserByAccountIds called with accountIds: ${JSON.stringify(accountIds)}, referralCode: ${referralCode}`,
+    );
 
     if (!accountIds || accountIds.length === 0) {
       throw new Error('At least one account ID is required');
     }
 
     // Validate all account IDs
-    accountIds.forEach(id => {
+    accountIds.forEach((id) => {
       if (!isValidAccountId(id)) {
         throw new Error(`Invalid account ID: ${id}`);
       }
     });
 
-    const hashedAccountIds = accountIds.map(id => hashAccountId(id));
+    const hashedAccountIds = accountIds.map((id) => hashAccountId(id));
     this.logger.log(`Hashed account IDs: ${JSON.stringify(hashedAccountIds)}`);
 
     for (const hashedAccountId of hashedAccountIds) {
-      const existingUser = await this.findUserByHashedAccountId(hashedAccountId);
+      const existingUser =
+        await this.findUserByHashedAccountId(hashedAccountId);
       if (existingUser) {
-        this.logger.log(`Found existing user: ${existingUser.id} for account ID`);
+        this.logger.log(
+          `Found existing user: ${existingUser.id} for account ID`,
+        );
 
-        const newAccountIds = hashedAccountIds.filter(id =>
-          !existingUser.userAccounts.some(ua => ua.accountId === id)
+        const newAccountIds = hashedAccountIds.filter(
+          (id) => !existingUser.userAccounts.some((ua) => ua.accountId === id),
         );
 
         if (newAccountIds.length > 0) {
@@ -277,31 +301,39 @@ export class UsersService {
               code: referralCode,
               refereeAddress: hashedAccountIds[0],
             });
-            this.logger.log(`Successfully applied referral code ${referralCode} for existing user ${existingUser.id}`);
+            this.logger.log(
+              `Successfully applied referral code ${referralCode} for existing user ${existingUser.id}`,
+            );
           } catch (error) {
             // Log but don't fail - user might already be referred or code might be invalid
-            this.logger.log(`Could not apply referral code ${referralCode} for existing user ${existingUser.id}: ${error.message}`);
+            this.logger.log(
+              `Could not apply referral code ${referralCode} for existing user ${existingUser.id}: ${error instanceof Error ? error.message : String(error)}`,
+            );
           }
         }
 
         const result = await this.getUserById(existingUser.id);
         this.logger.log(`Returning existing user: ${result?.id}`);
-        return result!;
+        return result;
       }
     }
 
-    this.logger.log(`No existing user found, creating new user with ${hashedAccountIds.length} account IDs`);
+    this.logger.log(
+      `No existing user found, creating new user with ${hashedAccountIds.length} account IDs`,
+    );
     const user = await this.prisma.user.create({
       data: {
         userAccounts: {
-          create: hashedAccountIds.map(id => ({
+          create: hashedAccountIds.map((id) => ({
             accountId: id,
           })),
         },
       },
     });
 
-    this.logger.log(`Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`);
+    this.logger.log(
+      `Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`,
+    );
 
     // Handle referral code if provided
     if (referralCode) {
@@ -311,16 +343,21 @@ export class UsersService {
           code: referralCode,
           refereeAddress: hashedAccountIds[0],
         });
-        this.logger.log(`Successfully applied referral code ${referralCode} for new user ${user.id}`);
+        this.logger.log(
+          `Successfully applied referral code ${referralCode} for new user ${user.id}`,
+        );
       } catch (error) {
-        this.logger.warn(`Failed to apply referral code ${referralCode} for user ${user.id}:`, error);
+        this.logger.warn(
+          `Failed to apply referral code ${referralCode} for user ${user.id}:`,
+          error,
+        );
         // Don't fail user creation if referral code application fails
       }
     }
 
     const result = await this.getUserById(user.id);
     this.logger.log(`Returning new user: ${result?.id}`);
-    return result!;
+    return result;
   }
 
   async registerDevice(data: RegisterDeviceDto): Promise<Device> {
@@ -347,7 +384,9 @@ export class UsersService {
         },
       });
 
-      this.logger.log(`Device registered: ${data.deviceToken} for user ${data.userId} (${data.deviceType})`);
+      this.logger.log(
+        `Device registered: ${data.deviceToken} for user ${data.userId} (${data.deviceType})`,
+      );
       return device;
     } catch (error) {
       this.logger.error('Failed to register device', error);
@@ -365,7 +404,10 @@ export class UsersService {
     return devices;
   }
 
-  async removeDevice(userId: string, deviceId: string): Promise<{ success: boolean }> {
+  async removeDevice(
+    userId: string,
+    deviceId: string,
+  ): Promise<{ success: boolean }> {
     try {
       await this.prisma.device.updateMany({
         where: {

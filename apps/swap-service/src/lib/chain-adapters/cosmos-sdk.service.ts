@@ -2,12 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service';
 import * as unchained from '@shapeshiftoss/unchained-client';
 import { cosmos, thorchain, mayachain } from '@shapeshiftoss/chain-adapters';
-import { 
+import {
   cosmosChainId,
   thorchainChainId,
   mayachainChainId,
 } from '@shapeshiftoss/caip';
-import { cosmosSdkChainIds, type CosmosSdkChainAdapter } from '@shapeshiftoss/chain-adapters';
+import {
+  cosmosSdkChainIds,
+  type CosmosSdkChainAdapter,
+} from '@shapeshiftoss/chain-adapters';
 import type { ChainId } from '@shapeshiftoss/caip';
 import { CosmosSdkChainId } from '@shapeshiftoss/types';
 
@@ -17,24 +20,28 @@ export class CosmosSdkChainAdapterService {
 
   constructor(private chainAdapterManagerService: ChainAdapterManagerService) {}
 
-  async initializeCosmosSdkChainAdapters() {
+  initializeCosmosSdkChainAdapters() {
     this.logger.log('Initializing Cosmos SDK chain adapters...');
-    
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
 
     try {
-      await this.initializeCosmosAdapter(chainAdapterManager);
-      await this.initializeThorchainAdapter(chainAdapterManager);
-      await this.initializeMayachainAdapter(chainAdapterManager);
+      this.initializeCosmosAdapter(chainAdapterManager);
+      this.initializeThorchainAdapter(chainAdapterManager);
+      this.initializeMayachainAdapter(chainAdapterManager);
 
       this.logger.log('All Cosmos SDK chain adapters initialized successfully');
     } catch (error) {
-      this.logger.error('Failed to initialize Cosmos SDK chain adapters:', error);
+      this.logger.error(
+        'Failed to initialize Cosmos SDK chain adapters:',
+        error,
+      );
       throw error;
     }
   }
 
-  private async initializeCosmosAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeCosmosAdapter(chainAdapterManager: Map<string, any>) {
     const cosmosHttp = new unchained.cosmos.V1Api(
       new unchained.cosmos.Configuration({
         basePath: process.env.VITE_UNCHAINED_COSMOS_HTTP_URL,
@@ -55,22 +62,22 @@ export class CosmosSdkChainAdapterService {
     this.logger.log('Cosmos adapter initialized');
   }
 
-  private async initializeThorchainAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeThorchainAdapter(chainAdapterManager: Map<string, any>) {
     const http = new unchained.thorchain.V1Api(
       new unchained.thorchain.Configuration({
-        basePath:  process.env.VITE_UNCHAINED_THORCHAIN_HTTP_URL,
+        basePath: process.env.VITE_UNCHAINED_THORCHAIN_HTTP_URL,
       }),
-    )
+    );
 
     const httpV1 = new unchained.thorchainV1.V1Api(
       new unchained.thorchainV1.Configuration({
         basePath: process.env.VITE_UNCHAINED_THORCHAIN_V1_HTTP_URL,
       }),
-    )
+    );
 
     const ws = new unchained.ws.Client<unchained.cosmossdk.Tx>(
       process.env.VITE_UNCHAINED_THORCHAIN_WS_URL,
-    )
+    );
 
     const thorchainAdapter = new thorchain.ChainAdapter({
       providers: { http, ws },
@@ -84,7 +91,7 @@ export class CosmosSdkChainAdapterService {
     this.logger.log('Thorchain adapter initialized');
   }
 
-  private async initializeMayachainAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeMayachainAdapter(chainAdapterManager: Map<string, any>) {
     const mayachainHttp = new unchained.mayachain.V1Api(
       new unchained.mayachain.Configuration({
         basePath: process.env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL,
@@ -110,11 +117,14 @@ export class CosmosSdkChainAdapterService {
       throw new Error(`Chain ${chainId} is not a Cosmos SDK chain`);
     }
 
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
     const adapter = chainAdapterManager.get(chainId);
 
     if (!adapter) {
-      throw new Error(`Cosmos SDK chain adapter not found for chain ${chainId}`);
+      throw new Error(
+        `Cosmos SDK chain adapter not found for chain ${chainId}`,
+      );
     }
 
     return adapter as CosmosSdkChainAdapter;

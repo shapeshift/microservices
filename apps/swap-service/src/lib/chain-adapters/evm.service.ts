@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service';
 import * as unchained from '@shapeshiftoss/unchained-client';
 import { ethereum } from '@shapeshiftoss/chain-adapters';
-import { 
+import {
   ethChainId,
   avalancheChainId,
   optimismChainId,
@@ -13,7 +13,10 @@ import {
   arbitrumNovaChainId,
   baseChainId,
 } from '@shapeshiftoss/caip';
-import { evmChainIds, type EvmChainAdapter } from '@shapeshiftoss/chain-adapters';
+import {
+  evmChainIds,
+  type EvmChainAdapter,
+} from '@shapeshiftoss/chain-adapters';
 import type { ChainId } from '@shapeshiftoss/caip';
 import { EvmChainId } from '@shapeshiftoss/types';
 
@@ -23,29 +26,30 @@ export class EvmChainAdapterService {
 
   constructor(private chainAdapterManagerService: ChainAdapterManagerService) {}
 
-  async initializeEvmChainAdapters() {
+  initializeEvmChainAdapters() {
     this.logger.log('Initializing EVM chain adapters...');
-    
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
 
     try {
-      await this.initializeEthereumAdapter(chainAdapterManager);
-      
-      await this.initializeAvalancheAdapter(chainAdapterManager);
-      
-      await this.initializeOptimismAdapter(chainAdapterManager);
-      
-      await this.initializeBscAdapter(chainAdapterManager);
-      
-      await this.initializePolygonAdapter(chainAdapterManager);
-      
-      await this.initializeGnosisAdapter(chainAdapterManager);
-      
-      await this.initializeArbitrumAdapter(chainAdapterManager);
-      
-      await this.initializeArbitrumNovaAdapter(chainAdapterManager);
-      
-      await this.initializeBaseAdapter(chainAdapterManager);
+      this.initializeEthereumAdapter(chainAdapterManager);
+
+      this.initializeAvalancheAdapter(chainAdapterManager);
+
+      this.initializeOptimismAdapter(chainAdapterManager);
+
+      this.initializeBscAdapter(chainAdapterManager);
+
+      this.initializePolygonAdapter(chainAdapterManager);
+
+      this.initializeGnosisAdapter(chainAdapterManager);
+
+      this.initializeArbitrumAdapter(chainAdapterManager);
+
+      this.initializeArbitrumNovaAdapter(chainAdapterManager);
+
+      this.initializeBaseAdapter(chainAdapterManager);
 
       this.logger.log('All EVM chain adapters initialized successfully');
     } catch (error) {
@@ -54,7 +58,7 @@ export class EvmChainAdapterService {
     }
   }
 
-  private async initializeEthereumAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeEthereumAdapter(chainAdapterManager: Map<string, any>) {
     const ethereumHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_ETHEREUM_HTTP_URL,
@@ -76,7 +80,7 @@ export class EvmChainAdapterService {
     this.logger.log('Ethereum adapter initialized');
   }
 
-  private async initializeAvalancheAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeAvalancheAdapter(chainAdapterManager: Map<string, any>) {
     const avalancheHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL,
@@ -98,7 +102,7 @@ export class EvmChainAdapterService {
     this.logger.log('Avalanche adapter initialized');
   }
 
-  private async initializeOptimismAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeOptimismAdapter(chainAdapterManager: Map<string, any>) {
     const optimismHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_OPTIMISM_HTTP_URL,
@@ -120,7 +124,7 @@ export class EvmChainAdapterService {
     this.logger.log('Optimism adapter initialized');
   }
 
-  private async initializeBscAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeBscAdapter(chainAdapterManager: Map<string, any>) {
     const bscHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL,
@@ -142,7 +146,7 @@ export class EvmChainAdapterService {
     this.logger.log('BNB Smart Chain adapter initialized');
   }
 
-  private async initializePolygonAdapter(chainAdapterManager: Map<string, any>) {
+  private initializePolygonAdapter(chainAdapterManager: Map<string, any>) {
     const polygonHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_POLYGON_HTTP_URL,
@@ -164,7 +168,7 @@ export class EvmChainAdapterService {
     this.logger.log('Polygon adapter initialized');
   }
 
-  private async initializeGnosisAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeGnosisAdapter(chainAdapterManager: Map<string, any>) {
     const gnosisHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_GNOSIS_HTTP_URL,
@@ -186,7 +190,7 @@ export class EvmChainAdapterService {
     this.logger.log('Gnosis adapter initialized');
   }
 
-  private async initializeArbitrumAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeArbitrumAdapter(chainAdapterManager: Map<string, any>) {
     const arbitrumHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_ARBITRUM_HTTP_URL,
@@ -208,7 +212,7 @@ export class EvmChainAdapterService {
     this.logger.log('Arbitrum adapter initialized');
   }
 
-  private async initializeArbitrumNovaAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeArbitrumNovaAdapter(chainAdapterManager: Map<string, any>) {
     const arbitrumNovaHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_ARBITRUM_NOVA_HTTP_URL,
@@ -230,7 +234,7 @@ export class EvmChainAdapterService {
     this.logger.log('Arbitrum Nova adapter initialized');
   }
 
-  private async initializeBaseAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeBaseAdapter(chainAdapterManager: Map<string, any>) {
     const baseHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_BASE_HTTP_URL,
@@ -253,11 +257,14 @@ export class EvmChainAdapterService {
   }
 
   isEvmChainAdapter(chainAdapter: unknown): chainAdapter is EvmChainAdapter {
-    return evmChainIds.includes((chainAdapter as EvmChainAdapter).getChainId() as EvmChainId);
+    return evmChainIds.includes(
+      (chainAdapter as EvmChainAdapter).getChainId() as EvmChainId,
+    );
   }
 
   assertGetEvmChainAdapter(chainId: ChainId): EvmChainAdapter {
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
     const adapter = chainAdapterManager.get(chainId);
 
     if (!this.isEvmChainAdapter(adapter)) {

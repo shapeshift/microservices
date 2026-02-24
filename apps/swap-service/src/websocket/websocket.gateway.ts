@@ -21,7 +21,9 @@ interface AuthenticatedSocket extends Socket {
     origin: '*',
   },
 })
-export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class WebsocketGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -62,25 +64,28 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
-  async sendSwapUpdateToUser(userId: string, swap: { 
-    id: string; 
-    swapId: string; 
-    status: string; 
-    sellAsset: Asset; 
-    buyAsset: Asset; 
-    sellAmountCryptoBaseUnit: string; 
-    expectedBuyAmountCryptoBaseUnit: string; 
-    sellAccountId: string; 
-    buyAccountId?: string; 
-    sellTxHash?: string; 
-    buyTxHash?: string; 
-    statusMessage?: string; 
-  }) {
+  sendSwapUpdateToUser(
+    userId: string,
+    swap: {
+      id: string;
+      swapId: string;
+      status: string;
+      sellAsset: Asset;
+      buyAsset: Asset;
+      sellAmountCryptoBaseUnit: string;
+      expectedBuyAmountCryptoBaseUnit: string;
+      sellAccountId: string;
+      buyAccountId?: string;
+      sellTxHash?: string;
+      buyTxHash?: string;
+      statusMessage?: string;
+    },
+  ) {
     const client = this.connectedClients.get(userId);
     if (client) {
       client.emit('swapUpdate', swap);
     }
-    
+
     this.server.to(`user:${userId}`).emit('swapUpdate', swap);
   }
 

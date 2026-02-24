@@ -2,13 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service';
 import * as unchained from '@shapeshiftoss/unchained-client';
 import { bitcoin } from '@shapeshiftoss/chain-adapters';
-import { 
+import {
   btcChainId,
   bchChainId,
   dogeChainId,
   ltcChainId,
 } from '@shapeshiftoss/caip';
-import { utxoChainIds, type UtxoChainAdapter } from '@shapeshiftoss/chain-adapters';
+import {
+  utxoChainIds,
+  type UtxoChainAdapter,
+} from '@shapeshiftoss/chain-adapters';
 import type { ChainId } from '@shapeshiftoss/caip';
 import { UtxoChainId } from '@shapeshiftoss/types';
 
@@ -18,16 +21,17 @@ export class UtxoChainAdapterService {
 
   constructor(private chainAdapterManagerService: ChainAdapterManagerService) {}
 
-  async initializeUtxoChainAdapters() {
+  initializeUtxoChainAdapters() {
     this.logger.log('Initializing UTXO chain adapters...');
-    
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
 
     try {
-      await this.initializeBitcoinAdapter(chainAdapterManager);
-      await this.initializeBitcoinCashAdapter(chainAdapterManager);
-      await this.initializeDogecoinAdapter(chainAdapterManager);
-      await this.initializeLitecoinAdapter(chainAdapterManager);
+      this.initializeBitcoinAdapter(chainAdapterManager);
+      this.initializeBitcoinCashAdapter(chainAdapterManager);
+      this.initializeDogecoinAdapter(chainAdapterManager);
+      this.initializeLitecoinAdapter(chainAdapterManager);
 
       this.logger.log('All UTXO chain adapters initialized successfully');
     } catch (error) {
@@ -36,7 +40,7 @@ export class UtxoChainAdapterService {
     }
   }
 
-  private async initializeBitcoinAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeBitcoinAdapter(chainAdapterManager: Map<string, any>) {
     const bitcoinHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_BITCOIN_HTTP_URL,
@@ -58,7 +62,7 @@ export class UtxoChainAdapterService {
     this.logger.log('Bitcoin adapter initialized');
   }
 
-  private async initializeBitcoinCashAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeBitcoinCashAdapter(chainAdapterManager: Map<string, any>) {
     const bchHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL,
@@ -80,7 +84,7 @@ export class UtxoChainAdapterService {
     this.logger.log('Bitcoin Cash adapter initialized');
   }
 
-  private async initializeDogecoinAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeDogecoinAdapter(chainAdapterManager: Map<string, any>) {
     const dogeHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_DOGECOIN_HTTP_URL,
@@ -102,7 +106,7 @@ export class UtxoChainAdapterService {
     this.logger.log('Dogecoin adapter initialized');
   }
 
-  private async initializeLitecoinAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeLitecoinAdapter(chainAdapterManager: Map<string, any>) {
     const ltcHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_LITECOIN_HTTP_URL,
@@ -129,7 +133,8 @@ export class UtxoChainAdapterService {
       throw new Error(`Chain ${chainId} is not a UTXO chain`);
     }
 
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
     const adapter = chainAdapterManager.get(chainId);
 
     if (!adapter) {

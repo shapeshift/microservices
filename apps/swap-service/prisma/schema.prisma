@@ -46,6 +46,10 @@ model Swap {
   affiliateVerificationDetails     Json?
   affiliateVerifiedAt              DateTime?
   affiliateAddress                 String?
+  affiliateBps                     String?
+  origin                           String?
+  affiliateFeeAssetId              String?
+  affiliateFeeAmountCryptoBaseUnit String?
 
   @@index([referralCode])
   @@index([affiliateAddress])

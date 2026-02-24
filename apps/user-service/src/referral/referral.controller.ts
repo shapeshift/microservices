@@ -44,7 +44,9 @@ export class ReferralController {
 
   @Get('codes')
   async getAllReferralCodes(@Query('limit') limit?: string) {
-    return this.referralService.getAllReferralCodes(limit ? parseInt(limit) : 50);
+    return this.referralService.getAllReferralCodes(
+      limit ? parseInt(limit) : 50,
+    );
   }
 
   @Get('codes/:code')
@@ -62,7 +64,9 @@ export class ReferralController {
   }
 
   @Get('usage/:refereeAddress')
-  async getReferralUsageByAddress(@Param('refereeAddress') refereeAddress: string) {
+  async getReferralUsageByAddress(
+    @Param('refereeAddress') refereeAddress: string,
+  ) {
     return this.referralService.getReferralUsageByAddress(refereeAddress);
   }
 
@@ -75,7 +79,10 @@ export class ReferralController {
       throw new Error('Invalid account ID');
     }
     const hashedOwnerAddress = hashAccountId(data.ownerAddress);
-    return this.referralService.deactivateReferralCode(code, hashedOwnerAddress);
+    return this.referralService.deactivateReferralCode(
+      code,
+      hashedOwnerAddress,
+    );
   }
 
   @Get('stats/:ownerAddress')
@@ -90,6 +97,10 @@ export class ReferralController {
     const hashedOwnerAddress = hashAccountId(ownerAddress);
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.referralService.getReferralStatsByOwner(hashedOwnerAddress, start, end);
+    return this.referralService.getReferralStatsByOwner(
+      hashedOwnerAddress,
+      start,
+      end,
+    );
   }
 }

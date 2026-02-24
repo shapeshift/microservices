@@ -1,4 +1,12 @@
-import { Controller, Post, Get, Put, Delete, Param, Body, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Delete,
+  Param,
+  Body,
+  Query,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto, DeviceType } from '@shapeshift/shared-types';
 
@@ -12,8 +20,13 @@ export class UsersController {
   }
 
   @Post('get-or-create')
-  async getOrCreateUser(@Body() data: { accountIds: string[]; referralCode?: string }) {
-    return this.usersService.getOrCreateUserByAccountIds(data.accountIds, data.referralCode);
+  async getOrCreateUser(
+    @Body() data: { accountIds: string[]; referralCode?: string },
+  ) {
+    return this.usersService.getOrCreateUserByAccountIds(
+      data.accountIds,
+      data.referralCode,
+    );
   }
 
   @Get()

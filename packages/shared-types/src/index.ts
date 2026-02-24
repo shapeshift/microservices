@@ -65,10 +65,10 @@ export interface PushNotificationData {
 
 export interface CreateSwapDto {
   swapId: string;
-  userId: string;
+  userId?: string;
   sellAsset: Asset;
   buyAsset: Asset;
-  sellTxHash: string;
+  sellTxHash?: string;
   sellAmountCryptoBaseUnit: string;
   expectedBuyAmountCryptoBaseUnit: string;
   sellAmountCryptoPrecision: string;
@@ -81,6 +81,8 @@ export interface CreateSwapDto {
   isStreaming?: boolean;
   metadata?: Record<string, any>;
   affiliateAddress?: string;
+  affiliateBps?: string;
+  origin?: 'web' | 'api' | 'widget';
 }
 
 export interface UpdateSwapStatusDto {
@@ -127,6 +129,7 @@ export interface SwapVerificationResult {
   hasAffiliate: boolean;
   affiliateBps?: number;
   affiliateAddress?: string;
+  verifiedSellAmountCryptoBaseUnit?: string;
   protocol: string;
   swapId: string;
   details?: Record<string, any>;

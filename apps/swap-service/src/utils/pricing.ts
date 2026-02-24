@@ -33,7 +33,9 @@ export async function getAssetPriceUsd(asset: Asset): Promise<number | null> {
     }
 
     // Fetch price from CoinGecko
-    const { data } = await axios.get<CoinGeckoAssetData>(url, { timeout: 5000 });
+    const { data } = await axios.get<CoinGeckoAssetData>(url, {
+      timeout: 5000,
+    });
     const price = data?.market_data?.current_price?.usd || null;
 
     if (price !== null) {
@@ -41,7 +43,9 @@ export async function getAssetPriceUsd(asset: Asset): Promise<number | null> {
       priceCache.set(cacheKey, { price, timestamp: Date.now() });
       return price;
     } else {
-      console.warn(`No price data found for ${asset.assetId} (symbol: ${asset.symbol})`);
+      console.warn(
+        `No price data found for ${asset.assetId} (symbol: ${asset.symbol})`,
+      );
       return null;
     }
   } catch (error) {
@@ -50,7 +54,10 @@ export async function getAssetPriceUsd(asset: Asset): Promise<number | null> {
   }
 }
 
-export function calculateUsdValue(cryptoAmount: string, priceUsd: number): string {
+export function calculateUsdValue(
+  cryptoAmount: string,
+  priceUsd: number,
+): string {
   try {
     const amount = parseFloat(cryptoAmount);
     if (isNaN(amount)) return '0';

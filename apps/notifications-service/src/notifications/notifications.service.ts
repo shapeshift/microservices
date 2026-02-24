@@ -3,13 +3,12 @@ import { HttpService } from '@nestjs/axios';
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRequiredEnvVar } from '@shapeshift/shared-utils';
-import { 
+import {
   CreateNotificationDto,
   Device,
-  PushNotificationData
+  PushNotificationData,
 } from '@shapeshift/shared-types';
 import { Notification } from '@prisma/client';
-
 
 @Injectable()
 export class NotificationsService {
@@ -18,9 +17,11 @@ export class NotificationsService {
 
   constructor(
     private prisma: PrismaService,
-    private httpService: HttpService
+    private httpService: HttpService,
   ) {
-    this.expo = new Expo({ accessToken: getRequiredEnvVar('EXPO_ACCESS_TOKEN') });
+    this.expo = new Expo({
+      accessToken: getRequiredEnvVar('EXPO_ACCESS_TOKEN'),
+    });
   }
 
   async createNotification(data: CreateNotificationDto): Promise<Notification> {
@@ -49,12 +50,16 @@ export class NotificationsService {
     try {
       // Get user devices from user service
       const userServiceUrl = getRequiredEnvVar('USER_SERVICE_URL');
-      const response = await this.httpService.axiosRef.get<Device[]>(`${userServiceUrl}/users/${notification.userId}/devices`);
+      const response = await this.httpService.axiosRef.get<Device[]>(
+        `${userServiceUrl}/users/${notification.userId}/devices`,
+      );
       const devices = response.data;
       const activeDevices = devices.filter((device) => device.isActive);
-      
+
       if (activeDevices.length === 0) {
-        throw new BadRequestException(`No active devices found for user ${notification.userId}`);
+        throw new BadRequestException(
+          `No active devices found for user ${notification.userId}`,
+        );
       }
 
       const messages: ExpoPushMessage[] = activeDevices
@@ -73,7 +78,10 @@ export class NotificationsService {
           channelId: 'swap-notifications',
         }));
 
-      const tickets = await this.sendExpoPushNotifications(messages, notification.id);
+      const tickets = await this.sendExpoPushNotifications(
+        messages,
+        notification.id,
+      );
       return tickets;
     } catch (error) {
       this.logger.error('Failed to send push notification', error);
@@ -82,14 +90,16 @@ export class NotificationsService {
   }
 
   async sendPushNotificationToDevice(
-    deviceToken: string, 
-    title: string, 
-    body: string, 
-    data?: PushNotificationData
+    deviceToken: string,
+    title: string,
+    body: string,
+    data?: PushNotificationData,
   ): Promise<ExpoPushTicket[]> {
     try {
       if (!Expo.isExpoPushToken(deviceToken)) {
-        throw new BadRequestException(`Invalid Expo push token: ${deviceToken}`);
+        throw new BadRequestException(
+          `Invalid Expo push token: ${String(deviceToken)}`,
+        );
       }
 
       const message: ExpoPushMessage = {
@@ -106,28 +116,34 @@ export class NotificationsService {
       return tickets;
     } catch (error) {
       this.logger.error('Failed to send push notification to device', error);
-      throw new BadRequestException('Failed to send push notification to device');
+      throw new BadRequestException(
+        'Failed to send push notification to device',
+      );
     }
   }
 
   async sendPushNotificationToUser(
-    userId: string, 
-    title: string, 
-    body: string, 
-    data?: PushNotificationData
+    userId: string,
+    title: string,
+    body: string,
+    data?: PushNotificationData,
   ): Promise<ExpoPushTicket[]> {
     try {
       // Get user devices from user service
       const userServiceUrl = getRequiredEnvVar('USER_SERVICE_URL');
-      const response = await this.httpService.axiosRef.get<Device[]>(`${userServiceUrl}/users/${userId}/devices`);
+      const response = await this.httpService.axiosRef.get<Device[]>(
+        `${userServiceUrl}/users/${userId}/devices`,
+      );
       const devices = response.data;
       const activeDevices = devices.filter((device) => device.isActive);
 
       if (activeDevices.length === 0) {
-        throw new BadRequestException(`No active devices found for user ${userId}`);
+        throw new BadRequestException(
+          `No active devices found for user ${userId}`,
+        );
       }
 
-      const messages: ExpoPushMessage[] = activeDevices.map((device: any) => ({
+      const messages: ExpoPushMessage[] = activeDevices.map((device) => ({
         to: device.deviceToken,
         sound: 'default',
         title,
@@ -139,12 +155,15 @@ export class NotificationsService {
 
       const tickets = await this.sendExpoPushNotifications(messages);
       return tickets;
-    } catch (error) {
+    } catch {
       throw new BadRequestException('Failed to send push notification to user');
     }
   }
 
-  private async sendExpoPushNotifications(messages: ExpoPushMessage[], notificationId?: string): Promise<ExpoPushTicket[]> {
+  private async sendExpoPushNotifications(
+    messages: ExpoPushMessage[],
+    notificationId?: string,
+  ): Promise<ExpoPushTicket[]> {
     const chunks = this.expo.chunkPushNotifications(messages);
     const tickets: ExpoPushTicket[] = [];
 
@@ -170,10 +189,16 @@ export class NotificationsService {
     return tickets;
   }
 
-  async registerDevice(userId: string, deviceToken: string, deviceType: 'MOBILE' | 'WEB') {
+  async registerDevice(
+    userId: string,
+    deviceToken: string,
+    deviceType: 'MOBILE' | 'WEB',
+  ) {
     try {
-      this.logger.log(`registerDevice called with userId: ${userId}, deviceType: ${deviceType}, deviceToken: ${deviceToken}`);
-      
+      this.logger.log(
+        `registerDevice called with userId: ${userId}, deviceType: ${deviceType}, deviceToken: ${deviceToken}`,
+      );
+
       // Only validate Expo push token for mobile devices
       if (deviceType === 'MOBILE' && !Expo.isExpoPushToken(deviceToken)) {
         throw new BadRequestException('Invalid Expo push token');
@@ -186,12 +211,17 @@ export class NotificationsService {
 
       // Register device with user service
       const userServiceUrl = getRequiredEnvVar('USER_SERVICE_URL');
-      const response = await this.httpService.axiosRef.post<Device>(`${userServiceUrl}/users/${userId}/devices`, {
-        deviceToken,
-        deviceType,
-      });
+      const response = await this.httpService.axiosRef.post<Device>(
+        `${userServiceUrl}/users/${userId}/devices`,
+        {
+          deviceToken,
+          deviceType,
+        },
+      );
       const device = response.data;
-      this.logger.log(`Device registered: ${deviceToken} for user ${userId} (${deviceType})`);
+      this.logger.log(
+        `Device registered: ${deviceToken} for user ${userId} (${deviceType})`,
+      );
       return device;
     } catch (error) {
       this.logger.error('Failed to register device', error);
@@ -199,7 +229,10 @@ export class NotificationsService {
     }
   }
 
-  async getUserNotifications(userId: string, limit = 50): Promise<Notification[]> {
+  async getUserNotifications(
+    userId: string,
+    limit = 50,
+  ): Promise<Notification[]> {
     return this.prisma.notification.findMany({
       where: { userId },
       orderBy: { sentAt: 'desc' },
@@ -210,7 +243,9 @@ export class NotificationsService {
   async getUserDevices(userId: string): Promise<Device[]> {
     try {
       const userServiceUrl = getRequiredEnvVar('USER_SERVICE_URL');
-      const response = await this.httpService.axiosRef.get<Device[]>(`${userServiceUrl}/users/${userId}/devices`);
+      const response = await this.httpService.axiosRef.get<Device[]>(
+        `${userServiceUrl}/users/${userId}/devices`,
+      );
       return response.data;
     } catch (error) {
       this.logger.error('Failed to get user devices', error);

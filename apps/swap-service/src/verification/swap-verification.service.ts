@@ -2,8 +2,123 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SwapVerificationResult } from '@shapeshift/shared-types';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { OneClickService, OpenAPI } from '@defuse-protocol/one-click-sdk-typescript';
-import { assertGetCowNetwork, getTreasuryAddressFromChainId } from '@shapeshiftoss/swapper';
+import {
+  OneClickService,
+  OpenAPI,
+} from '@defuse-protocol/one-click-sdk-typescript';
+import {
+  assertGetCowNetwork,
+  getTreasuryAddressFromChainId,
+} from '@shapeshiftoss/swapper';
+
+interface ThorchainMayaTxResponse {
+  observed_tx?: {
+    tx?: {
+      memo?: string;
+      coins?: Array<{ amount?: string }>;
+    };
+  };
+}
+
+interface RelayAppFee {
+  bps?: string;
+  recipient?: string;
+}
+
+interface RelayRequest {
+  referrer?: string;
+  data?: {
+    appFees?: RelayAppFee[];
+    paidAppFees?: RelayAppFee[];
+    inTxs?: Array<{ data?: { value?: string } }>;
+    metadata?: { currencyIn?: { amount?: string } };
+  };
+}
+
+interface RelayRequestsResponse {
+  requests?: RelayRequest[];
+}
+
+interface CowSwapAppDataResponse {
+  fullAppData: string;
+}
+
+interface CowSwapDecodedAppData {
+  appCode?: string;
+  metadata?: {
+    partnerFee?: {
+      bps?: number;
+      recipient?: string;
+    };
+  };
+}
+
+interface CowSwapOrderResponse {
+  executedSellAmountBeforeFees?: string;
+  executedSellAmount?: string;
+}
+
+interface PortalsOrderResponse {
+  context?: {
+    partner?: string;
+    inputAmount?: string;
+    feeAmount?: string;
+    feeAmountUsd?: string;
+  };
+}
+
+interface ChainflipSwapResponse {
+  affiliate?: string;
+  affiliateName?: string;
+  affiliateBps?: string;
+  affiliateFee?: string;
+  depositAmount?: string;
+  ingressAmount?: string;
+  sourceAmount?: string;
+}
+
+interface ZrxTrade {
+  txHash?: string;
+  transactionHash?: string;
+  integratorId?: string;
+  integratorName?: string;
+  affiliateName?: string;
+  integratorFee?: string;
+  affiliateFee?: string;
+  partnerFee?: string;
+  sellAmount?: string;
+  inputTokenAmount?: string;
+  amount?: string;
+}
+
+interface ZrxApiResponse {
+  trades?: ZrxTrade[];
+  results?: ZrxTrade[];
+}
+
+interface BebopTrade {
+  txHash?: string;
+  partnerFeeBps?: number;
+  sellTokens?: Record<string, { amount?: string }>;
+  partnerFeeNative?: string;
+}
+
+interface BebopTradesResponse {
+  results?: BebopTrade[];
+}
+
+const THORCHAIN_PRECISION = 8;
+
+const thorchainToNativePrecision = (
+  thorchainAmount: string,
+  nativePrecision: number,
+): string => {
+  const diff = nativePrecision - THORCHAIN_PRECISION;
+  if (diff === 0) return thorchainAmount;
+  if (diff > 0) return thorchainAmount + '0'.repeat(diff);
+  const trimmed = thorchainAmount.slice(0, diff);
+  return trimmed || '0';
+};
 
 @Injectable()
 export class SwapVerificationService {
@@ -31,7 +146,9 @@ export class SwapVerificationService {
     metadata?: Record<string, any>,
   ): Promise<SwapVerificationResult> {
     try {
-      this.logger.log(`Verifying affiliate for swap ${swapId} on protocol ${protocol}`);
+      this.logger.log(
+        `Verifying affiliate for swap ${swapId} on protocol ${protocol}`,
+      );
 
       switch (protocol.toLowerCase()) {
         case 'near':
@@ -40,20 +157,28 @@ export class SwapVerificationService {
           return await this.verifyNearIntents(swapId, metadata);
 
         case 'relay':
-          return await this.verifyRelay(swapId, metadata.relayTransactionMetadata.relayId);
+          return await this.verifyRelay(
+            swapId,
+            (metadata?.relayTransactionMetadata as { relayId: string }).relayId,
+          );
 
         case 'cow swap':
-          return await this.verifyCowSwap(swapId, sellChainId, metadata);
+          return await this.verifyCowSwap(
+            swapId,
+            sellChainId,
+            txHash,
+            metadata,
+          );
 
         case 'portals':
           return await this.verifyPortals(swapId, sellChainId, metadata);
 
         case 'thorchain':
-          return await this.verifyThorchain(swapId, txHash);
+          return await this.verifyThorchain(swapId, txHash, metadata);
 
         case 'maya':
         case 'mayachain':
-          return await this.verifyMaya(swapId, txHash);
+          return await this.verifyMaya(swapId, txHash, metadata);
 
         case 'chainflip':
           return await this.verifyChainflip(swapId, metadata);
@@ -75,7 +200,10 @@ export class SwapVerificationService {
           };
       }
     } catch (error) {
-      this.logger.error(`Error verifying swap ${swapId} for protocol ${protocol}:`, error);
+      this.logger.error(
+        `Error verifying swap ${swapId} for protocol ${protocol}:`,
+        error,
+      );
       return {
         isVerified: false,
         hasAffiliate: false,
@@ -93,7 +221,9 @@ export class SwapVerificationService {
     // NEAR intents uses depositAddress to query execution status
     // The depositAddress is stored in nearIntentsSpecific metadata
 
-    const depositAddress = metadata?.nearIntentsSpecific?.depositAddress;
+    const depositAddress = (
+      metadata?.nearIntentsSpecific as { depositAddress?: string } | undefined
+    )?.depositAddress;
 
     if (!depositAddress) {
       return {
@@ -109,7 +239,9 @@ export class SwapVerificationService {
       // Initialize OneClickService with API key (same approach as web)
       const apiKey = process.env.VITE_NEAR_INTENTS_API_KEY;
       if (!apiKey) {
-        this.logger.error('Missing VITE_NEAR_INTENTS_API_KEY for NEAR Intents verification');
+        this.logger.error(
+          'Missing VITE_NEAR_INTENTS_API_KEY for NEAR Intents verification',
+        );
         return {
           isVerified: false,
           hasAffiliate: false,
@@ -121,7 +253,8 @@ export class SwapVerificationService {
 
       this.initializeOneClickService(apiKey);
 
-      const statusResponse = await OneClickService.getExecutionStatus(depositAddress);
+      const statusResponse =
+        await OneClickService.getExecutionStatus(depositAddress);
 
       if (!statusResponse) {
         return {
@@ -140,8 +273,10 @@ export class SwapVerificationService {
       // Verify it's ShapeShift's affiliate
       // The referral field should be 'shapeshift' from the quote request
       const referral = quoteRequest?.referral;
-      const shapeshiftReferral = process.env.SHAPESHIFT_NEAR_REFERRAL || 'shapeshift';
-      const hasShapeshiftReferral = referral?.toLowerCase() === shapeshiftReferral.toLowerCase();
+      const shapeshiftReferral =
+        process.env.SHAPESHIFT_NEAR_REFERRAL || 'shapeshift';
+      const hasShapeshiftReferral =
+        referral?.toLowerCase() === shapeshiftReferral.toLowerCase();
 
       // Check if there are app fees
       const appFees = quoteRequest?.appFees || [];
@@ -155,11 +290,40 @@ export class SwapVerificationService {
         affiliateBps = appFees[0].fee;
       }
 
+      const swapDetails = (
+        statusResponse as unknown as {
+          swapDetails?: { depositedAmount?: string; amountIn?: string };
+        }
+      ).swapDetails;
+      const quoteAmounts = statusResponse.quoteResponse?.quote;
+      let verifiedSellAmountCryptoBaseUnit: string | undefined;
+
+      const rawDepositedAmount: string | undefined =
+        swapDetails?.depositedAmount ??
+        swapDetails?.amountIn ??
+        quoteAmounts?.amountIn;
+      if (rawDepositedAmount) {
+        const sellAssetPrecision = metadata?.sellAssetPrecision as
+          | number
+          | undefined;
+        if (sellAssetPrecision && rawDepositedAmount.includes('.')) {
+          const [whole, frac = ''] = rawDepositedAmount.split('.');
+          verifiedSellAmountCryptoBaseUnit =
+            whole +
+            frac.padEnd(sellAssetPrecision, '0').slice(0, sellAssetPrecision);
+        } else {
+          verifiedSellAmountCryptoBaseUnit = rawDepositedAmount;
+        }
+      }
+
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftReferral : undefined,
+        affiliateAddress: hasShapeshiftAffiliate
+          ? shapeshiftReferral
+          : undefined,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'near',
         swapId,
         details: {
@@ -167,16 +331,23 @@ export class SwapVerificationService {
           referral,
           appFees,
           quoteRequest,
+          swapDetails,
         },
       };
     } catch (error) {
-      this.logger.error(`Error verifying NEAR intents for swap ${swapId}:`, error);
+      this.logger.error(
+        `Error verifying NEAR intents for swap ${swapId}:`,
+        error,
+      );
       return {
         isVerified: false,
         hasAffiliate: false,
         protocol: 'near',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to fetch NEAR intents status',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch NEAR intents status',
       };
     }
   }
@@ -196,14 +367,14 @@ export class SwapVerificationService {
     }
 
     try {
-      const relayApiUrl = process.env.VITE_RELAY_API_URL || 'https://api.relay.link';
+      const relayApiUrl =
+        process.env.VITE_RELAY_API_URL || 'https://api.relay.link';
       const requestUrl = `${relayApiUrl}/requests/v2?id=${txHash}`;
 
       const response = await firstValueFrom(
-        this.httpService.get(requestUrl),
+        this.httpService.get<RelayRequestsResponse>(requestUrl),
       );
 
-      // Response has a requests array
       const requests = response.data?.requests;
 
       if (!requests || requests.length === 0) {
@@ -220,8 +391,10 @@ export class SwapVerificationService {
 
       // Check for referrer field at top level
       const referrer = request.referrer;
-      const shapeshiftReferrer = process.env.SHAPESHIFT_RELAY_REFERRER || 'shapeshift';
-      const hasShapeshiftReferrer = referrer?.toLowerCase() === shapeshiftReferrer.toLowerCase();
+      const shapeshiftReferrer =
+        process.env.SHAPESHIFT_RELAY_REFERRER || 'shapeshift';
+      const hasShapeshiftReferrer =
+        referrer?.toLowerCase() === shapeshiftReferrer.toLowerCase();
 
       // Check for appFees or paidAppFees in the data object
       const appFees = request.data?.appFees || request.data?.paidAppFees || [];
@@ -238,13 +411,20 @@ export class SwapVerificationService {
       }
 
       // Verification is successful if we have shapeshift as referrer AND we have app fees
-      const hasShapeshiftAffiliate = hasShapeshiftReferrer && appFees.length > 0;
+      const hasShapeshiftAffiliate =
+        hasShapeshiftReferrer && appFees.length > 0;
+
+      const verifiedSellAmountCryptoBaseUnit =
+        request.data?.inTxs?.[0]?.data?.value?.toString() ??
+        request.data?.metadata?.currencyIn?.amount?.toString() ??
+        undefined;
 
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
         affiliateAddress,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'relay',
         swapId,
         details: {
@@ -261,7 +441,10 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: 'relay',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to fetch Relay request data',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch Relay request data',
       };
     }
   }
@@ -269,11 +452,16 @@ export class SwapVerificationService {
   private async verifyCowSwap(
     swapId: string,
     sellChainId: string,
+    txHash?: string,
     metadata?: Record<string, any>,
   ): Promise<SwapVerificationResult> {
     // SECURITY: Always verify appData from CowSwap API using appDataHash
     // to prevent users from pushing fake data to abuse the referral system
-    const appDataHash = metadata?.cowswapQuoteSpecific?.quote?.appDataHash;
+    const appDataHash = (
+      metadata?.cowswapQuoteSpecific as
+        | { quote?: { appDataHash?: string } }
+        | undefined
+    )?.quote?.appDataHash;
 
     if (!appDataHash) {
       this.logger.warn(`CowSwap - Missing appDataHash for swap ${swapId}`);
@@ -288,19 +476,28 @@ export class SwapVerificationService {
 
     try {
       // ALWAYS fetch appData from CowSwap API to verify it's legitimate
-      this.logger.log(`CowSwap - Fetching appData from API using hash ${appDataHash} for swap ${swapId}`);
-      const cowswapApiUrl = process.env.VITE_COWSWAP_BASE_URL || 'https://api.cow.fi';
+      this.logger.log(
+        `CowSwap - Fetching appData from API using hash ${appDataHash} for swap ${swapId}`,
+      );
+      const cowswapApiUrl =
+        process.env.VITE_COWSWAP_BASE_URL || 'https://api.cow.fi';
       const cowNetwork = assertGetCowNetwork(sellChainId);
       const response = await firstValueFrom(
-        this.httpService.get(`${cowswapApiUrl}/${cowNetwork}/api/v1/app_data/${appDataHash}`),
+        this.httpService.get<CowSwapAppDataResponse>(
+          `${cowswapApiUrl}/${cowNetwork}/api/v1/app_data/${appDataHash}`,
+        ),
       );
 
-      const decodedAppData = JSON.parse(response.data.fullAppData);
+      const decodedAppData = JSON.parse(
+        response.data.fullAppData,
+      ) as CowSwapDecodedAppData;
 
       // Check if appCode is "shapeshift"
       const appCode = decodedAppData?.appCode;
-      const shapeshiftAppCode = process.env.SHAPESHIFT_COWSWAP_APPCODE || 'shapeshift';
-      const hasShapeshiftAppCode = appCode?.toLowerCase() === shapeshiftAppCode.toLowerCase();
+      const shapeshiftAppCode =
+        process.env.SHAPESHIFT_COWSWAP_APPCODE || 'shapeshift';
+      const hasShapeshiftAppCode =
+        appCode?.toLowerCase() === shapeshiftAppCode.toLowerCase();
 
       // Extract partner fee information from metadata.partnerFee
       const partnerFee = decodedAppData?.metadata?.partnerFee;
@@ -310,6 +507,27 @@ export class SwapVerificationService {
       // We have ShapeShift affiliate if appCode is shapeshift AND we have partnerFee
       const hasShapeshiftAffiliate = hasShapeshiftAppCode && !!partnerFee;
 
+      let verifiedSellAmountCryptoBaseUnit: string | undefined;
+      const orderUid =
+        txHash || (metadata?.cowswapOrderUid as string | undefined);
+      if (orderUid) {
+        try {
+          const orderResponse = await firstValueFrom(
+            this.httpService.get<CowSwapOrderResponse>(
+              `${cowswapApiUrl}/${cowNetwork}/api/v1/orders/${orderUid}`,
+            ),
+          );
+          verifiedSellAmountCryptoBaseUnit =
+            orderResponse.data?.executedSellAmountBeforeFees?.toString() ??
+            orderResponse.data?.executedSellAmount?.toString();
+        } catch (orderErr) {
+          this.logger.warn(
+            `CowSwap - Failed to fetch order ${orderUid} for amount verification:`,
+            orderErr,
+          );
+        }
+      }
+
       this.logger.log(
         `CowSwap verification for swap ${swapId}: appCode=${appCode}, hasPartnerFee=${!!partnerFee}, bps=${affiliateBps}, verified=${hasShapeshiftAffiliate}`,
       );
@@ -317,8 +535,10 @@ export class SwapVerificationService {
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
+        affiliateBps:
+          hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
         affiliateAddress: hasShapeshiftAffiliate ? affiliateAddress : undefined,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'cowswap',
         swapId,
         details: {
@@ -334,7 +554,10 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: 'cowswap',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to decode CowSwap appData',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to decode CowSwap appData',
       };
     }
   }
@@ -348,7 +571,9 @@ export class SwapVerificationService {
     // to prevent users from pushing fake data to abuse the referral system
 
     // Get the orderId from the swap (stored as the quote id)
-    const orderId = metadata?.portalsTransactionMetadata?.orderId;
+    const orderId = (
+      metadata?.portalsTransactionMetadata as { orderId?: string } | undefined
+    )?.orderId;
 
     if (!orderId) {
       this.logger.warn(`Portals - Missing orderId for swap ${swapId}`);
@@ -365,8 +590,10 @@ export class SwapVerificationService {
     let expectedTreasuryAddress: string;
     try {
       expectedTreasuryAddress = getTreasuryAddressFromChainId(sellChainId);
-    } catch (error) {
-      this.logger.warn(`Portals - Unsupported chain for treasury address: ${sellChainId}`);
+    } catch {
+      this.logger.warn(
+        `Portals - Unsupported chain for treasury address: ${sellChainId}`,
+      );
       return {
         isVerified: false,
         hasAffiliate: false,
@@ -378,20 +605,30 @@ export class SwapVerificationService {
 
     try {
       // ALWAYS fetch order status from Portals API to verify it's legitimate
-      this.logger.log(`Portals - Fetching order status from API using orderId ${orderId} for swap ${swapId}`);
-      const portalsProxyUrl = process.env.PORTALS_PROXY_URL || 'https://api.proxy.shapeshift.com/api/v1/portals';
+      this.logger.log(
+        `Portals - Fetching order status from API using orderId ${orderId} for swap ${swapId}`,
+      );
+      const portalsProxyUrl =
+        process.env.PORTALS_PROXY_URL ||
+        'https://api.proxy.shapeshift.com/api/v1/portals';
       const response = await firstValueFrom(
-        this.httpService.get(`${portalsProxyUrl}/v2/portal/status?orderId=${orderId}`),
+        this.httpService.get<PortalsOrderResponse>(
+          `${portalsProxyUrl}/v2/portal/status?orderId=${orderId}`,
+        ),
       );
 
       const orderData = response.data;
-      this.logger.log(`Portals - Fetched and verified order from API for swap ${swapId}`);
+      this.logger.log(
+        `Portals - Fetched and verified order from API for swap ${swapId}`,
+      );
 
       // Get partner from the API response context
       const partner = orderData?.context?.partner;
 
       if (!partner) {
-        this.logger.warn(`Portals - No partner found in API response for swap ${swapId}`);
+        this.logger.warn(
+          `Portals - No partner found in API response for swap ${swapId}`,
+        );
         return {
           isVerified: false,
           hasAffiliate: false,
@@ -402,12 +639,16 @@ export class SwapVerificationService {
       }
 
       // Verify partner matches the expected treasury address (case-insensitive for EVM addresses)
-      const hasShapeshiftAffiliate = partner.toLowerCase() === expectedTreasuryAddress.toLowerCase();
+      const hasShapeshiftAffiliate =
+        partner.toLowerCase() === expectedTreasuryAddress.toLowerCase();
 
       // Extract fee information from the order context
       // feeAmount and feeAmountUsd are in the context
       const feeAmount = orderData?.context?.feeAmount;
       const feeAmountUsd = orderData?.context?.feeAmountUsd;
+
+      const verifiedSellAmountCryptoBaseUnit =
+        orderData?.context?.inputAmount?.toString() ?? undefined;
 
       this.logger.log(
         `Portals verification for swap ${swapId}: partner=${partner}, expectedTreasury=${expectedTreasuryAddress}, verified=${hasShapeshiftAffiliate}, feeAmount=${feeAmount}`,
@@ -416,8 +657,13 @@ export class SwapVerificationService {
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: metadata?.affiliateBps ? parseInt(metadata.affiliateBps) : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? expectedTreasuryAddress : undefined,
+        affiliateBps: metadata?.affiliateBps
+          ? parseInt(metadata.affiliateBps as string)
+          : undefined,
+        affiliateAddress: hasShapeshiftAffiliate
+          ? expectedTreasuryAddress
+          : undefined,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'portals',
         swapId,
         details: {
@@ -437,7 +683,10 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: 'portals',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to verify Portals order',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify Portals order',
       };
     }
   }
@@ -445,6 +694,7 @@ export class SwapVerificationService {
   private async verifyThorchain(
     swapId: string,
     txHash?: string,
+    metadata?: Record<string, any>,
   ): Promise<SwapVerificationResult> {
     if (!txHash) {
       return {
@@ -458,13 +708,15 @@ export class SwapVerificationService {
 
     try {
       // SECURITY: Query Thorchain node API to verify memo contains affiliate info
-      const nodeUrl = process.env.VITE_THORCHAIN_NODE_URL || 'https://thornode.ninerealms.com';
+      const nodeUrl =
+        process.env.VITE_THORCHAIN_NODE_URL ||
+        'https://thornode.ninerealms.com';
       const txUrl = `${nodeUrl}/thorchain/tx/${txHash}`;
 
       this.logger.log(`Thorchain - Fetching tx from node API: ${txUrl}`);
 
       const response = await firstValueFrom(
-        this.httpService.get(txUrl),
+        this.httpService.get<ThorchainMayaTxResponse>(txUrl),
       );
 
       const observedTx = response.data?.observed_tx;
@@ -479,7 +731,7 @@ export class SwapVerificationService {
         };
       }
 
-      const memo = observedTx.tx.memo;
+      const memo: string | undefined = observedTx.tx.memo;
       if (!memo) {
         return {
           isVerified: false,
@@ -492,12 +744,22 @@ export class SwapVerificationService {
 
       // Parse memo format: =:r:thor1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
       // The affiliate code is after the 4th colon, followed by fee in bps
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_THORCHAIN_AFFILIATE || 'ss';
+      const shapeshiftAffiliate =
+        process.env.SHAPESHIFT_THORCHAIN_AFFILIATE || 'ss';
       const memoPattern = new RegExp(`:${shapeshiftAffiliate}:(\\d+)`, 'i');
       const memoMatch = memo.match(memoPattern);
 
       const hasShapeshiftAffiliate = !!memoMatch;
       const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined;
+
+      const coins = observedTx.tx.coins;
+      const sellAssetPrecision =
+        (metadata?.sellAssetPrecision as number | undefined) ??
+        THORCHAIN_PRECISION;
+      const firstCoinAmount = coins?.[0]?.amount;
+      const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
+        ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
+        : undefined;
 
       this.logger.log(
         `Thorchain verification for swap ${swapId}: memo=${memo}, affiliate=${shapeshiftAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
@@ -506,8 +768,12 @@ export class SwapVerificationService {
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateBps:
+          hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
+        affiliateAddress: hasShapeshiftAffiliate
+          ? shapeshiftAffiliate
+          : undefined,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'thorchain',
         swapId,
         details: {
@@ -523,7 +789,10 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: 'thorchain',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to fetch Thorchain data from node',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch Thorchain data from node',
       };
     }
   }
@@ -531,6 +800,7 @@ export class SwapVerificationService {
   private async verifyMaya(
     swapId: string,
     txHash?: string,
+    metadata?: Record<string, any>,
   ): Promise<SwapVerificationResult> {
     if (!txHash) {
       return {
@@ -544,13 +814,15 @@ export class SwapVerificationService {
 
     try {
       // SECURITY: Query Maya node API to verify memo contains affiliate info
-      const nodeUrl = process.env.VITE_MAYACHAIN_NODE_URL || 'https://mayanode.mayachain.info';
+      const nodeUrl =
+        process.env.VITE_MAYACHAIN_NODE_URL ||
+        'https://mayanode.mayachain.info';
       const txUrl = `${nodeUrl}/mayachain/tx/${txHash}`;
 
       this.logger.log(`Maya - Fetching tx from node API: ${txUrl}`);
 
       const response = await firstValueFrom(
-        this.httpService.get(txUrl),
+        this.httpService.get<ThorchainMayaTxResponse>(txUrl),
       );
 
       const observedTx = response.data?.observed_tx;
@@ -565,7 +837,7 @@ export class SwapVerificationService {
         };
       }
 
-      const memo = observedTx.tx.memo;
+      const memo: string | undefined = observedTx.tx.memo;
       if (!memo) {
         return {
           isVerified: false,
@@ -578,12 +850,22 @@ export class SwapVerificationService {
 
       // Parse memo format: =:r:maya1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
       // The affiliate code is after the 4th colon, followed by fee in bps
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_MAYA_AFFILIATE || 'ssmaya';
+      const shapeshiftAffiliate =
+        process.env.SHAPESHIFT_MAYA_AFFILIATE || 'ssmaya';
       const memoPattern = new RegExp(`:${shapeshiftAffiliate}:(\\d+)`, 'i');
       const memoMatch = memo.match(memoPattern);
 
       const hasShapeshiftAffiliate = !!memoMatch;
       const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined;
+
+      const coins = observedTx.tx.coins;
+      const sellAssetPrecision =
+        (metadata?.sellAssetPrecision as number | undefined) ??
+        THORCHAIN_PRECISION;
+      const firstCoinAmount = coins?.[0]?.amount;
+      const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
+        ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
+        : undefined;
 
       this.logger.log(
         `Maya verification for swap ${swapId}: memo=${memo}, affiliate=${shapeshiftAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
@@ -592,8 +874,12 @@ export class SwapVerificationService {
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateBps:
+          hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
+        affiliateAddress: hasShapeshiftAffiliate
+          ? shapeshiftAffiliate
+          : undefined,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'maya',
         swapId,
         details: {
@@ -609,7 +895,10 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: 'maya',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to fetch Maya data from node',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch Maya data from node',
       };
     }
   }
@@ -618,7 +907,7 @@ export class SwapVerificationService {
     swapId: string,
     metadata?: Record<string, any>,
   ): Promise<SwapVerificationResult> {
-    const chainflipSwapId = metadata?.chainflipSwapId;
+    const chainflipSwapId = metadata?.chainflipSwapId as string | undefined;
 
     if (!chainflipSwapId) {
       return {
@@ -631,7 +920,8 @@ export class SwapVerificationService {
     }
 
     try {
-      const chainflipApiUrl = process.env.VITE_CHAINFLIP_API_URL || 'https://api.chainflip.io';
+      const chainflipApiUrl =
+        process.env.VITE_CHAINFLIP_API_URL || 'https://api.chainflip.io';
       const statusUrl = `${chainflipApiUrl}/swaps/${chainflipSwapId}`;
 
       const headers: Record<string, string> = {};
@@ -641,7 +931,7 @@ export class SwapVerificationService {
       }
 
       const response = await firstValueFrom(
-        this.httpService.get(statusUrl, { headers }),
+        this.httpService.get<ChainflipSwapResponse>(statusUrl, { headers }),
       );
 
       const swapData = response.data;
@@ -660,14 +950,28 @@ export class SwapVerificationService {
       const affiliate = swapData.affiliate || swapData.affiliateName;
       const affiliateBps = swapData.affiliateBps || swapData.affiliateFee;
 
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_CHAINFLIP_AFFILIATE || 'shapeshift';
-      const hasShapeshiftAffiliate = affiliate?.toLowerCase() === shapeshiftAffiliate.toLowerCase();
+      const shapeshiftAffiliate =
+        process.env.SHAPESHIFT_CHAINFLIP_AFFILIATE || 'shapeshift';
+      const hasShapeshiftAffiliate =
+        affiliate?.toLowerCase() === shapeshiftAffiliate.toLowerCase();
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        swapData.depositAmount ??
+        swapData.ingressAmount ??
+        swapData.sourceAmount
+      )?.toString();
 
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: hasShapeshiftAffiliate && affiliateBps ? parseInt(affiliateBps) : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateBps:
+          hasShapeshiftAffiliate && affiliateBps
+            ? parseInt(String(affiliateBps))
+            : undefined,
+        affiliateAddress: hasShapeshiftAffiliate
+          ? shapeshiftAffiliate
+          : undefined,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'chainflip',
         swapId,
         details: {
@@ -683,7 +987,10 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: 'chainflip',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to fetch Chainflip swap data',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch Chainflip swap data',
       };
     }
   }
@@ -693,7 +1000,10 @@ export class SwapVerificationService {
     txHash?: string,
     metadata?: Record<string, any>,
   ): Promise<SwapVerificationResult> {
-    const tradeHash = txHash || metadata?.tradeHash || metadata?.txHash;
+    const tradeHash =
+      txHash ||
+      (metadata?.tradeHash as string | undefined) ||
+      (metadata?.txHash as string | undefined);
 
     if (!tradeHash) {
       return {
@@ -707,20 +1017,23 @@ export class SwapVerificationService {
 
     try {
       // Use 0x Trade Analytics API via ShapeShift proxy to verify the trade
-      const zrxProxyUrl = process.env.ZRX_PROXY_URL || 'https://api.proxy.shapeshift.com/api/v1/zrx';
+      const zrxProxyUrl =
+        process.env.ZRX_PROXY_URL ||
+        'https://api.proxy.shapeshift.com/api/v1/zrx';
       const requestUrl = `${zrxProxyUrl}/trade-analytics/swap`;
 
       const response = await firstValueFrom(
-        this.httpService.get(requestUrl),
+        this.httpService.get<ZrxTrade[] | ZrxApiResponse>(requestUrl),
       );
 
-      // Response could be an array of trades or have a trades/results field
-      const trades = Array.isArray(response.data) ? response.data : (response.data?.trades || response.data?.results || []);
+      const trades: ZrxTrade[] = Array.isArray(response.data)
+        ? response.data
+        : response.data?.trades || response.data?.results || [];
 
-      // Find trade matching our txHash
-      const trade = trades.find((t: any) =>
-        t.txHash?.toLowerCase() === tradeHash.toLowerCase() ||
-        t.transactionHash?.toLowerCase() === tradeHash.toLowerCase()
+      const trade = trades.find(
+        (t: ZrxTrade) =>
+          t.txHash?.toLowerCase() === tradeHash.toLowerCase() ||
+          t.transactionHash?.toLowerCase() === tradeHash.toLowerCase(),
       );
 
       if (!trade) {
@@ -735,14 +1048,18 @@ export class SwapVerificationService {
 
       // Check for ShapeShift's partner/integrator name
       // The field could be integratorId, integratorName, or affiliateName
-      const integratorId = trade.integratorId || trade.integratorName || trade.affiliateName;
-      const shapeshiftIntegrator = process.env.SHAPESHIFT_0X_INTEGRATOR || 'ShapeShift';
-      const hasShapeshiftAffiliate = integratorId?.toLowerCase() === shapeshiftIntegrator.toLowerCase();
+      const integratorId =
+        trade.integratorId || trade.integratorName || trade.affiliateName;
+      const shapeshiftIntegrator =
+        process.env.SHAPESHIFT_0X_INTEGRATOR || 'ShapeShift';
+      const hasShapeshiftAffiliate =
+        integratorId?.toLowerCase() === shapeshiftIntegrator.toLowerCase();
 
       // Extract fee information
       // The fee could be in integratorFee, affiliateFee, or partnerFee fields
       // Note: 0x fees are typically in decimal format (e.g., 0.0015 for 15 bps)
-      const integratorFee = trade.integratorFee || trade.affiliateFee || trade.partnerFee;
+      const integratorFee =
+        trade.integratorFee || trade.affiliateFee || trade.partnerFee;
       let affiliateBps: number | undefined;
 
       if (integratorFee) {
@@ -750,11 +1067,20 @@ export class SwapVerificationService {
         affiliateBps = parseFloat(integratorFee) * 10000;
       }
 
+      const verifiedSellAmountCryptoBaseUnit = (
+        trade.sellAmount ??
+        trade.inputTokenAmount ??
+        trade.amount
+      )?.toString();
+
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftIntegrator : undefined,
+        affiliateAddress: hasShapeshiftAffiliate
+          ? shapeshiftIntegrator
+          : undefined,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: '0x',
         swapId,
         details: {
@@ -771,7 +1097,8 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: '0x',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to verify 0x trade',
+        error:
+          error instanceof Error ? error.message : 'Failed to verify 0x trade',
       };
     }
   }
@@ -793,11 +1120,14 @@ export class SwapVerificationService {
 
     try {
       // Use trade history API to find the trade by source filter
-      const bebopApiUrl = process.env.VITE_BEBOP_API_URL || 'https://api.bebop.xyz';
-      const shapeshiftSource = process.env.SHAPESHIFT_BEBOP_SOURCE || 'shapeshift';
+      const bebopApiUrl =
+        process.env.VITE_BEBOP_API_URL || 'https://api.bebop.xyz';
+      const shapeshiftSource =
+        process.env.SHAPESHIFT_BEBOP_SOURCE || 'shapeshift';
 
       // Get swap timestamp to create time range (swap createdAt +/- 1 hour)
-      const swapTimestamp = metadata?.createdAt || Date.now();
+      const swapTimestamp =
+        (metadata?.createdAt as number | undefined) || Date.now();
       const oneHour = 60 * 60 * 1000;
       const startNano = (swapTimestamp - oneHour) * 1_000_000; // Convert to nanoseconds
       const endNano = (swapTimestamp + oneHour) * 1_000_000;
@@ -830,28 +1160,34 @@ export class SwapVerificationService {
 
       // Log request details
       this.logger.log(`Bebop API Request - URL: ${requestUrl}`);
-      this.logger.log(`Bebop API Request - Params: ${JSON.stringify({
-        start: startNano.toString(),
-        end: endNano.toString(),
-        source: shapeshiftSource,
-        swapTimestamp: new Date(swapTimestamp).toISOString(),
-      })}`);
-      this.logger.log(`Bebop API Request - Headers: { 'source-auth': '${apiKey.substring(0, 8)}...' }`);
+      this.logger.log(
+        `Bebop API Request - Params: ${JSON.stringify({
+          start: startNano.toString(),
+          end: endNano.toString(),
+          source: shapeshiftSource,
+          swapTimestamp: new Date(swapTimestamp).toISOString(),
+        })}`,
+      );
+      this.logger.log(
+        `Bebop API Request - Headers: { 'source-auth': '${apiKey.substring(0, 8)}...' }`,
+      );
       this.logger.log(`Bebop API Request - Looking for txHash: ${txHash}`);
 
       const response = await firstValueFrom(
-        this.httpService.get(requestUrl, { headers }),
+        this.httpService.get<BebopTradesResponse>(requestUrl, { headers }),
       );
 
-      // Log response
       this.logger.log(`Bebop API Response - Status: ${response.status}`);
-      this.logger.log(`Bebop API Response - Data: ${JSON.stringify(response.data)}`);
+      this.logger.log(
+        `Bebop API Response - Data: ${JSON.stringify(response.data)}`,
+      );
 
       const trades = response.data?.results || [];
       this.logger.log(`Bebop API Response - Found ${trades.length} trades`);
 
-      // Find trade matching our txHash
-      const trade = trades.find((t: any) => t.txHash?.toLowerCase() === txHash.toLowerCase());
+      const trade = trades.find(
+        (t: BebopTrade) => t.txHash?.toLowerCase() === txHash.toLowerCase(),
+      );
 
       if (!trade) {
         return {
@@ -868,7 +1204,14 @@ export class SwapVerificationService {
 
       // Extract partner fee from the response (partnerFeeBps is in basis points)
       const partnerFeeBps = trade.partnerFeeBps;
-      const affiliateBps = partnerFeeBps ? parseFloat(partnerFeeBps) : undefined;
+      const affiliateBps =
+        partnerFeeBps != null ? Number(partnerFeeBps) : undefined;
+
+      const sellTokenEntries = trade.sellTokens
+        ? Object.values(trade.sellTokens)
+        : [];
+      const verifiedSellAmountCryptoBaseUnit =
+        sellTokenEntries[0]?.amount?.toString() ?? undefined;
 
       this.logger.log(
         `Bebop verification: trade found, partnerFeeBps=${partnerFeeBps}, hasAffiliate=true`,
@@ -879,6 +1222,7 @@ export class SwapVerificationService {
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
         affiliateAddress: shapeshiftSource,
+        verifiedSellAmountCryptoBaseUnit,
         protocol: 'bebop',
         swapId,
         details: {
@@ -895,7 +1239,10 @@ export class SwapVerificationService {
         hasAffiliate: false,
         protocol: 'bebop',
         swapId,
-        error: error instanceof Error ? error.message : 'Failed to verify Bebop trade',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify Bebop trade',
       };
     }
   }
