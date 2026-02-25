@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Put, Param, Body, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Param,
+  Body,
+  Query,
+} from '@nestjs/common';
 import { SwapsService } from './swaps.service';
 import { SwapPollingService } from '../polling/swap-polling.service';
 import { SwapVerificationService } from '../verification/swap-verification.service';
@@ -96,6 +105,21 @@ export class SwapsController {
       sellAsset: swap.sellAsset,
       buyAsset: swap.buyAsset,
     };
+  }
+
+  @Delete('test-cleanup')
+  async cleanupTestSwaps() {
+    const result = await this.swapsService['prisma'].swap.updateMany({
+      where: {
+        swapId: { startsWith: 'test-' },
+        status: { in: ['IDLE', 'PENDING'] },
+      },
+      data: {
+        status: 'FAILED',
+        statusMessage: 'Cleaned up by test runner',
+      },
+    });
+    return { cleaned: result.count };
   }
 
   @Post(':swapId/verify-affiliate')

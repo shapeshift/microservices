@@ -8,7 +8,7 @@ async function bootstrap() {
 
   // Initialize chain adapters
   const chainAdapterInitService = app.get(ChainAdapterInitService);
-  await chainAdapterInitService.initializeChainAdapters();
+  chainAdapterInitService.initializeChainAdapters();
 
   // Enable CORS
   app.enableCors({
@@ -23,10 +23,10 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' });
   });
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.SWAP_SERVICE_PORT || process.env.PORT || 3001;
   await app.listen(port);
 
   console.log(`Swap service is running on: http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();

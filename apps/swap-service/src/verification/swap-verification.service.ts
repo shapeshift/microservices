@@ -107,6 +107,38 @@ interface BebopTradesResponse {
   results?: BebopTrade[];
 }
 
+interface ButterBridgeInfo {
+  state?: number;
+  toHash?: string;
+  relayerHash?: string;
+  entrance?: string;
+  sourceHash?: string;
+  relayerChain?: { scanUrl?: string };
+}
+
+interface ButterBridgeInfoApiResponse {
+  code?: number;
+  data?: {
+    info?: ButterBridgeInfo;
+  };
+}
+
+interface AcrossDepositStatusResponse {
+  status?: 'filled' | 'pending' | 'expired' | 'refunded' | 'slowFillRequested';
+  fillTxnRef?: string;
+  depositTxnRef?: string;
+  destinationChainId?: number;
+  originChainId?: number;
+  depositId?: number;
+}
+
+interface StonfiQuoteMetadata {
+  quoteId?: string;
+  referrerAddress?: string;
+  referrerFeeUnits?: string;
+  referrerFeeBps?: number;
+}
+
 const THORCHAIN_PRECISION = 8;
 
 const thorchainToNativePrecision = (
@@ -189,6 +221,32 @@ export class SwapVerificationService {
 
         case 'bebop':
           return await this.verifyBebop(swapId, txHash, metadata);
+
+        case 'jupiter':
+          return await this.verifyJupiter(swapId, txHash, metadata);
+
+        case 'arbitrum bridge':
+          return await this.verifyArbitrumBridge(swapId);
+
+        case 'butterswap':
+          return await this.verifyButterSwap(swapId, txHash, metadata);
+
+        case 'cetus':
+          return await this.verifyCetus(swapId, txHash, metadata);
+
+        case 'sun.io':
+        case 'sunio':
+          return await this.verifySunio(swapId, txHash, metadata);
+
+        case 'avnu':
+          return await this.verifyAvnu(swapId, txHash, metadata);
+
+        case 'ston.fi':
+        case 'stonfi':
+          return await this.verifyStonfi(swapId, txHash, metadata);
+
+        case 'across':
+          return await this.verifyAcross(swapId, txHash, metadata);
 
         default:
           return {
@@ -1243,6 +1301,512 @@ export class SwapVerificationService {
           error instanceof Error
             ? error.message
             : 'Failed to verify Bebop trade',
+      };
+    }
+  }
+
+  private verifyJupiter(
+    swapId: string,
+    txHash?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SwapVerificationResult> {
+    if (!txHash) {
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'jupiter',
+        swapId,
+        error: 'Missing txHash for Jupiter verification',
+      });
+    }
+
+    try {
+      const referralKey =
+        process.env.SHAPESHIFT_JUPITER_REFERRAL_KEY ||
+        'Ajgmo453yGmcHDPoJBrMUj3GFwLVL7HaaZGNLkB8vREG';
+
+      const affiliateBps = metadata?.affiliateBps
+        ? parseInt(metadata.affiliateBps as string)
+        : undefined;
+      const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0;
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
+          | string
+          | undefined) ?? (metadata?.sellAmount as string | undefined)
+      )?.toString();
+
+      this.logger.log(
+        `Jupiter verification for swap ${swapId}: affiliateBps=${affiliateBps}, hasAffiliate=${hasAffiliate}, referralKey=${referralKey}`,
+      );
+
+      return Promise.resolve({
+        isVerified: true,
+        hasAffiliate,
+        affiliateBps: hasAffiliate ? affiliateBps : undefined,
+        affiliateAddress: referralKey,
+        verifiedSellAmountCryptoBaseUnit,
+        protocol: 'jupiter',
+        swapId,
+        details: {
+          txHash,
+          affiliateBps: metadata?.affiliateBps as string | undefined,
+          referralKey,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error verifying Jupiter for swap ${swapId}:`, error);
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'jupiter',
+        swapId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify Jupiter trade',
+      });
+    }
+  }
+
+  private verifyArbitrumBridge(
+    swapId: string,
+  ): Promise<SwapVerificationResult> {
+    this.logger.log(
+      `ArbitrumBridge verification for swap ${swapId}: no affiliate fees supported`,
+    );
+
+    return Promise.resolve({
+      isVerified: true,
+      hasAffiliate: false,
+      protocol: 'arbitrum bridge',
+      swapId,
+      details: {
+        note: 'ArbitrumBridge does not support affiliate fees',
+      },
+    });
+  }
+
+  private async verifyButterSwap(
+    swapId: string,
+    txHash?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SwapVerificationResult> {
+    if (!txHash) {
+      return {
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'butterswap',
+        swapId,
+        error: 'Missing txHash for ButterSwap verification',
+      };
+    }
+
+    try {
+      const apiUrl = `https://bs-app-api.chainservice.io/api/queryBridgeInfoBySourceHash?hash=${txHash}`;
+
+      this.logger.log(`ButterSwap - Fetching bridge info from API: ${apiUrl}`);
+
+      const response = await firstValueFrom(
+        this.httpService.get<ButterBridgeInfoApiResponse>(apiUrl),
+      );
+
+      const bridgeInfo = response.data?.data?.info;
+
+      if (!bridgeInfo) {
+        return {
+          isVerified: false,
+          hasAffiliate: false,
+          protocol: 'butterswap',
+          swapId,
+          error: 'No bridge info found',
+        };
+      }
+
+      const entrance = bridgeInfo.entrance;
+      const shapeshiftEntrance =
+        process.env.SHAPESHIFT_BUTTERSWAP_ENTRANCE || 'shapeshift';
+      const hasShapeshiftAffiliate =
+        entrance?.toLowerCase() === shapeshiftEntrance.toLowerCase();
+
+      const affiliateBps = metadata?.affiliateBps
+        ? parseInt(metadata.affiliateBps as string)
+        : undefined;
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
+          | string
+          | undefined) ?? (metadata?.sellAmount as string | undefined)
+      )?.toString();
+
+      this.logger.log(
+        `ButterSwap verification for swap ${swapId}: entrance=${entrance}, hasAffiliate=${hasShapeshiftAffiliate}`,
+      );
+
+      return {
+        isVerified: true,
+        hasAffiliate: hasShapeshiftAffiliate,
+        affiliateBps:
+          hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
+        verifiedSellAmountCryptoBaseUnit,
+        protocol: 'butterswap',
+        swapId,
+        details: {
+          txHash,
+          entrance,
+          bridgeInfo,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error verifying ButterSwap for swap ${swapId}:`,
+        error,
+      );
+      return {
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'butterswap',
+        swapId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify ButterSwap trade',
+      };
+    }
+  }
+
+  private verifyCetus(
+    swapId: string,
+    txHash?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SwapVerificationResult> {
+    if (!txHash) {
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'cetus',
+        swapId,
+        error: 'Missing txHash for Cetus verification',
+      });
+    }
+
+    try {
+      const affiliateBps = metadata?.affiliateBps
+        ? parseInt(metadata.affiliateBps as string)
+        : undefined;
+      const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0;
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
+          | string
+          | undefined) ?? (metadata?.sellAmount as string | undefined)
+      )?.toString();
+
+      this.logger.log(
+        `Cetus verification for swap ${swapId}: affiliateBps=${affiliateBps}, hasAffiliate=${hasAffiliate}`,
+      );
+
+      return Promise.resolve({
+        isVerified: true,
+        hasAffiliate,
+        affiliateBps: hasAffiliate ? affiliateBps : undefined,
+        verifiedSellAmountCryptoBaseUnit,
+        protocol: 'cetus',
+        swapId,
+        details: {
+          txHash,
+          affiliateBps: metadata?.affiliateBps as string | undefined,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error verifying Cetus for swap ${swapId}:`, error);
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'cetus',
+        swapId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify Cetus trade',
+      });
+    }
+  }
+
+  private verifySunio(
+    swapId: string,
+    txHash?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SwapVerificationResult> {
+    if (!txHash) {
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'sun.io',
+        swapId,
+        error: 'Missing txHash for Sun.io verification',
+      });
+    }
+
+    try {
+      const affiliateBps = metadata?.affiliateBps
+        ? parseInt(metadata.affiliateBps as string)
+        : undefined;
+      const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0;
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
+          | string
+          | undefined) ?? (metadata?.sellAmount as string | undefined)
+      )?.toString();
+
+      this.logger.log(
+        `Sun.io verification for swap ${swapId}: affiliateBps=${affiliateBps}, hasAffiliate=${hasAffiliate}`,
+      );
+
+      return Promise.resolve({
+        isVerified: true,
+        hasAffiliate,
+        affiliateBps: hasAffiliate ? affiliateBps : undefined,
+        verifiedSellAmountCryptoBaseUnit,
+        protocol: 'sun.io',
+        swapId,
+        details: {
+          txHash,
+          affiliateBps: metadata?.affiliateBps as string | undefined,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error verifying Sun.io for swap ${swapId}:`, error);
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'sun.io',
+        swapId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify Sun.io trade',
+      });
+    }
+  }
+
+  private verifyAvnu(
+    swapId: string,
+    txHash?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SwapVerificationResult> {
+    if (!txHash) {
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'avnu',
+        swapId,
+        error: 'Missing txHash for AVNU verification',
+      });
+    }
+
+    try {
+      const affiliateBps = metadata?.affiliateBps
+        ? parseInt(metadata.affiliateBps as string)
+        : undefined;
+      const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0;
+      const affiliateAddress = metadata?.integratorFeeRecipient as
+        | string
+        | undefined;
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
+          | string
+          | undefined) ?? (metadata?.sellAmount as string | undefined)
+      )?.toString();
+
+      this.logger.log(
+        `AVNU verification for swap ${swapId}: affiliateBps=${affiliateBps}, hasAffiliate=${hasAffiliate}, integratorFeeRecipient=${affiliateAddress}`,
+      );
+
+      return Promise.resolve({
+        isVerified: true,
+        hasAffiliate,
+        affiliateBps: hasAffiliate ? affiliateBps : undefined,
+        affiliateAddress,
+        verifiedSellAmountCryptoBaseUnit,
+        protocol: 'avnu',
+        swapId,
+        details: {
+          txHash,
+          affiliateBps: metadata?.affiliateBps as string | undefined,
+          integratorFeeRecipient: metadata?.integratorFeeRecipient as
+            | string
+            | undefined,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error verifying AVNU for swap ${swapId}:`, error);
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'avnu',
+        swapId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify AVNU trade',
+      });
+    }
+  }
+
+  private verifyStonfi(
+    swapId: string,
+    txHash?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SwapVerificationResult> {
+    if (!txHash) {
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'ston.fi',
+        swapId,
+        error: 'Missing txHash for STON.fi verification',
+      });
+    }
+
+    try {
+      const stonfiSpecific = metadata?.stonfiSpecific as
+        | StonfiQuoteMetadata
+        | undefined;
+
+      const referrerAddress = stonfiSpecific?.referrerAddress;
+      const referrerFeeUnits = stonfiSpecific?.referrerFeeUnits;
+
+      const affiliateBps = metadata?.affiliateBps
+        ? parseInt(metadata.affiliateBps as string)
+        : (stonfiSpecific?.referrerFeeBps ?? undefined);
+
+      const hasAffiliate =
+        !!referrerAddress &&
+        (affiliateBps !== undefined ? affiliateBps > 0 : false);
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
+          | string
+          | undefined) ?? (metadata?.sellAmount as string | undefined)
+      )?.toString();
+
+      this.logger.log(
+        `STON.fi verification for swap ${swapId}: affiliateBps=${affiliateBps}, hasAffiliate=${hasAffiliate}, referrerAddress=${referrerAddress}`,
+      );
+
+      return Promise.resolve({
+        isVerified: true,
+        hasAffiliate,
+        affiliateBps: hasAffiliate ? affiliateBps : undefined,
+        affiliateAddress: referrerAddress,
+        verifiedSellAmountCryptoBaseUnit,
+        protocol: 'ston.fi',
+        swapId,
+        details: {
+          txHash,
+          referrerAddress,
+          referrerFeeUnits,
+          stonfiSpecific: metadata?.stonfiSpecific as
+            | Record<string, unknown>
+            | undefined,
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Error verifying STON.fi for swap ${swapId}:`, error);
+      return Promise.resolve({
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'ston.fi',
+        swapId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify STON.fi trade',
+      });
+    }
+  }
+
+  private async verifyAcross(
+    swapId: string,
+    txHash?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SwapVerificationResult> {
+    if (!txHash) {
+      return {
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'across',
+        swapId,
+        error: 'Missing txHash for Across verification',
+      };
+    }
+
+    try {
+      const acrossApiUrl =
+        process.env.VITE_ACROSS_API_URL || 'https://app.across.to/api';
+      const statusUrl = `${acrossApiUrl}/deposit/status?depositTxnRef=${txHash}`;
+
+      this.logger.log(
+        `Across - Fetching deposit status from API: ${statusUrl}`,
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.get<AcrossDepositStatusResponse>(statusUrl),
+      );
+
+      const depositStatus = response.data;
+
+      const affiliateBps = metadata?.affiliateBps
+        ? parseInt(metadata.affiliateBps as string)
+        : undefined;
+      const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0;
+
+      const affiliateAddress =
+        (metadata?.appFeeRecipient as string | undefined) ||
+        (metadata?.integratorId as string | undefined);
+
+      const fillTxnRef = depositStatus?.fillTxnRef;
+
+      const verifiedSellAmountCryptoBaseUnit = (
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
+          | string
+          | undefined) ?? (metadata?.sellAmount as string | undefined)
+      )?.toString();
+
+      this.logger.log(
+        `Across verification for swap ${swapId}: status=${depositStatus?.status}, hasAffiliate=${hasAffiliate}, affiliateBps=${affiliateBps}`,
+      );
+
+      return {
+        isVerified: true,
+        hasAffiliate,
+        affiliateBps: hasAffiliate ? affiliateBps : undefined,
+        affiliateAddress,
+        verifiedSellAmountCryptoBaseUnit,
+        protocol: 'across',
+        swapId,
+        details: {
+          txHash,
+          fillTxnRef,
+          depositStatus,
+          integratorId: metadata?.integratorId as string | undefined,
+          appFeeRecipient: metadata?.appFeeRecipient as string | undefined,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error verifying Across for swap ${swapId}:`, error);
+      return {
+        isVerified: false,
+        hasAffiliate: false,
+        protocol: 'across',
+        swapId,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to verify Across deposit',
       };
     }
   }

@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service';
 import * as unchained from '@shapeshiftoss/unchained-client';
-import { bitcoin } from '@shapeshiftoss/chain-adapters';
+import { bitcoin, zcash } from '@shapeshiftoss/chain-adapters';
 import {
   btcChainId,
   bchChainId,
   dogeChainId,
   ltcChainId,
+  zecChainId,
 } from '@shapeshiftoss/caip';
 import {
   utxoChainIds,
@@ -32,6 +33,7 @@ export class UtxoChainAdapterService {
       this.initializeBitcoinCashAdapter(chainAdapterManager);
       this.initializeDogecoinAdapter(chainAdapterManager);
       this.initializeLitecoinAdapter(chainAdapterManager);
+      this.initializeZcashAdapter(chainAdapterManager);
 
       this.logger.log('All UTXO chain adapters initialized successfully');
     } catch (error) {
@@ -126,6 +128,28 @@ export class UtxoChainAdapterService {
 
     chainAdapterManager.set(ltcChainId, ltcAdapter);
     this.logger.log('Litecoin adapter initialized');
+  }
+
+  private initializeZcashAdapter(chainAdapterManager: Map<string, any>) {
+    const zcashHttp = new unchained.zcash.V1Api(
+      new unchained.zcash.Configuration({
+        basePath: process.env.VITE_UNCHAINED_ZCASH_HTTP_URL,
+      }),
+    );
+
+    const zcashWs = new unchained.ws.Client<unchained.zcash.Tx>(
+      process.env.VITE_UNCHAINED_ZCASH_WS_URL,
+    );
+
+    const zcashAdapter = new zcash.ChainAdapter({
+      providers: { http: zcashHttp, ws: zcashWs },
+      coinName: 'Zcash',
+      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+    });
+
+    chainAdapterManager.set(zecChainId, zcashAdapter);
+    this.logger.log('Zcash adapter initialized');
   }
 
   assertGetUtxoChainAdapter(chainId: ChainId): UtxoChainAdapter {

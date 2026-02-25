@@ -4,6 +4,11 @@ import { EvmChainAdapterService } from './chain-adapters/evm.service';
 import { UtxoChainAdapterService } from './chain-adapters/utxo.service';
 import { CosmosSdkChainAdapterService } from './chain-adapters/cosmos-sdk.service';
 import { SolanaChainAdapterService } from './chain-adapters/solana.service';
+import { TronChainAdapterService } from './chain-adapters/tron.service';
+import { SuiChainAdapterService } from './chain-adapters/sui.service';
+import { NearChainAdapterService } from './chain-adapters/near.service';
+import { StarknetChainAdapterService } from './chain-adapters/starknet.service';
+import { TonChainAdapterService } from './chain-adapters/ton.service';
 
 @Injectable()
 export class ChainAdapterInitService {
@@ -15,6 +20,11 @@ export class ChainAdapterInitService {
     private utxoChainAdapterService: UtxoChainAdapterService,
     private cosmosSdkChainAdapterService: CosmosSdkChainAdapterService,
     private solanaChainAdapterService: SolanaChainAdapterService,
+    private tronChainAdapterService: TronChainAdapterService,
+    private suiChainAdapterService: SuiChainAdapterService,
+    private nearChainAdapterService: NearChainAdapterService,
+    private starknetChainAdapterService: StarknetChainAdapterService,
+    private tonChainAdapterService: TonChainAdapterService,
   ) {}
 
   initializeChainAdapters() {
@@ -28,6 +38,16 @@ export class ChainAdapterInitService {
       this.cosmosSdkChainAdapterService.initializeCosmosSdkChainAdapters();
 
       this.solanaChainAdapterService.initializeSolanaChainAdapter();
+
+      this.tronChainAdapterService.initializeTronChainAdapter();
+
+      this.suiChainAdapterService.initializeSuiChainAdapter();
+
+      this.nearChainAdapterService.initializeNearChainAdapter();
+
+      this.starknetChainAdapterService.initializeStarknetChainAdapter();
+
+      this.tonChainAdapterService.initializeTonChainAdapter();
 
       this.logger.log('All chain adapters initialized successfully');
     } catch (error) {

@@ -13,6 +13,11 @@ import { EvmChainAdapterService } from './lib/chain-adapters/evm.service';
 import { UtxoChainAdapterService } from './lib/chain-adapters/utxo.service';
 import { CosmosSdkChainAdapterService } from './lib/chain-adapters/cosmos-sdk.service';
 import { SolanaChainAdapterService } from './lib/chain-adapters/solana.service';
+import { TronChainAdapterService } from './lib/chain-adapters/tron.service';
+import { SuiChainAdapterService } from './lib/chain-adapters/sui.service';
+import { NearChainAdapterService } from './lib/chain-adapters/near.service';
+import { StarknetChainAdapterService } from './lib/chain-adapters/starknet.service';
+import { TonChainAdapterService } from './lib/chain-adapters/ton.service';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -20,7 +25,7 @@ import { ConfigModule } from '@nestjs/config';
     ScheduleModule.forRoot(),
     HttpModule,
     ConfigModule.forRoot({
-      envFilePath: '../../.env',
+      envFilePath: ['.env', '../../.env'],
     }),
   ],
   controllers: [SwapsController],
@@ -36,6 +41,11 @@ import { ConfigModule } from '@nestjs/config';
     UtxoChainAdapterService,
     CosmosSdkChainAdapterService,
     SolanaChainAdapterService,
+    TronChainAdapterService,
+    SuiChainAdapterService,
+    NearChainAdapterService,
+    StarknetChainAdapterService,
+    TonChainAdapterService,
   ],
 })
 export class AppModule {}

@@ -5,8 +5,17 @@ import { EvmChainAdapterService } from '../lib/chain-adapters/evm.service';
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service';
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service';
 import { SolanaChainAdapterService } from '../lib/chain-adapters/solana.service';
+import { TronChainAdapterService } from '../lib/chain-adapters/tron.service';
+import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service';
+import { NearChainAdapterService } from '../lib/chain-adapters/near.service';
+import { StarknetChainAdapterService } from '../lib/chain-adapters/starknet.service';
+import { TonChainAdapterService } from '../lib/chain-adapters/ton.service';
 import { SwapVerificationService } from '../verification/swap-verification.service';
-import { SwapperName, swappers } from '@shapeshiftoss/swapper';
+import {
+  SwapperName,
+  swappers,
+  type Swap as SwapperSwap,
+} from '@shapeshiftoss/swapper';
 import { ChainId } from '@shapeshiftoss/caip';
 import { Asset } from '@shapeshiftoss/types';
 import { hashAccountId } from '@shapeshift/shared-utils';
@@ -45,6 +54,11 @@ export class SwapsService {
     private utxoChainAdapterService: UtxoChainAdapterService,
     private cosmosSdkChainAdapterService: CosmosSdkChainAdapterService,
     private solanaChainAdapterService: SolanaChainAdapterService,
+    private tronChainAdapterService: TronChainAdapterService,
+    private suiChainAdapterService: SuiChainAdapterService,
+    private nearChainAdapterService: NearChainAdapterService,
+    private starknetChainAdapterService: StarknetChainAdapterService,
+    private tonChainAdapterService: TonChainAdapterService,
     private swapVerificationService: SwapVerificationService,
   ) {
     this.notificationsClient = new NotificationsServiceClient();
@@ -599,7 +613,9 @@ export class SwapsService {
 
       const verificationDetails =
         swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
-      const verifiedBps = verificationDetails?.affiliateBps;
+      const verifiedBps =
+        verificationDetails?.affiliateBps ??
+        (swap.affiliateBps ? parseInt(String(swap.affiliateBps)) : undefined);
 
       if (verifiedBps && sellAmountUsd > 0) {
         const commissionRate = this.getAffiliateCommissionRate(
@@ -655,7 +671,9 @@ export class SwapsService {
 
       const verificationDetails =
         swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
-      const verifiedBps = verificationDetails?.affiliateBps;
+      const verifiedBps =
+        verificationDetails?.affiliateBps ??
+        (swap.affiliateBps ? parseInt(String(swap.affiliateBps)) : undefined);
 
       if (verifiedBps && sellAmountUsd > 0) {
         const commissionRate = this.getAffiliateCommissionRate(
@@ -724,7 +742,8 @@ export class SwapsService {
     verifiedBps: number,
   ): number {
     if (origin === 'web') {
-      return SwapsService.WEB_REVENUE_SHARE;
+      // Referrer gets 10bps of volume (API_BASE_BPS / verifiedBps of the fee)
+      return SwapsService.API_BASE_BPS / verifiedBps;
     }
     if (!origin || verifiedBps <= SwapsService.API_BASE_BPS) return 0;
     return (verifiedBps - SwapsService.API_BASE_BPS) / verifiedBps;
@@ -789,7 +808,7 @@ export class SwapsService {
           id: swap.swapId,
           createdAt: swap.createdAt.getTime(),
           updatedAt: swap.updatedAt.getTime(),
-        },
+        } as unknown as SwapperSwap,
         stepIndex: 0,
         config: {
           VITE_UNCHAINED_THORCHAIN_HTTP_URL:
@@ -829,6 +848,17 @@ export class SwapsService {
             process.env.VITE_UNCHAINED_BASE_HTTP_URL || '',
           VITE_NEAR_INTENTS_API_KEY:
             process.env.VITE_NEAR_INTENTS_API_KEY || '',
+          VITE_BEBOP_API_KEY: process.env.VITE_BEBOP_API_KEY || '',
+          VITE_TENDERLY_API_KEY: process.env.VITE_TENDERLY_API_KEY || '',
+          VITE_TENDERLY_ACCOUNT_SLUG:
+            process.env.VITE_TENDERLY_ACCOUNT_SLUG || '',
+          VITE_TENDERLY_PROJECT_SLUG:
+            process.env.VITE_TENDERLY_PROJECT_SLUG || '',
+          VITE_TRON_NODE_URL: process.env.VITE_TRON_NODE_URL || '',
+          VITE_SUI_NODE_URL: process.env.VITE_SUI_NODE_URL || '',
+          VITE_ACROSS_API_URL: process.env.VITE_ACROSS_API_URL || '',
+          VITE_ACROSS_INTEGRATOR_ID:
+            process.env.VITE_ACROSS_INTEGRATOR_ID || '',
           VITE_FEATURE_THORCHAINSWAP_LONGTAIL: true,
           VITE_FEATURE_THORCHAINSWAP_L1_TO_LONGTAIL: true,
           VITE_FEATURE_CHAINFLIP_SWAP_DCA: true,
@@ -850,6 +880,27 @@ export class SwapsService {
         },
         assertGetEvmChainAdapter: (chainId: ChainId) => {
           return this.evmChainAdapterService.assertGetEvmChainAdapter(chainId);
+        },
+        assertGetTronChainAdapter: (chainId: ChainId) => {
+          return this.tronChainAdapterService.assertGetTronChainAdapter(
+            chainId,
+          );
+        },
+        assertGetSuiChainAdapter: (chainId: ChainId) => {
+          return this.suiChainAdapterService.assertGetSuiChainAdapter(chainId);
+        },
+        assertGetNearChainAdapter: (chainId: ChainId) => {
+          return this.nearChainAdapterService.assertGetNearChainAdapter(
+            chainId,
+          );
+        },
+        assertGetStarknetChainAdapter: (chainId: ChainId) => {
+          return this.starknetChainAdapterService.assertGetStarknetChainAdapter(
+            chainId,
+          );
+        },
+        assertGetTonChainAdapter: (chainId: ChainId) => {
+          return this.tonChainAdapterService.assertGetTonChainAdapter(chainId);
         },
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       });
@@ -874,6 +925,10 @@ export class SwapsService {
             swap.expectedBuyAmountCryptoPrecision,
           createdAt: swap.createdAt.getTime(),
           sellAssetPrecision: sellAsset.precision,
+          affiliateBps: swap.affiliateBps,
+          affiliateAddress: swap.affiliateAddress,
+          integratorFeeRecipient: swap.affiliateAddress,
+          sellAmountCryptoBaseUnit: swap.sellAmountCryptoBaseUnit,
         };
 
         const verificationResult =
@@ -928,7 +983,12 @@ export class SwapsService {
               : 'PENDING',
         sellTxHash: swap.sellTxHash,
         buyTxHash: status.buyTxHash,
-        statusMessage: status.message,
+        statusMessage:
+          typeof status.message === 'string'
+            ? status.message
+            : Array.isArray(status.message)
+              ? status.message[0]
+              : '',
         isAffiliateVerified,
         affiliateVerificationDetails,
       };

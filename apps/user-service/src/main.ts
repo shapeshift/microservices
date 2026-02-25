@@ -18,10 +18,10 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' });
   });
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.USER_SERVICE_PORT || process.env.PORT || 3002;
   await app.listen(port);
 
   console.log(`User service is running on: http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();
