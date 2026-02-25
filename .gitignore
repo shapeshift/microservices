@@ -4,6 +4,10 @@ node_modules
 build
 .turbo
 
+# TypeScript compiled JS alongside source (use dist/ instead)
+apps/*/src/**/*.js
+packages/*/src/**/*.js
+
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
