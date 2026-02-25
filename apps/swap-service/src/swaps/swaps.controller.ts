@@ -7,6 +7,7 @@ import {
   Param,
   Body,
   Query,
+  NotFoundException,
 } from '@nestjs/common';
 import { SwapsService } from './swaps.service';
 import { SwapPollingService } from '../polling/swap-polling.service';
@@ -92,12 +93,10 @@ export class SwapsController {
 
   @Get(':swapId')
   async getSwap(@Param('swapId') swapId: string) {
-    const swap = await this.swapsService['prisma'].swap.findUnique({
-      where: { swapId },
-    });
+    const swap = await this.swapsService.findSwapBySwapId(swapId);
 
     if (!swap) {
-      return null;
+      throw new NotFoundException(`Swap ${swapId} not found`);
     }
 
     return {
@@ -109,17 +108,7 @@ export class SwapsController {
 
   @Delete('test-cleanup')
   async cleanupTestSwaps() {
-    const result = await this.swapsService['prisma'].swap.updateMany({
-      where: {
-        swapId: { startsWith: 'test-' },
-        status: { in: ['IDLE', 'PENDING'] },
-      },
-      data: {
-        status: 'FAILED',
-        statusMessage: 'Cleaned up by test runner',
-      },
-    });
-    return { cleaned: result.count };
+    return this.swapsService.cleanupTestSwaps();
   }
 
   @Post(':swapId/verify-affiliate')
@@ -127,10 +116,7 @@ export class SwapsController {
     @Param('swapId') swapId: string,
     @Body() data: Omit<VerifySwapAffiliateDto, 'swapId'>,
   ) {
-    // Fetch the swap to get metadata and other details
-    const swap = await this.swapsService['prisma'].swap.findUnique({
-      where: { swapId },
-    });
+    const swap = await this.swapsService.findSwapBySwapId(swapId);
 
     if (!swap) {
       return {

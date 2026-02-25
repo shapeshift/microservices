@@ -18,6 +18,8 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' });
   });
 
+  app.enableShutdownHooks();
+
   const port =
     process.env.NOTIFICATIONS_SERVICE_PORT || process.env.PORT || 3003;
   await app.listen(port);

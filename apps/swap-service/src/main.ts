@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+
 import type { Response } from 'express';
 import { AppModule } from './app.module';
 import { ChainAdapterInitService } from './lib/chain-adapter-init.service';
@@ -22,6 +23,9 @@ async function bootstrap() {
   app.getHttpAdapter().get('/health', (_, res: Response) => {
     res.status(200).json({ status: 'ok' });
   });
+
+  // TODO: Add ValidationPipe when class-validator resolves properly in Yarn workspaces
+  app.enableShutdownHooks();
 
   const port = process.env.SWAP_SERVICE_PORT || process.env.PORT || 3001;
   await app.listen(port);

@@ -6,6 +6,7 @@ import { WebsocketGateway } from '../websocket/websocket.gateway';
 @Injectable()
 export class SwapPollingService {
   private readonly logger = new Logger(SwapPollingService.name);
+  private isPolling = false;
 
   constructor(
     private swapsService: SwapsService,
@@ -14,6 +15,9 @@ export class SwapPollingService {
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async pollPendingSwaps() {
+    if (this.isPolling) return;
+    this.isPolling = true;
+
     try {
       this.logger.log('Starting to poll pending swaps...');
 
@@ -52,10 +56,22 @@ export class SwapPollingService {
           }
         } catch (error) {
           this.logger.error(`Failed to poll swap ${swap.swapId}:`, error);
+          const failCount = await this.swapsService.incrementPollFailCount(
+            swap.id,
+          );
+          if (failCount >= 100) {
+            await this.swapsService.updateSwapStatus({
+              swapId: swap.swapId,
+              status: 'FAILED',
+              statusMessage: `Polling failed after ${failCount} attempts`,
+            });
+          }
         }
       }
     } catch (error) {
       this.logger.error('Failed to poll pending swaps:', error);
+    } finally {
+      this.isPolling = false;
     }
   }
 }

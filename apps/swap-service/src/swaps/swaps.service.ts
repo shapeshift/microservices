@@ -167,10 +167,18 @@ export class SwapsService {
           txLink: data.txLink,
           statusMessage: data.statusMessage,
           actualBuyAmountCryptoPrecision: data.actualBuyAmountCryptoPrecision,
+          pollFailCount: 0,
         },
       });
 
-      await this.sendStatusUpdateNotification(swap);
+      try {
+        await this.sendStatusUpdateNotification(swap);
+      } catch (notifError) {
+        this.logger.error(
+          `Failed to send notification for swap ${data.swapId}:`,
+          notifError,
+        );
+      }
 
       this.logger.log(`Swap status updated: ${swap.swapId} -> ${data.status}`);
       return {
@@ -365,19 +373,22 @@ export class SwapsService {
       }
     }
 
-    // Fetch all prices in parallel
-    const pricePromises = Array.from(uniqueAssets.values()).map(
-      async (asset) => {
-        const price = await getAssetPriceUsd(asset);
-        return { assetId: asset.assetId, price };
-      },
-    );
-
-    const prices = await Promise.all(pricePromises);
+    // Fetch prices in batches to respect CoinGecko rate limits
+    const BATCH_SIZE = 5;
+    const allReferralAssets = Array.from(uniqueAssets.values());
     const priceMap = new Map<string, number | null>();
-    prices.forEach(({ assetId, price }) => {
-      priceMap.set(assetId, price);
-    });
+    for (let i = 0; i < allReferralAssets.length; i += BATCH_SIZE) {
+      const batch = allReferralAssets.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (asset) => {
+          const price = await getAssetPriceUsd(asset);
+          return { assetId: asset.assetId, price };
+        }),
+      );
+      batchResults.forEach(({ assetId, price }) => {
+        priceMap.set(assetId, price);
+      });
+    }
 
     // Calculate period fees and volume
     for (const swap of periodSwaps) {
@@ -583,138 +594,46 @@ export class SwapsService {
       }
     }
 
-    const pricePromises = Array.from(uniqueAssets.values()).map(
-      async (asset) => {
-        const price = await getAssetPriceUsd(asset);
-        return { assetId: asset.assetId, price };
-      },
-    );
-
-    const prices = await Promise.all(pricePromises);
+    const BATCH_SIZE = 5;
+    const allAffiliateAssets = Array.from(uniqueAssets.values());
     const priceMap = new Map<string, number | null>();
-    prices.forEach(({ assetId, price }) => {
-      priceMap.set(assetId, price);
-    });
+    for (let i = 0; i < allAffiliateAssets.length; i += BATCH_SIZE) {
+      const batch = allAffiliateAssets.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (asset) => {
+          const price = await getAssetPriceUsd(asset);
+          return { assetId: asset.assetId, price };
+        }),
+      );
+      batchResults.forEach(({ assetId, price }) => {
+        priceMap.set(assetId, price);
+      });
+    }
 
     let periodCommissionUsd = 0;
     let totalSwapVolumeUsd = 0;
     const swapCount = periodSwaps.length;
 
     for (const swap of periodSwaps) {
-      const sellAmountUsd = await this.resolveSwapUsdValue(
+      const { feeUsd, volumeUsd } = await this.calculateFeeForSwap(
         swap,
         priceMap,
         freezeCutoff,
         calculateUsdValue,
       );
-      if (sellAmountUsd === null) continue;
-
-      totalSwapVolumeUsd += sellAmountUsd;
-
-      const verificationDetails =
-        swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
-      const verifiedBps =
-        verificationDetails?.affiliateBps ??
-        (swap.affiliateBps ? parseInt(String(swap.affiliateBps)) : undefined);
-
-      if (verifiedBps && sellAmountUsd > 0) {
-        const commissionRate = this.getAffiliateCommissionRate(
-          swap.origin,
-          verifiedBps,
-        );
-
-        const verifiedSell =
-          verificationDetails?.verifiedSellAmountCryptoBaseUnit;
-        const effectiveSellAmount = verifiedSell
-          ? bnOrZero(verifiedSell).lt(bnOrZero(swap.sellAmountCryptoBaseUnit))
-            ? verifiedSell
-            : swap.sellAmountCryptoBaseUnit
-          : swap.sellAmountCryptoBaseUnit;
-
-        let totalFeeUsd: number;
-        const feeAssetId = swap.affiliateFeeAssetId;
-        const feeAssetPrice = feeAssetId ? priceMap.get(feeAssetId) : null;
-
-        if (feeAssetId && feeAssetPrice) {
-          const sellAssetObj = swap.sellAsset as Asset;
-          const buyAssetObj = swap.buyAsset as Asset;
-          const feeAmountBaseUnit = this.estimateAffiliateFeeAmount(
-            verifiedBps,
-            swap.swapperName,
-            effectiveSellAmount,
-            swap.expectedBuyAmountCryptoBaseUnit,
-          );
-          const feeAssetPrecision =
-            feeAssetId === sellAssetObj.assetId
-              ? sellAssetObj.precision
-              : buyAssetObj.precision;
-          const feeAmountHuman =
-            parseFloat(feeAmountBaseUnit) / Math.pow(10, feeAssetPrecision);
-          totalFeeUsd = feeAmountHuman * feeAssetPrice;
-        } else {
-          totalFeeUsd = (sellAmountUsd * verifiedBps) / 10000;
-        }
-
-        periodCommissionUsd += totalFeeUsd * commissionRate;
-      }
+      totalSwapVolumeUsd += volumeUsd;
+      periodCommissionUsd += feeUsd;
     }
 
     let allTimeCommissionUsd = 0;
     for (const swap of allTimeSwaps) {
-      const sellAmountUsd = await this.resolveSwapUsdValue(
+      const { feeUsd } = await this.calculateFeeForSwap(
         swap,
         priceMap,
         freezeCutoff,
         calculateUsdValue,
       );
-      if (sellAmountUsd === null) continue;
-
-      const verificationDetails =
-        swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
-      const verifiedBps =
-        verificationDetails?.affiliateBps ??
-        (swap.affiliateBps ? parseInt(String(swap.affiliateBps)) : undefined);
-
-      if (verifiedBps && sellAmountUsd > 0) {
-        const commissionRate = this.getAffiliateCommissionRate(
-          swap.origin,
-          verifiedBps,
-        );
-
-        const verifiedSell =
-          verificationDetails?.verifiedSellAmountCryptoBaseUnit;
-        const effectiveSellAmount = verifiedSell
-          ? bnOrZero(verifiedSell).lt(bnOrZero(swap.sellAmountCryptoBaseUnit))
-            ? verifiedSell
-            : swap.sellAmountCryptoBaseUnit
-          : swap.sellAmountCryptoBaseUnit;
-
-        let totalFeeUsd: number;
-        const feeAssetId = swap.affiliateFeeAssetId;
-        const feeAssetPrice = feeAssetId ? priceMap.get(feeAssetId) : null;
-
-        if (feeAssetId && feeAssetPrice) {
-          const sellAssetObj = swap.sellAsset as Asset;
-          const buyAssetObj = swap.buyAsset as Asset;
-          const feeAmountBaseUnit = this.estimateAffiliateFeeAmount(
-            verifiedBps,
-            swap.swapperName,
-            effectiveSellAmount,
-            swap.expectedBuyAmountCryptoBaseUnit,
-          );
-          const feeAssetPrecision =
-            feeAssetId === sellAssetObj.assetId
-              ? sellAssetObj.precision
-              : buyAssetObj.precision;
-          const feeAmountHuman =
-            parseFloat(feeAmountBaseUnit) / Math.pow(10, feeAssetPrecision);
-          totalFeeUsd = feeAmountHuman * feeAssetPrice;
-        } else {
-          totalFeeUsd = (sellAmountUsd * verifiedBps) / 10000;
-        }
-
-        allTimeCommissionUsd += totalFeeUsd * commissionRate;
-      }
+      allTimeCommissionUsd += feeUsd;
     }
 
     this.logger.log(
@@ -747,6 +666,85 @@ export class SwapsService {
     }
     if (!origin || verifiedBps <= SwapsService.API_BASE_BPS) return 0;
     return (verifiedBps - SwapsService.API_BASE_BPS) / verifiedBps;
+  }
+
+  private async calculateFeeForSwap(
+    swap: {
+      id: string;
+      swapId: string;
+      swapperName: string;
+      sellAsset: unknown;
+      buyAsset: unknown;
+      sellAmountCryptoBaseUnit: string;
+      sellAmountCryptoPrecision: string;
+      expectedBuyAmountCryptoBaseUnit: string;
+      sellAmountUsd: string | null;
+      affiliateBps: string | number | null;
+      origin: string | null;
+      affiliateFeeAssetId: string | null;
+      affiliateVerificationDetails: unknown;
+      createdAt: Date;
+    },
+    priceMap: Map<string, number | null>,
+    freezeCutoff: Date,
+    calculateUsdValue: (amount: string, price: number) => string,
+  ): Promise<{ feeUsd: number; volumeUsd: number }> {
+    const sellAmountUsd = await this.resolveSwapUsdValue(
+      swap,
+      priceMap,
+      freezeCutoff,
+      calculateUsdValue,
+    );
+    if (sellAmountUsd === null) return { feeUsd: 0, volumeUsd: 0 };
+
+    const verificationDetails =
+      swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
+    const verifiedBps =
+      verificationDetails?.affiliateBps ??
+      (swap.affiliateBps ? parseInt(String(swap.affiliateBps)) : undefined);
+
+    if (!verifiedBps || sellAmountUsd <= 0) {
+      return { feeUsd: 0, volumeUsd: sellAmountUsd };
+    }
+
+    const commissionRate = this.getAffiliateCommissionRate(
+      swap.origin,
+      verifiedBps,
+    );
+
+    const verifiedSell = verificationDetails?.verifiedSellAmountCryptoBaseUnit;
+    const effectiveSellAmount = verifiedSell
+      ? bnOrZero(verifiedSell).lt(bnOrZero(swap.sellAmountCryptoBaseUnit))
+        ? verifiedSell
+        : swap.sellAmountCryptoBaseUnit
+      : swap.sellAmountCryptoBaseUnit;
+
+    let totalFeeUsd: number;
+    const feeAssetId = swap.affiliateFeeAssetId;
+    const feeAssetPrice = feeAssetId ? priceMap.get(feeAssetId) : null;
+
+    if (feeAssetId && feeAssetPrice) {
+      const sellAssetObj = swap.sellAsset as Asset;
+      const buyAssetObj = swap.buyAsset as Asset;
+      const feeAmountBaseUnit = this.estimateAffiliateFeeAmount(
+        verifiedBps,
+        swap.swapperName,
+        effectiveSellAmount,
+        swap.expectedBuyAmountCryptoBaseUnit,
+      );
+      const feeAssetPrecision =
+        feeAssetId === sellAssetObj.assetId
+          ? sellAssetObj.precision
+          : buyAssetObj.precision;
+      const feeAmountHuman = bnOrZero(feeAmountBaseUnit)
+        .div(bnOrZero(10).pow(feeAssetPrecision))
+        .toNumber();
+      totalFeeUsd = feeAmountHuman * feeAssetPrice;
+    } else {
+      totalFeeUsd = (sellAmountUsd * verifiedBps) / 10000;
+    }
+
+    return { feeUsd: totalFeeUsd * commissionRate, volumeUsd: sellAmountUsd };
   }
 
   private estimateAffiliateFeeAmount(
@@ -999,5 +997,33 @@ export class SwapsService {
         statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
+  }
+
+  async incrementPollFailCount(swapId: string): Promise<number> {
+    const updated = await this.prisma.swap.update({
+      where: { id: swapId },
+      data: { pollFailCount: { increment: 1 } },
+    });
+    return updated.pollFailCount;
+  }
+
+  async findSwapBySwapId(swapId: string) {
+    return this.prisma.swap.findUnique({
+      where: { swapId },
+    });
+  }
+
+  async cleanupTestSwaps() {
+    const result = await this.prisma.swap.updateMany({
+      where: {
+        swapId: { startsWith: 'test-' },
+        status: { in: ['IDLE', 'PENDING'] },
+      },
+      data: {
+        status: 'FAILED',
+        statusMessage: 'Cleaned up by test runner',
+      },
+    });
+    return { cleaned: result.count };
   }
 }

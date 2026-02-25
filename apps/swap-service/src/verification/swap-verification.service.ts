@@ -188,11 +188,23 @@ export class SwapVerificationService {
         case 'near intents':
           return await this.verifyNearIntents(swapId, metadata);
 
-        case 'relay':
-          return await this.verifyRelay(
-            swapId,
-            (metadata?.relayTransactionMetadata as { relayId: string }).relayId,
-          );
+        case 'relay': {
+          const relayId = (
+            metadata?.relayTransactionMetadata as
+              | { relayId?: string }
+              | undefined
+          )?.relayId;
+          if (!relayId) {
+            return {
+              isVerified: false,
+              hasAffiliate: false,
+              protocol: 'relay',
+              swapId,
+              error: 'Missing relay transaction metadata',
+            };
+          }
+          return await this.verifyRelay(swapId, relayId);
+        }
 
         case 'cow swap':
           return await this.verifyCowSwap(
@@ -1078,7 +1090,7 @@ export class SwapVerificationService {
       const zrxProxyUrl =
         process.env.ZRX_PROXY_URL ||
         'https://api.proxy.shapeshift.com/api/v1/zrx';
-      const requestUrl = `${zrxProxyUrl}/trade-analytics/swap`;
+      const requestUrl = `${zrxProxyUrl}/trade-analytics/swap?txHash=${tradeHash}`;
 
       const response = await firstValueFrom(
         this.httpService.get<ZrxTrade[] | ZrxApiResponse>(requestUrl),
@@ -1227,7 +1239,7 @@ export class SwapVerificationService {
         })}`,
       );
       this.logger.log(
-        `Bebop API Request - Headers: { 'source-auth': '${apiKey.substring(0, 8)}...' }`,
+        `Bebop API Request - Headers: { 'source-auth': '[REDACTED]' }`,
       );
       this.logger.log(`Bebop API Request - Looking for txHash: ${txHash}`);
 
@@ -1325,6 +1337,7 @@ export class SwapVerificationService {
         process.env.SHAPESHIFT_JUPITER_REFERRAL_KEY ||
         'Ajgmo453yGmcHDPoJBrMUj3GFwLVL7HaaZGNLkB8vREG';
 
+      // TODO: Implement on-chain/API verification for Jupiter
       const affiliateBps = metadata?.affiliateBps
         ? parseInt(metadata.affiliateBps as string)
         : undefined;
@@ -1341,7 +1354,7 @@ export class SwapVerificationService {
       );
 
       return Promise.resolve({
-        isVerified: true,
+        isVerified: false,
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress: referralKey,
@@ -1352,6 +1365,7 @@ export class SwapVerificationService {
           txHash,
           affiliateBps: metadata?.affiliateBps as string | undefined,
           referralKey,
+          verificationMethod: 'client_metadata_only',
         },
       });
     } catch (error) {
@@ -1491,6 +1505,7 @@ export class SwapVerificationService {
     }
 
     try {
+      // TODO: Implement on-chain/API verification for Cetus
       const affiliateBps = metadata?.affiliateBps
         ? parseInt(metadata.affiliateBps as string)
         : undefined;
@@ -1507,7 +1522,7 @@ export class SwapVerificationService {
       );
 
       return Promise.resolve({
-        isVerified: true,
+        isVerified: false,
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         verifiedSellAmountCryptoBaseUnit,
@@ -1516,6 +1531,7 @@ export class SwapVerificationService {
         details: {
           txHash,
           affiliateBps: metadata?.affiliateBps as string | undefined,
+          verificationMethod: 'client_metadata_only',
         },
       });
     } catch (error) {
@@ -1549,6 +1565,7 @@ export class SwapVerificationService {
     }
 
     try {
+      // TODO: Implement on-chain/API verification for Sun.io
       const affiliateBps = metadata?.affiliateBps
         ? parseInt(metadata.affiliateBps as string)
         : undefined;
@@ -1565,7 +1582,7 @@ export class SwapVerificationService {
       );
 
       return Promise.resolve({
-        isVerified: true,
+        isVerified: false,
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         verifiedSellAmountCryptoBaseUnit,
@@ -1574,6 +1591,7 @@ export class SwapVerificationService {
         details: {
           txHash,
           affiliateBps: metadata?.affiliateBps as string | undefined,
+          verificationMethod: 'client_metadata_only',
         },
       });
     } catch (error) {
@@ -1607,6 +1625,7 @@ export class SwapVerificationService {
     }
 
     try {
+      // TODO: Implement on-chain/API verification for AVNU
       const affiliateBps = metadata?.affiliateBps
         ? parseInt(metadata.affiliateBps as string)
         : undefined;
@@ -1626,7 +1645,7 @@ export class SwapVerificationService {
       );
 
       return Promise.resolve({
-        isVerified: true,
+        isVerified: false,
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress,
@@ -1639,6 +1658,7 @@ export class SwapVerificationService {
           integratorFeeRecipient: metadata?.integratorFeeRecipient as
             | string
             | undefined,
+          verificationMethod: 'client_metadata_only',
         },
       });
     } catch (error) {
@@ -1672,6 +1692,7 @@ export class SwapVerificationService {
     }
 
     try {
+      // TODO: Implement on-chain/API verification for STON.fi
       const stonfiSpecific = metadata?.stonfiSpecific as
         | StonfiQuoteMetadata
         | undefined;
@@ -1698,7 +1719,7 @@ export class SwapVerificationService {
       );
 
       return Promise.resolve({
-        isVerified: true,
+        isVerified: false,
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress: referrerAddress,
@@ -1712,6 +1733,7 @@ export class SwapVerificationService {
           stonfiSpecific: metadata?.stonfiSpecific as
             | Record<string, unknown>
             | undefined,
+          verificationMethod: 'client_metadata_only',
         },
       });
     } catch (error) {
@@ -1757,6 +1779,7 @@ export class SwapVerificationService {
         this.httpService.get<AcrossDepositStatusResponse>(statusUrl),
       );
 
+      // TODO: Implement on-chain/API verification for Across
       const depositStatus = response.data;
 
       const affiliateBps = metadata?.affiliateBps
@@ -1781,7 +1804,7 @@ export class SwapVerificationService {
       );
 
       return {
-        isVerified: true,
+        isVerified: false,
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress,
@@ -1794,6 +1817,7 @@ export class SwapVerificationService {
           depositStatus,
           integratorId: metadata?.integratorId as string | undefined,
           appFeeRecipient: metadata?.appFeeRecipient as string | undefined,
+          verificationMethod: 'client_metadata_only',
         },
       };
     } catch (error) {
