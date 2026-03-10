@@ -5,14 +5,42 @@ import { EvmChainAdapterService } from '../lib/chain-adapters/evm.service';
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service';
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service';
 import { SolanaChainAdapterService } from '../lib/chain-adapters/solana.service';
+import { TronChainAdapterService } from '../lib/chain-adapters/tron.service';
+import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service';
+import { NearChainAdapterService } from '../lib/chain-adapters/near.service';
+import { StarknetChainAdapterService } from '../lib/chain-adapters/starknet.service';
+import { TonChainAdapterService } from '../lib/chain-adapters/ton.service';
 import { SwapVerificationService } from '../verification/swap-verification.service';
-import { SwapperName, swappers, SwapSource, SwapStatus } from '@shapeshiftoss/swapper';
+import {
+  SwapperName,
+  swappers,
+  type Swap as SwapperSwap,
+} from '@shapeshiftoss/swapper';
 import { ChainId } from '@shapeshiftoss/caip';
 import { Asset } from '@shapeshiftoss/types';
 import { hashAccountId } from '@shapeshift/shared-utils';
-import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils';
-import { CreateSwapDto, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types';
+import {
+  resolveAffiliateFeeAssetId,
+  getSwapperFeeStrategy,
+} from '../utils/affiliateFeeAsset';
+import {
+  NotificationsServiceClient,
+  UserServiceClient,
+} from '@shapeshift/shared-utils';
+import {
+  CreateSwapDto,
+  SwapStatusResponse,
+  UpdateSwapStatusDto,
+} from '@shapeshift/shared-types';
 import { bnOrZero } from '@shapeshiftoss/chain-adapters';
+import { TxStatus } from '@shapeshiftoss/unchained-client';
+
+type AffiliateVerificationDetails = {
+  affiliateBps?: number;
+  affiliateAddress?: string;
+  verifiedSellAmountCryptoBaseUnit?: string;
+  hasAffiliate?: boolean;
+};
 
 @Injectable()
 export class SwapsService {
@@ -26,6 +54,11 @@ export class SwapsService {
     private utxoChainAdapterService: UtxoChainAdapterService,
     private cosmosSdkChainAdapterService: CosmosSdkChainAdapterService,
     private solanaChainAdapterService: SolanaChainAdapterService,
+    private tronChainAdapterService: TronChainAdapterService,
+    private suiChainAdapterService: SuiChainAdapterService,
+    private nearChainAdapterService: NearChainAdapterService,
+    private starknetChainAdapterService: StarknetChainAdapterService,
+    private tonChainAdapterService: TonChainAdapterService,
     private swapVerificationService: SwapVerificationService,
   ) {
     this.notificationsClient = new NotificationsServiceClient();
@@ -34,43 +67,88 @@ export class SwapsService {
 
   async createSwap(data: CreateSwapDto) {
     try {
-      // Fetch referral code from user-service if userId is provided
       let referralCode: string | null = null;
       if (data.userId) {
         try {
-          referralCode = await this.userServiceClient.getUserReferralCode(data.userId);
+          referralCode = await this.userServiceClient.getUserReferralCode(
+            data.userId,
+          );
           if (referralCode) {
-            this.logger.log(`Found referral code ${referralCode} for user ${data.userId}`);
+            this.logger.log(
+              `Found referral code ${referralCode} for user ${data.userId}`,
+            );
           }
         } catch (error) {
-          this.logger.warn(`Failed to fetch referral code for user ${data.userId}:`, error);
-          // Continue swap creation even if referral code fetch fails
+          this.logger.warn(
+            `Failed to fetch referral code for user ${data.userId}:`,
+            error,
+          );
         }
       }
+
+      let sellAmountUsd: string | null = null;
+      try {
+        const { getAssetPriceUsd, calculateUsdValue } = await import(
+          '../utils/pricing'
+        );
+        const price = await getAssetPriceUsd(data.sellAsset);
+        if (price) {
+          sellAmountUsd = calculateUsdValue(
+            data.sellAmountCryptoPrecision,
+            price,
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to calculate sellAmountUsd for swap ${data.swapId}:`,
+          error,
+        );
+      }
+
+      const affiliateFeeAssetId = resolveAffiliateFeeAssetId(
+        data.swapperName,
+        data.sellAsset,
+        data.buyAsset,
+      );
 
       const swap = await this.prisma.swap.create({
         data: {
           swapId: data.swapId,
           sellAsset: data.sellAsset,
           buyAsset: data.buyAsset,
-          sellTxHash: data.sellTxHash,
+          sellTxHash: data.sellTxHash || null,
           sellAmountCryptoBaseUnit: data.sellAmountCryptoBaseUnit,
           expectedBuyAmountCryptoBaseUnit: data.expectedBuyAmountCryptoBaseUnit,
           sellAmountCryptoPrecision: data.sellAmountCryptoPrecision,
-          expectedBuyAmountCryptoPrecision: data.expectedBuyAmountCryptoPrecision,
+          expectedBuyAmountCryptoPrecision:
+            data.expectedBuyAmountCryptoPrecision,
           source: data.source,
           swapperName: data.swapperName,
-          sellAccountId: hashAccountId(data.sellAccountId),
-          buyAccountId: data.buyAccountId ? hashAccountId(data.buyAccountId) : null,
+          sellAccountId: data.sellAccountId
+            ? hashAccountId(data.sellAccountId)
+            : 'api',
+          buyAccountId: data.buyAccountId
+            ? hashAccountId(data.buyAccountId)
+            : null,
           receiveAddress: data.receiveAddress,
           isStreaming: data.isStreaming || false,
           metadata: data.metadata || {},
-          userId: data.userId,
+          userId: data.userId || 'api',
           referralCode,
+          sellAmountUsd,
+          affiliateAddress: data.affiliateAddress || null,
+          affiliateBps: data.affiliateBps || null,
+          origin: data.origin || null,
+          affiliateFeeAssetId,
         },
       });
 
-      this.logger.log(`Swap created: ${swap.id}${referralCode ? ` with referral code ${referralCode}` : ''}`);
+      this.logger.log(
+        `Swap created: ${swap.id}` +
+          `${referralCode ? ` with referral code ${referralCode}` : ''}` +
+          `${data.affiliateAddress ? ` with affiliate ${data.affiliateAddress}` : ''}` +
+          `${sellAmountUsd ? ` ($${sellAmountUsd})` : ''}`,
+      );
       return swap;
     } catch (error) {
       this.logger.error('Failed to create swap', error);
@@ -89,10 +167,18 @@ export class SwapsService {
           txLink: data.txLink,
           statusMessage: data.statusMessage,
           actualBuyAmountCryptoPrecision: data.actualBuyAmountCryptoPrecision,
+          pollFailCount: 0,
         },
       });
 
-      await this.sendStatusUpdateNotification(swap);
+      try {
+        await this.sendStatusUpdateNotification(swap);
+      } catch (notifError) {
+        this.logger.error(
+          `Failed to send notification for swap ${data.swapId}:`,
+          notifError,
+        );
+      }
 
       this.logger.log(`Swap status updated: ${swap.swapId} -> ${data.status}`);
       return {
@@ -113,7 +199,19 @@ export class SwapsService {
     return num.replace(/\.?0+$/, '');
   }
 
-  private async sendStatusUpdateNotification(swap: Pick<Swap, 'id' | 'userId' | 'status' | 'sellAsset' | 'buyAsset' | 'sellAmountCryptoPrecision' | 'actualBuyAmountCryptoPrecision' | 'expectedBuyAmountCryptoPrecision'>) {
+  private async sendStatusUpdateNotification(
+    swap: Pick<
+      Swap,
+      | 'id'
+      | 'userId'
+      | 'status'
+      | 'sellAsset'
+      | 'buyAsset'
+      | 'sellAmountCryptoPrecision'
+      | 'actualBuyAmountCryptoPrecision'
+      | 'expectedBuyAmountCryptoPrecision'
+    >,
+  ) {
     let title: string;
     let body: string;
     let type: 'SWAP_STATUS_UPDATE' | 'SWAP_COMPLETED' | 'SWAP_FAILED';
@@ -122,12 +220,16 @@ export class SwapsService {
     const buyAsset = swap.buyAsset as Asset;
 
     switch (swap.status) {
-      case 'SUCCESS':
+      case 'SUCCESS': {
         title = 'Swap Completed!';
-        const buyAmount = this.formatAmount(swap.actualBuyAmountCryptoPrecision || swap.expectedBuyAmountCryptoPrecision);
+        const buyAmount = this.formatAmount(
+          swap.actualBuyAmountCryptoPrecision ||
+            swap.expectedBuyAmountCryptoPrecision,
+        );
         body = `Your swap of ${this.formatAmount(swap.sellAmountCryptoPrecision)} ${sellAsset.symbol} to ${buyAmount} ${buyAsset.symbol} is complete.`;
         type = 'SWAP_COMPLETED';
         break;
+      }
       case 'FAILED':
         title = 'Swap Failed';
         body = `Your ${sellAsset.symbol} to ${buyAsset.symbol} swap has failed`;
@@ -155,7 +257,7 @@ export class SwapsService {
       take: limit,
     });
 
-    return swaps.map(swap => ({
+    return swaps.map((swap) => ({
       ...swap,
       sellAsset: swap.sellAsset as Asset,
       buyAsset: swap.buyAsset as Asset,
@@ -173,7 +275,7 @@ export class SwapsService {
       },
     });
 
-    return swaps.map(swap => ({
+    return swaps.map((swap) => ({
       ...swap,
       sellAsset: swap.sellAsset,
       buyAsset: swap.buyAsset,
@@ -186,21 +288,28 @@ export class SwapsService {
         status: {
           in: ['IDLE', 'PENDING'],
         },
+        sellTxHash: { not: null },
       },
     });
 
-    return swaps.map(swap => ({
+    return swaps.map((swap) => ({
       ...swap,
       sellAsset: swap.sellAsset,
       buyAsset: swap.buyAsset,
     }));
   }
 
-  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
-    this.logger.log(`Calculating referral fees for code: ${referralCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`);
+  async calculateReferralFees(
+    referralCode: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    this.logger.log(
+      `Calculating referral fees for code: ${referralCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
+    );
 
     // Fetch swaps for the current period
-    const periodWhereClause: any = {
+    const periodWhereClause: Prisma.SwapWhereInput = {
       referralCode,
       isAffiliateVerified: true,
       status: 'SUCCESS',
@@ -242,14 +351,18 @@ export class SwapsService {
       },
     });
 
-    this.logger.log(`Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for referral code ${referralCode}`);
+    this.logger.log(
+      `Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for referral code ${referralCode}`,
+    );
 
     let periodFeesUsd = 0;
     let totalSwapVolumeUsd = 0;
     const swapCount = periodSwaps.length;
 
     // Import pricing utilities dynamically
-    const { getAssetPriceUsd, calculateUsdValue } = await import('../utils/pricing');
+    const { getAssetPriceUsd, calculateUsdValue } = await import(
+      '../utils/pricing'
+    );
 
     // Fetch prices for all unique assets from both period and all-time swaps
     const uniqueAssets = new Map<string, Asset>();
@@ -260,17 +373,22 @@ export class SwapsService {
       }
     }
 
-    // Fetch all prices in parallel
-    const pricePromises = Array.from(uniqueAssets.values()).map(async (asset) => {
-      const price = await getAssetPriceUsd(asset);
-      return { assetId: asset.assetId, price };
-    });
-
-    const prices = await Promise.all(pricePromises);
+    // Fetch prices in batches to respect CoinGecko rate limits
+    const BATCH_SIZE = 5;
+    const allReferralAssets = Array.from(uniqueAssets.values());
     const priceMap = new Map<string, number | null>();
-    prices.forEach(({ assetId, price }) => {
-      priceMap.set(assetId, price);
-    });
+    for (let i = 0; i < allReferralAssets.length; i += BATCH_SIZE) {
+      const batch = allReferralAssets.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (asset) => {
+          const price = await getAssetPriceUsd(asset);
+          return { assetId: asset.assetId, price };
+        }),
+      );
+      batchResults.forEach(({ assetId, price }) => {
+        priceMap.set(assetId, price);
+      });
+    }
 
     // Calculate period fees and volume
     for (const swap of periodSwaps) {
@@ -278,15 +396,20 @@ export class SwapsService {
       const price = priceMap.get(sellAsset.assetId);
 
       if (!price) {
-        this.logger.warn(`No price found for asset ${sellAsset.assetId}, skipping swap ${swap.swapId}`);
+        this.logger.warn(
+          `No price found for asset ${sellAsset.assetId}, skipping swap ${swap.swapId}`,
+        );
         continue;
       }
 
-      const sellAmountUsd = parseFloat(calculateUsdValue(swap.sellAmountCryptoPrecision, price));
+      const sellAmountUsd = parseFloat(
+        calculateUsdValue(swap.sellAmountCryptoPrecision, price),
+      );
       totalSwapVolumeUsd += sellAmountUsd;
 
       // Extract affiliateBps from verification details
-      const verificationDetails = swap.affiliateVerificationDetails as any;
+      const verificationDetails =
+        swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
       const affiliateBps = verificationDetails?.affiliateBps;
 
       if (affiliateBps && sellAmountUsd > 0) {
@@ -304,8 +427,11 @@ export class SwapsService {
 
       if (!price) continue;
 
-      const sellAmountUsd = parseFloat(calculateUsdValue(swap.sellAmountCryptoPrecision, price));
-      const verificationDetails = swap.affiliateVerificationDetails as any;
+      const sellAmountUsd = parseFloat(
+        calculateUsdValue(swap.sellAmountCryptoPrecision, price),
+      );
+      const verificationDetails =
+        swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
       const affiliateBps = verificationDetails?.affiliateBps;
 
       if (affiliateBps && sellAmountUsd > 0) {
@@ -320,8 +446,8 @@ export class SwapsService {
 
     this.logger.log(
       `Referral fee calculation for ${referralCode}: ` +
-      `Period: ${swapCount} swaps, $${totalSwapVolumeUsd.toFixed(2)} volume, $${periodReferrerCommissionUsd.toFixed(2)} commission | ` +
-      `All-time: ${allTimeSwaps.length} swaps, $${allTimeReferrerCommissionUsd.toFixed(2)} total commission`
+        `Period: ${swapCount} swaps, $${totalSwapVolumeUsd.toFixed(2)} volume, $${periodReferrerCommissionUsd.toFixed(2)} commission | ` +
+        `All-time: ${allTimeSwaps.length} swaps, $${allTimeReferrerCommissionUsd.toFixed(2)} total commission`,
     );
 
     return {
@@ -335,22 +461,334 @@ export class SwapsService {
     };
   }
 
+  private getDistributionCutoff(): Date {
+    const now = new Date();
+    const cutoff = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 5),
+    );
+    if (now >= cutoff) return cutoff;
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 5));
+  }
+
+  private async resolveSwapUsdValue(
+    swap: {
+      id: string;
+      swapId: string;
+      sellAsset: unknown;
+      sellAmountCryptoPrecision: string;
+      sellAmountUsd: string | null;
+      createdAt: Date;
+    },
+    priceMap: Map<string, number | null>,
+    freezeCutoff: Date,
+    calculateUsdValue: (amount: string, price: number) => string,
+  ): Promise<number | null> {
+    const sellAsset = swap.sellAsset as Asset;
+    const isFrozen = swap.createdAt < freezeCutoff;
+
+    if (isFrozen && swap.sellAmountUsd) {
+      return parseFloat(swap.sellAmountUsd);
+    }
+
+    const price = priceMap.get(sellAsset.assetId);
+    if (!price) {
+      this.logger.warn(
+        `No price found for asset ${sellAsset.assetId}, skipping swap ${swap.swapId}`,
+      );
+      return null;
+    }
+
+    const liveUsdValue = parseFloat(
+      calculateUsdValue(swap.sellAmountCryptoPrecision, price),
+    );
+
+    if (isFrozen && !swap.sellAmountUsd) {
+      await this.prisma.swap.update({
+        where: { id: swap.id },
+        data: { sellAmountUsd: liveUsdValue.toFixed(2) },
+      });
+      this.logger.log(
+        `Froze sellAmountUsd=${liveUsdValue.toFixed(2)} for swap ${swap.swapId} (pre-distribution)`,
+      );
+    }
+
+    return liveUsdValue;
+  }
+
+  async calculateAffiliateFees(
+    affiliateAddress: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    this.logger.log(
+      `Calculating affiliate fees for address: ${affiliateAddress}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
+    );
+
+    const freezeCutoff = this.getDistributionCutoff();
+    this.logger.log(
+      `Distribution freeze cutoff: ${freezeCutoff.toISOString()}`,
+    );
+
+    const periodWhereClause: Prisma.SwapWhereInput = {
+      affiliateAddress,
+      isAffiliateVerified: true,
+      status: 'SUCCESS',
+    };
+
+    if (startDate && endDate) {
+      periodWhereClause.createdAt = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
+    const swapSelect = {
+      id: true,
+      swapId: true,
+      swapperName: true,
+      sellAsset: true,
+      buyAsset: true,
+      sellAmountCryptoBaseUnit: true,
+      sellAmountCryptoPrecision: true,
+      expectedBuyAmountCryptoBaseUnit: true,
+      sellAmountUsd: true,
+      affiliateBps: true,
+      origin: true,
+      affiliateFeeAssetId: true,
+      affiliateFeeAmountCryptoBaseUnit: true,
+      affiliateVerificationDetails: true,
+      createdAt: true,
+    } as const;
+
+    const periodSwaps = await this.prisma.swap.findMany({
+      where: periodWhereClause,
+      select: swapSelect,
+    });
+
+    const allTimeSwaps = await this.prisma.swap.findMany({
+      where: {
+        affiliateAddress,
+        isAffiliateVerified: true,
+        status: 'SUCCESS',
+      },
+      select: swapSelect,
+    });
+
+    this.logger.log(
+      `Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for affiliate ${affiliateAddress}`,
+    );
+
+    const { getAssetPriceUsd, calculateUsdValue } = await import(
+      '../utils/pricing'
+    );
+
+    const uniqueAssets = new Map<string, Asset>();
+    for (const swap of [...periodSwaps, ...allTimeSwaps]) {
+      const sellAsset = swap.sellAsset as Asset;
+      const buyAsset = swap.buyAsset as Asset;
+      if (!uniqueAssets.has(sellAsset.assetId)) {
+        uniqueAssets.set(sellAsset.assetId, sellAsset);
+      }
+      if (!uniqueAssets.has(buyAsset.assetId)) {
+        uniqueAssets.set(buyAsset.assetId, buyAsset);
+      }
+    }
+
+    const BATCH_SIZE = 5;
+    const allAffiliateAssets = Array.from(uniqueAssets.values());
+    const priceMap = new Map<string, number | null>();
+    for (let i = 0; i < allAffiliateAssets.length; i += BATCH_SIZE) {
+      const batch = allAffiliateAssets.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (asset) => {
+          const price = await getAssetPriceUsd(asset);
+          return { assetId: asset.assetId, price };
+        }),
+      );
+      batchResults.forEach(({ assetId, price }) => {
+        priceMap.set(assetId, price);
+      });
+    }
+
+    let periodCommissionUsd = 0;
+    let totalSwapVolumeUsd = 0;
+    const swapCount = periodSwaps.length;
+
+    for (const swap of periodSwaps) {
+      const { feeUsd, volumeUsd } = await this.calculateFeeForSwap(
+        swap,
+        priceMap,
+        freezeCutoff,
+        calculateUsdValue,
+      );
+      totalSwapVolumeUsd += volumeUsd;
+      periodCommissionUsd += feeUsd;
+    }
+
+    let allTimeCommissionUsd = 0;
+    for (const swap of allTimeSwaps) {
+      const { feeUsd } = await this.calculateFeeForSwap(
+        swap,
+        priceMap,
+        freezeCutoff,
+        calculateUsdValue,
+      );
+      allTimeCommissionUsd += feeUsd;
+    }
+
+    this.logger.log(
+      `Affiliate fee calculation for ${affiliateAddress}: ` +
+        `Period: ${swapCount} swaps, $${totalSwapVolumeUsd.toFixed(2)} volume, $${periodCommissionUsd.toFixed(2)} commission | ` +
+        `All-time: ${allTimeSwaps.length} swaps, $${allTimeCommissionUsd.toFixed(2)} total commission`,
+    );
+
+    return {
+      affiliateAddress,
+      swapCount,
+      totalSwapVolumeUsd: totalSwapVolumeUsd.toFixed(2),
+      totalFeesCollectedUsd: allTimeCommissionUsd.toFixed(2),
+      referrerCommissionUsd: periodCommissionUsd.toFixed(2),
+      periodStart: startDate?.toISOString(),
+      periodEnd: endDate?.toISOString(),
+    };
+  }
+
+  private static readonly API_BASE_BPS = 10;
+  private static readonly WEB_REVENUE_SHARE = 0.1;
+
+  private getAffiliateCommissionRate(
+    origin: string | null,
+    verifiedBps: number,
+  ): number {
+    if (origin === 'web') {
+      // Referrer gets 10bps of volume (API_BASE_BPS / verifiedBps of the fee)
+      return SwapsService.API_BASE_BPS / verifiedBps;
+    }
+    if (!origin || verifiedBps <= SwapsService.API_BASE_BPS) return 0;
+    return (verifiedBps - SwapsService.API_BASE_BPS) / verifiedBps;
+  }
+
+  private async calculateFeeForSwap(
+    swap: {
+      id: string;
+      swapId: string;
+      swapperName: string;
+      sellAsset: unknown;
+      buyAsset: unknown;
+      sellAmountCryptoBaseUnit: string;
+      sellAmountCryptoPrecision: string;
+      expectedBuyAmountCryptoBaseUnit: string;
+      sellAmountUsd: string | null;
+      affiliateBps: string | number | null;
+      origin: string | null;
+      affiliateFeeAssetId: string | null;
+      affiliateVerificationDetails: unknown;
+      createdAt: Date;
+    },
+    priceMap: Map<string, number | null>,
+    freezeCutoff: Date,
+    calculateUsdValue: (amount: string, price: number) => string,
+  ): Promise<{ feeUsd: number; volumeUsd: number }> {
+    const sellAmountUsd = await this.resolveSwapUsdValue(
+      swap,
+      priceMap,
+      freezeCutoff,
+      calculateUsdValue,
+    );
+    if (sellAmountUsd === null) return { feeUsd: 0, volumeUsd: 0 };
+
+    const verificationDetails =
+      swap.affiliateVerificationDetails as AffiliateVerificationDetails | null;
+    const verifiedBps =
+      verificationDetails?.affiliateBps ??
+      (swap.affiliateBps ? parseInt(String(swap.affiliateBps)) : undefined);
+
+    if (!verifiedBps || sellAmountUsd <= 0) {
+      return { feeUsd: 0, volumeUsd: sellAmountUsd };
+    }
+
+    const commissionRate = this.getAffiliateCommissionRate(
+      swap.origin,
+      verifiedBps,
+    );
+
+    const verifiedSell = verificationDetails?.verifiedSellAmountCryptoBaseUnit;
+    const effectiveSellAmount = verifiedSell
+      ? bnOrZero(verifiedSell).lt(bnOrZero(swap.sellAmountCryptoBaseUnit))
+        ? verifiedSell
+        : swap.sellAmountCryptoBaseUnit
+      : swap.sellAmountCryptoBaseUnit;
+
+    let totalFeeUsd: number;
+    const feeAssetId = swap.affiliateFeeAssetId;
+    const feeAssetPrice = feeAssetId ? priceMap.get(feeAssetId) : null;
+
+    if (feeAssetId && feeAssetPrice) {
+      const sellAssetObj = swap.sellAsset as Asset;
+      const buyAssetObj = swap.buyAsset as Asset;
+      const feeAmountBaseUnit = this.estimateAffiliateFeeAmount(
+        verifiedBps,
+        swap.swapperName,
+        effectiveSellAmount,
+        swap.expectedBuyAmountCryptoBaseUnit,
+      );
+      const feeAssetPrecision =
+        feeAssetId === sellAssetObj.assetId
+          ? sellAssetObj.precision
+          : buyAssetObj.precision;
+      const feeAmountHuman = bnOrZero(feeAmountBaseUnit)
+        .div(bnOrZero(10).pow(feeAssetPrecision))
+        .toNumber();
+      totalFeeUsd = feeAmountHuman * feeAssetPrice;
+    } else {
+      totalFeeUsd = (sellAmountUsd * verifiedBps) / 10000;
+    }
+
+    return { feeUsd: totalFeeUsd * commissionRate, volumeUsd: sellAmountUsd };
+  }
+
+  private estimateAffiliateFeeAmount(
+    affiliateBps: number,
+    swapperName: string,
+    sellAmountCryptoBaseUnit: string,
+    expectedBuyAmountCryptoBaseUnit: string,
+  ): string {
+    const strategy = getSwapperFeeStrategy(swapperName);
+    const bpsMultiplier = affiliateBps / 10000;
+
+    switch (strategy) {
+      case 'sell_asset':
+        return bnOrZero(sellAmountCryptoBaseUnit)
+          .times(bpsMultiplier)
+          .toFixed(0);
+      case 'buy_asset':
+        return bnOrZero(expectedBuyAmountCryptoBaseUnit)
+          .times(bpsMultiplier)
+          .toFixed(0);
+      case 'fixed_base':
+      default:
+        return bnOrZero(sellAmountCryptoBaseUnit)
+          .times(bpsMultiplier)
+          .toFixed(0);
+    }
+  }
+
   async pollSwapStatus(swapId: string): Promise<SwapStatusResponse> {
     try {
       this.logger.log(`Polling status for swap: ${swapId}`);
-      
+
       const swap = await this.prisma.swap.findUnique({
         where: { swapId },
       });
-      
+
       if (!swap) {
         throw new Error(`Swap not found: ${swapId}`);
       }
 
       const sellAsset = swap.sellAsset as Asset;
 
-      const swapper = swappers[swap.swapperName];
-      
+      const swapper = swappers[swap.swapperName as SwapperName];
+
       if (!swapper) {
         throw new Error(`Swapper not found: ${swap.swapperName}`);
       }
@@ -361,19 +799,22 @@ export class SwapsService {
 
       const status = await swapper.checkTradeStatus({
         txHash: swap.sellTxHash ?? '',
-        chainId: sellAsset.chainId as ChainId,
+        chainId: sellAsset.chainId,
         address: swap.sellAccountId,
         swap: {
           ...swap,
           id: swap.swapId,
           createdAt: swap.createdAt.getTime(),
           updatedAt: swap.updatedAt.getTime(),
-        },
+        } as unknown as SwapperSwap,
         stepIndex: 0,
         config: {
-          VITE_UNCHAINED_THORCHAIN_HTTP_URL: process.env.VITE_UNCHAINED_THORCHAIN_HTTP_URL || '',
-          VITE_UNCHAINED_MAYACHAIN_HTTP_URL: process.env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL || '',
-          VITE_UNCHAINED_COSMOS_HTTP_URL: process.env.VITE_UNCHAINED_COSMOS_HTTP_URL || '',
+          VITE_UNCHAINED_THORCHAIN_HTTP_URL:
+            process.env.VITE_UNCHAINED_THORCHAIN_HTTP_URL || '',
+          VITE_UNCHAINED_MAYACHAIN_HTTP_URL:
+            process.env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL || '',
+          VITE_UNCHAINED_COSMOS_HTTP_URL:
+            process.env.VITE_UNCHAINED_COSMOS_HTTP_URL || '',
           VITE_THORCHAIN_NODE_URL: process.env.VITE_THORCHAIN_NODE_URL || '',
           VITE_MAYACHAIN_NODE_URL: process.env.VITE_MAYACHAIN_NODE_URL || '',
           VITE_COWSWAP_BASE_URL: process.env.VITE_COWSWAP_BASE_URL || '',
@@ -383,64 +824,130 @@ export class SwapsService {
           VITE_RELAY_API_URL: process.env.VITE_RELAY_API_URL || '',
           VITE_PORTALS_BASE_URL: process.env.VITE_PORTALS_BASE_URL || '',
           VITE_ZRX_BASE_URL: process.env.VITE_ZRX_BASE_URL || '',
-          VITE_THORCHAIN_MIDGARD_URL: process.env.VITE_THORCHAIN_MIDGARD_URL || '',
-          VITE_MAYACHAIN_MIDGARD_URL: process.env.VITE_MAYACHAIN_MIDGARD_URL || '',
-          VITE_UNCHAINED_BITCOIN_HTTP_URL: process.env.VITE_UNCHAINED_BITCOIN_HTTP_URL || '',
-          VITE_UNCHAINED_DOGECOIN_HTTP_URL: process.env.VITE_UNCHAINED_DOGECOIN_HTTP_URL || '',
-          VITE_UNCHAINED_LITECOIN_HTTP_URL: process.env.VITE_UNCHAINED_LITECOIN_HTTP_URL || '',
-          VITE_UNCHAINED_BITCOINCASH_HTTP_URL: process.env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL || '',
-          VITE_UNCHAINED_ETHEREUM_HTTP_URL: process.env.VITE_UNCHAINED_ETHEREUM_HTTP_URL || '',
-          VITE_UNCHAINED_AVALANCHE_HTTP_URL: process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL || '',
-          VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL: process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL || '',
-          VITE_UNCHAINED_BASE_HTTP_URL: process.env.VITE_UNCHAINED_BASE_HTTP_URL || '',
-          VITE_NEAR_INTENTS_API_KEY: process.env.VITE_NEAR_INTENTS_API_KEY || '',
+          VITE_THORCHAIN_MIDGARD_URL:
+            process.env.VITE_THORCHAIN_MIDGARD_URL || '',
+          VITE_MAYACHAIN_MIDGARD_URL:
+            process.env.VITE_MAYACHAIN_MIDGARD_URL || '',
+          VITE_UNCHAINED_BITCOIN_HTTP_URL:
+            process.env.VITE_UNCHAINED_BITCOIN_HTTP_URL || '',
+          VITE_UNCHAINED_DOGECOIN_HTTP_URL:
+            process.env.VITE_UNCHAINED_DOGECOIN_HTTP_URL || '',
+          VITE_UNCHAINED_LITECOIN_HTTP_URL:
+            process.env.VITE_UNCHAINED_LITECOIN_HTTP_URL || '',
+          VITE_UNCHAINED_BITCOINCASH_HTTP_URL:
+            process.env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL || '',
+          VITE_UNCHAINED_ETHEREUM_HTTP_URL:
+            process.env.VITE_UNCHAINED_ETHEREUM_HTTP_URL || '',
+          VITE_UNCHAINED_AVALANCHE_HTTP_URL:
+            process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL || '',
+          VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL:
+            process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL || '',
+          VITE_UNCHAINED_BASE_HTTP_URL:
+            process.env.VITE_UNCHAINED_BASE_HTTP_URL || '',
+          VITE_NEAR_INTENTS_API_KEY:
+            process.env.VITE_NEAR_INTENTS_API_KEY || '',
+          VITE_BEBOP_API_KEY: process.env.VITE_BEBOP_API_KEY || '',
+          VITE_TENDERLY_API_KEY: process.env.VITE_TENDERLY_API_KEY || '',
+          VITE_TENDERLY_ACCOUNT_SLUG:
+            process.env.VITE_TENDERLY_ACCOUNT_SLUG || '',
+          VITE_TENDERLY_PROJECT_SLUG:
+            process.env.VITE_TENDERLY_PROJECT_SLUG || '',
+          VITE_TRON_NODE_URL: process.env.VITE_TRON_NODE_URL || '',
+          VITE_SUI_NODE_URL: process.env.VITE_SUI_NODE_URL || '',
+          VITE_ACROSS_API_URL: process.env.VITE_ACROSS_API_URL || '',
+          VITE_ACROSS_INTEGRATOR_ID:
+            process.env.VITE_ACROSS_INTEGRATOR_ID || '',
           VITE_FEATURE_THORCHAINSWAP_LONGTAIL: true,
           VITE_FEATURE_THORCHAINSWAP_L1_TO_LONGTAIL: true,
           VITE_FEATURE_CHAINFLIP_SWAP_DCA: true,
         },
         assertGetSolanaChainAdapter: (chainId: ChainId) => {
-          return this.solanaChainAdapterService.assertGetSolanaChainAdapter(chainId);
+          return this.solanaChainAdapterService.assertGetSolanaChainAdapter(
+            chainId,
+          );
         },
         assertGetUtxoChainAdapter: (chainId: ChainId) => {
-          return this.utxoChainAdapterService.assertGetUtxoChainAdapter(chainId);
+          return this.utxoChainAdapterService.assertGetUtxoChainAdapter(
+            chainId,
+          );
         },
         assertGetCosmosSdkChainAdapter: (chainId: ChainId) => {
-          return this.cosmosSdkChainAdapterService.assertGetCosmosSdkChainAdapter(chainId);
+          return this.cosmosSdkChainAdapterService.assertGetCosmosSdkChainAdapter(
+            chainId,
+          );
         },
         assertGetEvmChainAdapter: (chainId: ChainId) => {
           return this.evmChainAdapterService.assertGetEvmChainAdapter(chainId);
+        },
+        assertGetTronChainAdapter: (chainId: ChainId) => {
+          return this.tronChainAdapterService.assertGetTronChainAdapter(
+            chainId,
+          );
+        },
+        assertGetSuiChainAdapter: (chainId: ChainId) => {
+          return this.suiChainAdapterService.assertGetSuiChainAdapter(chainId);
+        },
+        assertGetNearChainAdapter: (chainId: ChainId) => {
+          return this.nearChainAdapterService.assertGetNearChainAdapter(
+            chainId,
+          );
+        },
+        assertGetStarknetChainAdapter: (chainId: ChainId) => {
+          return this.starknetChainAdapterService.assertGetStarknetChainAdapter(
+            chainId,
+          );
+        },
+        assertGetTonChainAdapter: (chainId: ChainId) => {
+          return this.tonChainAdapterService.assertGetTonChainAdapter(chainId);
         },
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       });
 
       // Verify affiliate usage
       let isAffiliateVerified: boolean | undefined;
-      let affiliateVerificationDetails: { hasAffiliate: boolean; affiliateBps?: number; affiliateAddress?: string } | undefined;
+      let affiliateVerificationDetails:
+        | {
+            hasAffiliate: boolean;
+            affiliateBps?: number;
+            affiliateAddress?: string;
+            verifiedSellAmountCryptoBaseUnit?: string;
+          }
+        | undefined;
 
       try {
         // Enrich metadata with swap fields needed for verification
         const enrichedMetadata = {
           ...(swap.metadata as Record<string, any>),
           receiveAddress: swap.receiveAddress,
-          expectedBuyAmountCryptoPrecision: swap.expectedBuyAmountCryptoPrecision,
+          expectedBuyAmountCryptoPrecision:
+            swap.expectedBuyAmountCryptoPrecision,
           createdAt: swap.createdAt.getTime(),
+          sellAssetPrecision: sellAsset.precision,
+          affiliateBps: swap.affiliateBps,
+          affiliateAddress: swap.affiliateAddress,
+          integratorFeeRecipient: swap.affiliateAddress,
+          sellAmountCryptoBaseUnit: swap.sellAmountCryptoBaseUnit,
         };
 
-        const verificationResult = await this.swapVerificationService.verifySwapAffiliate(
-          swapId,
-          swap.swapperName,
-          sellAsset.chainId,
-          swap.sellTxHash || undefined,
-          enrichedMetadata,
-        );
+        const verificationResult =
+          await this.swapVerificationService.verifySwapAffiliate(
+            swapId,
+            swap.swapperName,
+            sellAsset.chainId,
+            swap.sellTxHash || undefined,
+            enrichedMetadata,
+          );
 
-        isAffiliateVerified = verificationResult.isVerified && verificationResult.hasAffiliate;
+        isAffiliateVerified =
+          verificationResult.isVerified && verificationResult.hasAffiliate;
 
         if (verificationResult.isVerified) {
           affiliateVerificationDetails = {
             hasAffiliate: verificationResult.hasAffiliate,
             affiliateBps: verificationResult.affiliateBps,
             affiliateAddress: verificationResult.affiliateAddress,
+            verifiedSellAmountCryptoBaseUnit:
+              verificationResult.verifiedSellAmountCryptoBaseUnit,
           };
         }
 
@@ -458,16 +965,28 @@ export class SwapsService {
           },
         });
       } catch (verificationError) {
-        this.logger.warn(`Failed to verify affiliate for swap ${swapId}:`, verificationError);
+        this.logger.warn(
+          `Failed to verify affiliate for swap ${swapId}:`,
+          verificationError,
+        );
         // Don't fail the entire status check if verification fails
       }
 
       return {
-        status: status.status === 'Confirmed' ? 'SUCCESS' :
-                status.status === 'Failed' ? 'FAILED' : 'PENDING',
+        status:
+          status.status === TxStatus.Confirmed
+            ? 'SUCCESS'
+            : status.status === TxStatus.Failed
+              ? 'FAILED'
+              : 'PENDING',
         sellTxHash: swap.sellTxHash,
         buyTxHash: status.buyTxHash,
-        statusMessage: status.message,
+        statusMessage:
+          typeof status.message === 'string'
+            ? status.message
+            : Array.isArray(status.message)
+              ? status.message[0]
+              : '',
         isAffiliateVerified,
         affiliateVerificationDetails,
       };
@@ -478,5 +997,33 @@ export class SwapsService {
         statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
+  }
+
+  async incrementPollFailCount(swapId: string): Promise<number> {
+    const updated = await this.prisma.swap.update({
+      where: { id: swapId },
+      data: { pollFailCount: { increment: 1 } },
+    });
+    return updated.pollFailCount;
+  }
+
+  async findSwapBySwapId(swapId: string) {
+    return this.prisma.swap.findUnique({
+      where: { swapId },
+    });
+  }
+
+  async cleanupTestSwaps() {
+    const result = await this.prisma.swap.updateMany({
+      where: {
+        swapId: { startsWith: 'test-' },
+        status: { in: ['IDLE', 'PENDING'] },
+      },
+      data: {
+        status: 'FAILED',
+        statusMessage: 'Cleaned up by test runner',
+      },
+    });
+    return { cleaned: result.count };
   }
 }

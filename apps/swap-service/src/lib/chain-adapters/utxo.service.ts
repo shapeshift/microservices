@@ -1,14 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service';
 import * as unchained from '@shapeshiftoss/unchained-client';
-import { bitcoin } from '@shapeshiftoss/chain-adapters';
-import { 
+import { bitcoin, zcash } from '@shapeshiftoss/chain-adapters';
+import {
   btcChainId,
   bchChainId,
   dogeChainId,
   ltcChainId,
+  zecChainId,
 } from '@shapeshiftoss/caip';
-import { utxoChainIds, type UtxoChainAdapter } from '@shapeshiftoss/chain-adapters';
+import {
+  utxoChainIds,
+  type UtxoChainAdapter,
+} from '@shapeshiftoss/chain-adapters';
 import type { ChainId } from '@shapeshiftoss/caip';
 import { UtxoChainId } from '@shapeshiftoss/types';
 
@@ -18,16 +22,18 @@ export class UtxoChainAdapterService {
 
   constructor(private chainAdapterManagerService: ChainAdapterManagerService) {}
 
-  async initializeUtxoChainAdapters() {
+  initializeUtxoChainAdapters() {
     this.logger.log('Initializing UTXO chain adapters...');
-    
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
 
     try {
-      await this.initializeBitcoinAdapter(chainAdapterManager);
-      await this.initializeBitcoinCashAdapter(chainAdapterManager);
-      await this.initializeDogecoinAdapter(chainAdapterManager);
-      await this.initializeLitecoinAdapter(chainAdapterManager);
+      this.initializeBitcoinAdapter(chainAdapterManager);
+      this.initializeBitcoinCashAdapter(chainAdapterManager);
+      this.initializeDogecoinAdapter(chainAdapterManager);
+      this.initializeLitecoinAdapter(chainAdapterManager);
+      this.initializeZcashAdapter(chainAdapterManager);
 
       this.logger.log('All UTXO chain adapters initialized successfully');
     } catch (error) {
@@ -36,7 +42,7 @@ export class UtxoChainAdapterService {
     }
   }
 
-  private async initializeBitcoinAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeBitcoinAdapter(chainAdapterManager: Map<string, any>) {
     const bitcoinHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_BITCOIN_HTTP_URL,
@@ -58,7 +64,7 @@ export class UtxoChainAdapterService {
     this.logger.log('Bitcoin adapter initialized');
   }
 
-  private async initializeBitcoinCashAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeBitcoinCashAdapter(chainAdapterManager: Map<string, any>) {
     const bchHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL,
@@ -80,7 +86,7 @@ export class UtxoChainAdapterService {
     this.logger.log('Bitcoin Cash adapter initialized');
   }
 
-  private async initializeDogecoinAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeDogecoinAdapter(chainAdapterManager: Map<string, any>) {
     const dogeHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_DOGECOIN_HTTP_URL,
@@ -102,7 +108,7 @@ export class UtxoChainAdapterService {
     this.logger.log('Dogecoin adapter initialized');
   }
 
-  private async initializeLitecoinAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeLitecoinAdapter(chainAdapterManager: Map<string, any>) {
     const ltcHttp = new unchained.bitcoin.V1Api(
       new unchained.bitcoin.Configuration({
         basePath: process.env.VITE_UNCHAINED_LITECOIN_HTTP_URL,
@@ -124,12 +130,35 @@ export class UtxoChainAdapterService {
     this.logger.log('Litecoin adapter initialized');
   }
 
+  private initializeZcashAdapter(chainAdapterManager: Map<string, any>) {
+    const zcashHttp = new unchained.zcash.V1Api(
+      new unchained.zcash.Configuration({
+        basePath: process.env.VITE_UNCHAINED_ZCASH_HTTP_URL,
+      }),
+    );
+
+    const zcashWs = new unchained.ws.Client<unchained.zcash.Tx>(
+      process.env.VITE_UNCHAINED_ZCASH_WS_URL,
+    );
+
+    const zcashAdapter = new zcash.ChainAdapter({
+      providers: { http: zcashHttp, ws: zcashWs },
+      coinName: 'Zcash',
+      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+    });
+
+    chainAdapterManager.set(zecChainId, zcashAdapter);
+    this.logger.log('Zcash adapter initialized');
+  }
+
   assertGetUtxoChainAdapter(chainId: ChainId): UtxoChainAdapter {
     if (!utxoChainIds.includes(chainId as UtxoChainId)) {
       throw new Error(`Chain ${chainId} is not a UTXO chain`);
     }
 
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
     const adapter = chainAdapterManager.get(chainId);
 
     if (!adapter) {

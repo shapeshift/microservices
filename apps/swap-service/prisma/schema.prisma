@@ -45,7 +45,16 @@ model Swap {
   isAffiliateVerified              Boolean?
   affiliateVerificationDetails     Json?
   affiliateVerifiedAt              DateTime?
+  affiliateAddress                 String?
+  affiliateBps                     String?
+  origin                           String?
+  affiliateFeeAssetId              String?
+  affiliateFeeAmountCryptoBaseUnit String?
+  pollFailCount                    Int            @default(0)
 
   @@index([referralCode])
+  @@index([affiliateAddress])
+  @@index([status, sellTxHash])
+  @@index([userId])
   @@map("swaps")
 }

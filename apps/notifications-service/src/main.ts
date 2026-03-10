@@ -18,10 +18,13 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' });
   });
 
-  const port = process.env.PORT || 3000;
+  app.enableShutdownHooks();
+
+  const port =
+    process.env.NOTIFICATIONS_SERVICE_PORT || process.env.PORT || 3003;
   await app.listen(port);
 
   console.log(`Notifications service is running on: http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();

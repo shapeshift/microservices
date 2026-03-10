@@ -11,13 +11,14 @@ export class SolanaChainAdapterService {
 
   constructor(private chainAdapterManagerService: ChainAdapterManagerService) {}
 
-  async initializeSolanaChainAdapter() {
+  initializeSolanaChainAdapter() {
     this.logger.log('Initializing Solana chain adapter...');
-    
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
 
     try {
-      await this.initializeSolanaAdapter(chainAdapterManager);
+      this.initializeSolanaAdapter(chainAdapterManager);
       this.logger.log('Solana chain adapter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Solana chain adapter:', error);
@@ -25,7 +26,7 @@ export class SolanaChainAdapterService {
     }
   }
 
-  private async initializeSolanaAdapter(chainAdapterManager: Map<string, any>) {
+  private initializeSolanaAdapter(chainAdapterManager: Map<string, any>) {
     const solanaHttp = new unchained.solana.V1Api(
       new unchained.solana.Configuration({
         basePath: process.env.VITE_UNCHAINED_SOLANA_HTTP_URL,
@@ -46,7 +47,8 @@ export class SolanaChainAdapterService {
   }
 
   assertGetSolanaChainAdapter(chainId: ChainId): solana.ChainAdapter {
-    const chainAdapterManager = this.chainAdapterManagerService.getChainAdapterManager();
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
     const adapter = chainAdapterManager.get(chainId);
 
     if (!adapter) {

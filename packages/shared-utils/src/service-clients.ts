@@ -26,7 +26,9 @@ export class UserServiceClient {
   }
 
   async getOrCreateUserByAccountIds(accountIds: string[]): Promise<User> {
-    const response = await this.axios.post<User>('/users/get-or-create', { accountIds });
+    const response = await this.axios.post<User>('/users/get-or-create', {
+      accountIds,
+    });
     return response.data;
   }
 
@@ -45,23 +47,25 @@ export class UserServiceClient {
       // Get the first account's hashed ID to check referral usage
       const hashedAccountId = user.userAccounts[0].accountId;
       const response = await this.axios.get<{ referralCode: string } | null>(
-        `/referrals/usage/${hashedAccountId}`
+        `/referrals/usage/${hashedAccountId}`,
       );
       return response.data?.referralCode || null;
-    } catch (error) {
+    } catch {
       // If no referral usage found, return null
       return null;
     }
   }
 
-  async getReferralUsages(referralCode: string): Promise<Array<{ refereeAddress: string; usedAt: string }>> {
+  async getReferralUsages(
+    referralCode: string,
+  ): Promise<Array<{ refereeAddress: string; usedAt: string }>> {
     try {
       const response = await this.axios.get<{
         code: string;
         usages: Array<{ refereeAddress: string; usedAt: string }>;
       }>(`/referrals/codes/${referralCode}`);
       return response.data?.usages || [];
-    } catch (error) {
+    } catch {
       // If code not found or no usages, return empty array
       return [];
     }
@@ -81,8 +85,13 @@ export class NotificationsServiceClient {
     });
   }
 
-  async createNotification(data: CreateNotificationDto) {
-    const response = await this.axios.post('/notifications', data);
+  async createNotification(
+    data: CreateNotificationDto,
+  ): Promise<Record<string, unknown>> {
+    const response = await this.axios.post<Record<string, unknown>>(
+      '/notifications',
+      data,
+    );
     return response.data;
   }
 
@@ -90,11 +99,21 @@ export class NotificationsServiceClient {
     userId: string;
     title: string;
     body: string;
-    data?: any;
-  }) {
-    const response = await this.axios.post('/notifications/send-to-user', data);
+    data?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    const response = await this.axios.post<Record<string, unknown>>(
+      '/notifications/send-to-user',
+      data,
+    );
     return response.data;
   }
+}
+
+interface ReferralFeeData {
+  swapCount: number;
+  totalSwapVolumeUsd: string;
+  totalFeesCollectedUsd: string;
+  referrerCommissionUsd: string;
 }
 
 export class SwapServiceClient {
@@ -110,13 +129,17 @@ export class SwapServiceClient {
     });
   }
 
-  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
+  async calculateReferralFees(
+    referralCode: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<ReferralFeeData> {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate.toISOString());
     if (endDate) params.append('endDate', endDate.toISOString());
 
     const url = `/swaps/referral-fees/${referralCode}${params.toString() ? `?${params.toString()}` : ''}`;
-    const response = await this.axios.get(url);
+    const response = await this.axios.get<ReferralFeeData>(url);
     return response.data;
   }
 }

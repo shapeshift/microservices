@@ -20,7 +20,9 @@ interface AuthenticatedSocket extends Socket {
     origin: '*',
   },
 })
-export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class WebsocketGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -50,10 +52,11 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
 
     try {
-      const notifications = await this.notificationsService.getUserNotifications(
-        client.userId,
-        data.limit || 50,
-      );
+      const notifications =
+        await this.notificationsService.getUserNotifications(
+          client.userId,
+          data.limit || 50,
+        );
       return { success: true, notifications };
     } catch (error) {
       this.logger.error('Failed to get notifications', error);
@@ -61,18 +64,21 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
-  async sendNotificationToUser(userId: string, notification: { 
-    id: string; 
-    title: string; 
-    body: string; 
-    type: string; 
-    swapId?: string; 
-  }) {
+  sendNotificationToUser(
+    userId: string,
+    notification: {
+      id: string;
+      title: string;
+      body: string;
+      type: string;
+      swapId?: string;
+    },
+  ) {
     const client = this.connectedClients.get(userId);
     if (client) {
       client.emit('notification', notification);
     }
-    
+
     this.server.to(`user:${userId}`).emit('notification', notification);
   }
 

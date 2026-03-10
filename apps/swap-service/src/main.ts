@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+
 import type { Response } from 'express';
 import { AppModule } from './app.module';
 import { ChainAdapterInitService } from './lib/chain-adapter-init.service';
@@ -8,7 +9,7 @@ async function bootstrap() {
 
   // Initialize chain adapters
   const chainAdapterInitService = app.get(ChainAdapterInitService);
-  await chainAdapterInitService.initializeChainAdapters();
+  chainAdapterInitService.initializeChainAdapters();
 
   // Enable CORS
   app.enableCors({
@@ -23,10 +24,13 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' });
   });
 
-  const port = process.env.PORT || 3000;
+  // TODO: Add ValidationPipe when class-validator resolves properly in Yarn workspaces
+  app.enableShutdownHooks();
+
+  const port = process.env.SWAP_SERVICE_PORT || process.env.PORT || 3001;
   await app.listen(port);
 
   console.log(`Swap service is running on: http://localhost:${port}`);
 }
 
-bootstrap();
+void bootstrap();

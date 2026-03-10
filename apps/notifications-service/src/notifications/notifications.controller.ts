@@ -1,25 +1,36 @@
-import { Controller, Post, Body, Get, Param, Query, Put } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Query } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
-import { NotificationType } from '@shapeshift/shared-types';
+import {
+  NotificationType,
+  PushNotificationData,
+} from '@shapeshift/shared-types';
 
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post()
-  async createNotification(@Body() data: {
-    userId: string;
-    title: string;
-    body: string;
-    type: NotificationType;
-    swapId?: string;
-  }) {
+  async createNotification(
+    @Body()
+    data: {
+      userId: string;
+      title: string;
+      body: string;
+      type: NotificationType;
+      swapId?: string;
+    },
+  ) {
     return this.notificationsService.createNotification(data);
   }
 
   @Post('register-device')
   async registerDevice(
-    @Body() data: { userId: string; deviceToken: string; deviceType: 'MOBILE' | 'WEB' },
+    @Body()
+    data: {
+      userId: string;
+      deviceToken: string;
+      deviceType: 'MOBILE' | 'WEB';
+    },
   ) {
     return this.notificationsService.registerDevice(
       data.userId,
@@ -45,12 +56,15 @@ export class NotificationsController {
   }
 
   @Post('send-to-user')
-  async sendToUser(@Body() data: {
-    userId: string;
-    title: string;
-    body: string;
-    data?: any;
-  }) {
+  async sendToUser(
+    @Body()
+    data: {
+      userId: string;
+      title: string;
+      body: string;
+      data?: PushNotificationData;
+    },
+  ) {
     return this.notificationsService.sendPushNotificationToUser(
       data.userId,
       data.title,
@@ -60,12 +74,15 @@ export class NotificationsController {
   }
 
   @Post('send-to-device')
-  async sendToDevice(@Body() data: {
-    deviceToken: string;
-    title: string;
-    body: string;
-    data?: any;
-  }) {
+  async sendToDevice(
+    @Body()
+    data: {
+      deviceToken: string;
+      title: string;
+      body: string;
+      data?: PushNotificationData;
+    },
+  ) {
     return this.notificationsService.sendPushNotificationToDevice(
       data.deviceToken,
       data.title,

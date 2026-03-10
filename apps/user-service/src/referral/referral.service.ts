@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReferralCode, ReferralUsage } from '@prisma/client';
 import { SwapServiceClient } from '@shapeshift/shared-utils';
@@ -50,7 +55,9 @@ export class ReferralService {
         },
       });
 
-      this.logger.log(`Created referral code: ${data.code} for address ${data.ownerAddress}`);
+      this.logger.log(
+        `Created referral code: ${data.code} for address ${data.ownerAddress}`,
+      );
       return referralCode;
     } catch (error) {
       this.logger.error('Failed to create referral code', error);
@@ -81,7 +88,10 @@ export class ReferralService {
         throw new BadRequestException('Referral code has expired');
       }
 
-      if (referralCode.maxUses && referralCode._count.usages >= referralCode.maxUses) {
+      if (
+        referralCode.maxUses &&
+        referralCode._count.usages >= referralCode.maxUses
+      ) {
         throw new BadRequestException('Referral code has reached maximum uses');
       }
 
@@ -94,7 +104,9 @@ export class ReferralService {
       });
 
       if (existingUsage) {
-        throw new BadRequestException('Address has already used a referral code');
+        throw new BadRequestException(
+          'Address has already used a referral code',
+        );
       }
 
       const usage = await this.prisma.referralUsage.create({
@@ -104,7 +116,9 @@ export class ReferralService {
         },
       });
 
-      this.logger.log(`Referral code ${data.code} used by ${data.refereeAddress}`);
+      this.logger.log(
+        `Referral code ${data.code} used by ${data.refereeAddress}`,
+      );
       return usage;
     } catch (error) {
       this.logger.error('Failed to use referral code', error);
@@ -112,7 +126,9 @@ export class ReferralService {
     }
   }
 
-  async getReferralCodeByCode(code: string): Promise<ReferralCodeWithUsages | null> {
+  async getReferralCodeByCode(
+    code: string,
+  ): Promise<ReferralCodeWithUsages | null> {
     const referralCode = await this.prisma.referralCode.findUnique({
       where: { code },
       include: {
@@ -128,7 +144,9 @@ export class ReferralService {
     return referralCode;
   }
 
-  async getReferralCodesByOwner(ownerAddress: string): Promise<ReferralCodeWithUsages[]> {
+  async getReferralCodesByOwner(
+    ownerAddress: string,
+  ): Promise<ReferralCodeWithUsages[]> {
     const referralCodes = await this.prisma.referralCode.findMany({
       where: { ownerAddress },
       include: {
@@ -145,7 +163,9 @@ export class ReferralService {
     return referralCodes;
   }
 
-  async getReferralUsageByAddress(refereeAddress: string): Promise<ReferralUsage | null> {
+  async getReferralUsageByAddress(
+    refereeAddress: string,
+  ): Promise<ReferralUsage | null> {
     const usage = await this.prisma.referralUsage.findUnique({
       where: { refereeAddress },
     });
@@ -153,7 +173,10 @@ export class ReferralService {
     return usage;
   }
 
-  async deactivateReferralCode(code: string, ownerAddress: string): Promise<ReferralCode> {
+  async deactivateReferralCode(
+    code: string,
+    ownerAddress: string,
+  ): Promise<ReferralCode> {
     try {
       const referralCode = await this.prisma.referralCode.findUnique({
         where: { code },
@@ -164,7 +187,9 @@ export class ReferralService {
       }
 
       if (referralCode.ownerAddress !== ownerAddress) {
-        throw new BadRequestException('Not authorized to deactivate this referral code');
+        throw new BadRequestException(
+          'Not authorized to deactivate this referral code',
+        );
       }
 
       const updatedCode = await this.prisma.referralCode.update({
@@ -197,13 +222,20 @@ export class ReferralService {
     return referralCodes;
   }
 
-  async getReferralStatsByOwner(ownerAddress: string, startDate?: Date, endDate?: Date) {
-    const dateFilter = startDate && endDate ? {
-      usedAt: {
-        gte: startDate,
-        lte: endDate,
-      },
-    } : {};
+  async getReferralStatsByOwner(
+    ownerAddress: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const dateFilter =
+      startDate && endDate
+        ? {
+            usedAt: {
+              gte: startDate,
+              lte: endDate,
+            },
+          }
+        : {};
 
     const referralCodes = await this.prisma.referralCode.findMany({
       where: { ownerAddress },
@@ -225,7 +257,9 @@ export class ReferralService {
       0,
     );
 
-    const activeCodesCount = referralCodes.filter(code => code.isActive).length;
+    const activeCodesCount = referralCodes.filter(
+      (code) => code.isActive,
+    ).length;
 
     // Fetch fee data from swap service for all codes
     let totalFeesCollectedUsd = 0;
@@ -240,8 +274,12 @@ export class ReferralService {
             endDate,
           );
 
-          const feesCollected = parseFloat(feeData.totalFeesCollectedUsd || '0');
-          const referrerCommission = parseFloat(feeData.referrerCommissionUsd || '0');
+          const feesCollected = parseFloat(
+            feeData.totalFeesCollectedUsd || '0',
+          );
+          const referrerCommission = parseFloat(
+            feeData.referrerCommissionUsd || '0',
+          );
 
           totalFeesCollectedUsd += feesCollected;
           totalReferrerCommissionUsd += referrerCommission;
@@ -259,7 +297,10 @@ export class ReferralService {
             referrerCommissionUsd: feeData.referrerCommissionUsd || '0',
           };
         } catch (error) {
-          this.logger.warn(`Failed to fetch fees for code ${code.code}:`, error);
+          this.logger.warn(
+            `Failed to fetch fees for code ${code.code}:`,
+            error,
+          );
           return {
             code: code.code,
             isActive: code.isActive,
