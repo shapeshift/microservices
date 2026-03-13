@@ -82,7 +82,9 @@ export interface CreateSwapDto {
   metadata?: Record<string, any>;
   affiliateAddress?: string;
   affiliateBps?: string;
+  partnerCode?: string;
   origin?: 'web' | 'api' | 'widget';
+  sellAmountUsd?: string;
 }
 
 export interface UpdateSwapStatusDto {

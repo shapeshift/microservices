@@ -105,11 +105,44 @@ export class SwapsService {
         );
       }
 
+      if (!sellAmountUsd && data.sellAmountUsd) {
+        sellAmountUsd = data.sellAmountUsd;
+      }
+
+      let affiliateAddress = data.affiliateAddress || null;
+      if (!affiliateAddress && data.partnerCode) {
+        try {
+          const affiliate = await this.prisma.affiliate.findFirst({
+            where: { partnerCode: data.partnerCode },
+            select: { receiveAddress: true, walletAddress: true },
+          });
+          if (affiliate) {
+            affiliateAddress =
+              affiliate.receiveAddress ?? affiliate.walletAddress;
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Failed to resolve partner code ${data.partnerCode}:`,
+            error,
+          );
+        }
+      }
+
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(
         data.swapperName,
         data.sellAsset,
         data.buyAsset,
       );
+
+      const metadata = (data.metadata || {}) as Record<string, unknown>;
+      const relayMeta = (metadata.relayTransactionMetadata ??
+        (metadata.relayId ? { relayId: metadata.relayId } : undefined)) as
+        | Prisma.InputJsonValue
+        | undefined;
+      const chainflipId =
+        typeof metadata.chainflipSwapId === 'number'
+          ? (metadata.chainflipSwapId as number)
+          : undefined;
 
       const swap = await this.prisma.swap.create({
         data: {
@@ -136,10 +169,12 @@ export class SwapsService {
           userId: data.userId || 'api',
           referralCode,
           sellAmountUsd,
-          affiliateAddress: data.affiliateAddress || null,
+          affiliateAddress: affiliateAddress,
           affiliateBps: data.affiliateBps || null,
           origin: data.origin || null,
           affiliateFeeAssetId,
+          relayTransactionMetadata: relayMeta ?? undefined,
+          chainflipSwapId: chainflipId ?? undefined,
         },
       });
 
