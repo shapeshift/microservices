@@ -6,6 +6,7 @@ import { SwapsController } from './swaps/swaps.controller';
 import { SwapsService } from './swaps/swaps.service';
 import { AffiliateController, PartnerController } from './affiliate/affiliate.controller';
 import { AffiliateService } from './affiliate/affiliate.service';
+import { SiweAuthController } from './affiliate/siwe-auth.controller';
 import { SwapPollingService } from './polling/swap-polling.service';
 import { SwapVerificationService } from './verification/swap-verification.service';
 import { WebsocketGateway } from './websocket/websocket.gateway';
@@ -30,7 +31,7 @@ import { ConfigModule } from '@nestjs/config';
       envFilePath: ['.env', '../../.env'],
     }),
   ],
-  controllers: [SwapsController, AffiliateController, PartnerController],
+  controllers: [SwapsController, AffiliateController, PartnerController, SiweAuthController],
   providers: [
     PrismaService,
     SwapsService,
