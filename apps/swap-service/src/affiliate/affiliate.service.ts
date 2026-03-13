@@ -8,13 +8,38 @@ export interface AffiliateStatsResult {
   totalFeesEarnedUsd: string;
 }
 
+export interface AffiliateSwapItem {
+  swapId: string;
+  status: string;
+  sellAsset: unknown;
+  buyAsset: unknown;
+  sellAmountCryptoPrecision: string;
+  expectedBuyAmountCryptoPrecision: string;
+  actualBuyAmountCryptoPrecision: string | null;
+  sellAmountUsd: string | null;
+  affiliateBps: string | null;
+  affiliateFeeUsd: string | null;
+  swapperName: string;
+  sellTxHash: string | null;
+  createdAt: Date;
+}
+
+export interface AffiliateSwapsResult {
+  swaps: AffiliateSwapItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface CreateAffiliateDto {
   walletAddress: string;
+  receiveAddress?: string;
   partnerCode?: string;
   bps?: number;
 }
 
 export interface UpdateAffiliateDto {
+  receiveAddress?: string;
   bps?: number;
   isActive?: boolean;
 }
@@ -83,9 +108,12 @@ export class AffiliateService {
       }
     }
 
+    const normalizedReceiveAddress = data.receiveAddress?.toLowerCase();
+
     return this.prisma.affiliate.create({
       data: {
         walletAddress: normalizedAddress,
+        receiveAddress: normalizedReceiveAddress,
         partnerCode: normalizedCode,
         bps: data.bps ?? 60,
       },
@@ -106,12 +134,18 @@ export class AffiliateService {
       throw new NotFoundException('Affiliate not found');
     }
 
+    const updateData: Record<string, unknown> = {
+      bps: data.bps ?? existing.bps,
+      isActive: data.isActive ?? existing.isActive,
+    };
+
+    if (data.receiveAddress !== undefined) {
+      updateData.receiveAddress = data.receiveAddress.toLowerCase();
+    }
+
     return this.prisma.affiliate.update({
       where: { walletAddress: normalizedAddress },
-      data: {
-        bps: data.bps ?? existing.bps,
-        isActive: data.isActive ?? existing.isActive,
-      },
+      data: updateData,
     });
   }
 
@@ -130,7 +164,7 @@ export class AffiliateService {
     }
 
     // Check reserved codes
-    const reserved = ['shapeshift', 'ss', 'admin', 'api', 'test', 'demo'];
+    const reserved = ['ss', 'admin', 'api', 'test', 'demo'];
     if (reserved.includes(normalizedCode)) {
       throw new Error('This partner code is reserved');
     }
@@ -211,6 +245,66 @@ export class AffiliateService {
   }
 
   /**
+   * Get paginated list of swaps for an affiliate address
+   */
+  async getAffiliateSwaps(
+    affiliateAddress: string,
+    startDate?: Date,
+    endDate?: Date,
+    limit = 50,
+    offset = 0,
+  ): Promise<AffiliateSwapsResult> {
+    const normalizedAddress = affiliateAddress.toLowerCase();
+
+    const whereClause: Prisma.SwapWhereInput = {
+      affiliateAddress: normalizedAddress,
+    };
+
+    if (startDate && endDate) {
+      whereClause.createdAt = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
+    const [swaps, total] = await Promise.all([
+      this.prisma.swap.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+        select: {
+          swapId: true,
+          status: true,
+          sellAsset: true,
+          buyAsset: true,
+          sellAmountCryptoPrecision: true,
+          expectedBuyAmountCryptoPrecision: true,
+          actualBuyAmountCryptoPrecision: true,
+          sellAmountUsd: true,
+          affiliateBps: true,
+          swapperName: true,
+          sellTxHash: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.swap.count({ where: whereClause }),
+    ]);
+
+    return {
+      swaps: swaps.map((swap) => ({
+        ...swap,
+        affiliateFeeUsd: swap.sellAmountUsd && swap.affiliateBps
+          ? (parseFloat(swap.sellAmountUsd) * parseInt(swap.affiliateBps, 10) / 10000).toFixed(2)
+          : null,
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  /**
    * Resolve partner code to affiliate config
    */
   async resolvePartnerCode(partnerCode: string) {
@@ -222,7 +316,7 @@ export class AffiliateService {
 
     return {
       partnerCode: affiliate.partnerCode,
-      affiliateAddress: affiliate.walletAddress,
+      affiliateAddress: affiliate.receiveAddress ?? affiliate.walletAddress,
       bps: affiliate.bps,
     };
   }

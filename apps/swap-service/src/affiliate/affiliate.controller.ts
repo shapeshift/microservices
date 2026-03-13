@@ -6,15 +6,19 @@ import {
   Param,
   Body,
   Query,
+  Req,
+  UseGuards,
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   AffiliateService,
   CreateAffiliateDto,
   UpdateAffiliateDto,
 } from './affiliate.service';
+import { SiweAuthGuard } from './siwe-auth.guard';
 
 @Controller('v1/affiliate')
 export class AffiliateController {
@@ -24,6 +28,30 @@ export class AffiliateController {
    * GET /v1/affiliate/stats
    * Get affiliate stats (for dashboard)
    */
+  @Get('swaps')
+  async getSwaps(
+    @Query('address') address: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    if (!address) {
+      throw new BadRequestException('address query parameter is required');
+    }
+
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+
+    return this.affiliateService.getAffiliateSwaps(
+      address,
+      start,
+      end,
+      limit ? parseInt(limit, 10) : 50,
+      offset ? parseInt(offset, 10) : 0,
+    );
+  }
+
   @Get('stats')
   async getStats(
     @Query('address') address: string,
@@ -55,24 +83,21 @@ export class AffiliateController {
     return affiliate;
   }
 
-  /**
-   * POST /v1/affiliate
-   * Register as affiliate
-   * Note: In production, this should require SIWE authentication
-   */
+  @UseGuards(SiweAuthGuard)
   @Post()
-  async createAffiliate(@Body() data: CreateAffiliateDto) {
-    // Validate wallet address
+  async createAffiliate(@Req() req: any, @Body() data: CreateAffiliateDto) {
     if (!data.walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(data.walletAddress)) {
       throw new BadRequestException('Invalid wallet address');
     }
 
-    // Validate BPS range
+    if (req.siweAddress !== data.walletAddress.toLowerCase()) {
+      throw new ForbiddenException('Authenticated address does not match walletAddress');
+    }
+
     if (data.bps !== undefined && (data.bps < 0 || data.bps > 1000)) {
       throw new BadRequestException('BPS must be between 0 and 1000');
     }
 
-    // Validate partner code format
     if (
       data.partnerCode &&
       !/^[a-zA-Z0-9-]{3,32}$/.test(data.partnerCode)
@@ -80,6 +105,10 @@ export class AffiliateController {
       throw new BadRequestException(
         'Partner code must be 3-32 alphanumeric characters or hyphens',
       );
+    }
+
+    if (data.receiveAddress && !/^0x[a-fA-F0-9]{40}$/.test(data.receiveAddress)) {
+      throw new BadRequestException('Invalid receive address');
     }
 
     try {
@@ -94,19 +123,23 @@ export class AffiliateController {
     }
   }
 
-  /**
-   * PATCH /v1/affiliate/:address
-   * Update affiliate settings
-   * Note: In production, this should require SIWE authentication matching address
-   */
+  @UseGuards(SiweAuthGuard)
   @Patch(':address')
   async updateAffiliate(
+    @Req() req: any,
     @Param('address') address: string,
     @Body() data: UpdateAffiliateDto,
   ) {
-    // Validate BPS range
+    if (req.siweAddress !== address.toLowerCase()) {
+      throw new ForbiddenException('Authenticated address does not match target address');
+    }
+
     if (data.bps !== undefined && (data.bps < 0 || data.bps > 1000)) {
       throw new BadRequestException('BPS must be between 0 and 1000');
+    }
+
+    if (data.receiveAddress && !/^0x[a-fA-F0-9]{40}$/.test(data.receiveAddress)) {
+      throw new BadRequestException('Invalid receive address');
     }
 
     try {
@@ -119,13 +152,10 @@ export class AffiliateController {
     }
   }
 
-  /**
-   * POST /v1/affiliate/claim-code
-   * Claim a partner code
-   * Note: In production, this should require SIWE authentication
-   */
+  @UseGuards(SiweAuthGuard)
   @Post('claim-code')
   async claimPartnerCode(
+    @Req() req: any,
     @Body() data: { walletAddress: string; partnerCode: string },
   ) {
     if (!data.walletAddress || !data.partnerCode) {
@@ -136,6 +166,10 @@ export class AffiliateController {
 
     if (!/^0x[a-fA-F0-9]{40}$/.test(data.walletAddress)) {
       throw new BadRequestException('Invalid wallet address');
+    }
+
+    if (req.siweAddress !== data.walletAddress.toLowerCase()) {
+      throw new ForbiddenException('Authenticated address does not match walletAddress');
     }
 
     try {
