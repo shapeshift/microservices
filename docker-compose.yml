@@ -28,6 +28,9 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3002
+      - DATABASE_URL=postgresql://postgres:password@db:5432/microservices
+      - SWAP_SERVICE_URL=http://swap-service:3001
+      - NOTIFICATIONS_SERVICE_URL=http://notifications-service:3003
     depends_on:
       packages:
         condition: service_started
@@ -45,6 +48,9 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
+      - DATABASE_URL=postgresql://postgres:password@db:5432/microservices
+      - USER_SERVICE_URL=http://user-service:3002
+      - NOTIFICATIONS_SERVICE_URL=http://notifications-service:3003
     depends_on:
       packages:
         condition: service_started
@@ -62,6 +68,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3003
+      - DATABASE_URL=postgresql://postgres:password@db:5432/microservices
+      - USER_SERVICE_URL=http://user-service:3002
     depends_on:
       packages:
         condition: service_started
