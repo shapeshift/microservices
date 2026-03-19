@@ -3,10 +3,10 @@
   "build": {
     "builder": "RAILPACK",
     "buildCommand": "yarn build",
-    "watchPatterns": ["yarn.lock", "apps/user-service/**", "packages/**"]
+    "watchPatterns": ["yarn.lock", "apps/user-service/**", "packages/**", "prisma/**"]
   },
   "deploy": {
-    "preDeployCommand": "cd apps/user-service && yarn db:migrate",
+    "preDeployCommand": "yarn db:migrate",
     "startCommand": "cd apps/user-service && yarn start:prod",
     "restartPolicyType": "ALWAYS",
     "multiRegionConfig": {

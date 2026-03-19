@@ -3,10 +3,10 @@
   "build": {
     "builder": "RAILPACK",
     "buildCommand": "yarn build",
-    "watchPatterns": ["yarn.lock", "apps/notifications-service/**", "packages/**"]
+    "watchPatterns": ["yarn.lock", "apps/notifications-service/**", "packages/**", "prisma/**"]
   },
   "deploy": {
-    "preDeployCommand": "cd apps/notifications-service && yarn db:migrate",
+    "preDeployCommand": "yarn db:migrate",
     "startCommand": "cd apps/notifications-service && yarn start:prod",
     "restartPolicyType": "ALWAYS",
     "multiRegionConfig": {
