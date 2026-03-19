@@ -13,6 +13,9 @@ shapeshift-backend/
 ├── packages/
 │   ├── shared-types/          # Shared TypeScript types
 │   └── shared-utils/          # Shared utilities
+├── prisma/
+│   ├── schema/                # Prisma schema files (one per service)
+│   └── migrations/            # Shared migration history
 ├── turbo.json                 # Turborepo configuration
 ├── package.json               # Root package.json
 └── docker-compose.yml         # Docker Compose for development
@@ -23,13 +26,13 @@ shapeshift-backend/
 ### User Service (`apps/user-service`)
 - **Port**: 3002
 - **Purpose**: Manages user accounts, devices, and authentication
-- **Database**: SQLite (development) / PostgreSQL (production)
+- **Database**: PostgreSQL
 - **API**: `/users/*`
 
 ### Swap Service (`apps/swap-service`)
 - **Port**: 3001
 - **Purpose**: Handles swaps and WebSocket connections
-- **Database**: SQLite (development) / PostgreSQL (production)
+- **Database**: PostgreSQL
 - **API**: `/swaps/*`
 - **WebSocket**: Real-time updates
 - **Dependencies**: User Service, Notifications Service
@@ -37,7 +40,7 @@ shapeshift-backend/
 ### Notifications Service (`apps/notifications-service`)
 - **Port**: 3003
 - **Purpose**: Manages notifications and push notifications
-- **Database**: SQLite (development) / PostgreSQL (production)
+- **Database**: PostgreSQL
 - **API**: `/notifications/*`
 - **WebSocket**: Real-time notifications
 - **Dependencies**: User Service
@@ -64,76 +67,88 @@ shapeshift-backend/
 ### Prerequisites
 - Node.js 22+
 - Yarn 4+
-- Docker (optional, for containerized development)
+- Docker (for containerized development)
 
 ### Installation
 
-1. **Copy the environment variables**
-  Copy `.env.example` into `.env` at the root of the repository
-  Ask the team for the EXPO token used to launch notifications
+1. **Copy the environment variables for each service** (see [Environment Variables](#environment-variables))
+   Ask the team for the EXPO token used to launch notifications.
 
-1. **Install dependencies**:
+2. **Install dependencies**:
    ```bash
    yarn install
    ```
 
-2. **Build shared packages**:
+3. **Build**:
    ```bash
    yarn build
    ```
 
-3. **Set up databases**:
-   ```bash
-   # Generate Prisma clients
-   yarn db:generate
-
-   # Push db structure
-   yarn db:push
-   
-   # Run migrations
-   yarn db:migrate
-   ```
-
 ### Development
 
-#### Option 1: Local Development
+#### Option 1: Docker Development (recommended)
 ```bash
-# Start all services in development mode
-yarn start:dev
-
-# Or start individual services
-yarn workspace @shapeshift/user-service start:dev
-yarn workspace @shapeshift/swap-service start:dev
-yarn workspace @shapeshift/notifications-service start:dev
-```
-
-#### Option 2: Docker Development
-```bash
-# Start all services with Docker
+# Start all services
 docker-compose up -d
 
 # View logs
 docker-compose logs -f
+
+# View logs for a specific service
+docker-compose logs -f swap-service db
+```
+
+#### Option 2: Local Development
+```bash
+yarn start:dev
 ```
 
 ### Available Scripts
 
 #### Root Level
-- `yarn build` - Build all packages and apps
+- `yarn build` - Build all packages and apps (runs `db:generate` first)
 - `yarn dev` - Start all services in development mode
-- `yarn test` - Run tests for all packages
+- `yarn test` - Run tests
 - `yarn lint` - Lint all packages
-- `yarn db:generate` - Generate Prisma clients
-- `yarn db:push` - Push default database structure
-- `yarn db:migrate` - Run database migrations
+- `yarn db:generate` - Generate Prisma client
+- `yarn db:migrate` - Deploy pending migrations
+- `yarn db:migrate:status` - Check migration state against a database
+- `yarn db:migrate:create <name>` - Create a new migration (see below)
+- `yarn db:studio` - Open Prisma Studio
 - `yarn clean` - Clean all builds and node_modules
 
-#### Individual Services
-- `yarn workspace @shapeshift/user-service dev` - Start user service
-- `yarn workspace @shapeshift/swap-service dev` - Start swap service
-- `yarn workspace @shapeshift/notifications-service dev` - Start notifications service
-- `yarn workspace @shapeshift/shared-types build` - Build shared types
-- `yarn workspace @shapeshift/shared-utils build` - Build shared utils
+## Database Migrations
+
+All migrations are managed from the root using a shared Prisma schema at `prisma/schema/`.
+
+### Creating a new migration
+
+1. Update the relevant schema file in `prisma/schema/`
+
+2. Start a fresh local DB and apply existing migrations as baseline:
+   ```bash
+   docker-compose down -v && docker-compose up -d db
+   DATABASE_URL="postgresql://postgres:password@localhost:5432/microservices" yarn db:migrate
+   ```
+
+3. Generate the migration (creates the file without applying it):
+   ```bash
+   DATABASE_URL="postgresql://postgres:password@localhost:5432/microservices" yarn db:migrate:create <migration_name>
+   ```
+
+4. Review the generated SQL in `prisma/migrations/<timestamp>_<name>/migration.sql`
+
+5. Apply and test locally:
+   ```bash
+   DATABASE_URL="postgresql://postgres:password@localhost:5432/microservices" yarn db:migrate
+   ```
+
+6. Commit and open a PR — production migrations are applied automatically on deployment.
+
+### Validating migration state against a database
+```bash
+DATABASE_URL="postgresql://..." yarn db:migrate:status
+```
 
 ## API Documentation
 
@@ -174,75 +189,15 @@ POST   /notifications/send-to-device  # Send notification to device
 
 ## Environment Variables
 
-### Swap Service
-```env
-PORT=3001
-DATABASE_URL=file:./dev.db
-USER_SERVICE_URL=http:/localhost:3001
-NOTIFICATIONS_SERVICE_URL=http:/localhost:3003
-```
+Each service has its own `.env` file. Copy from the example and fill in the required values:
 
-### User Service
-```env
-PORT=3002
-DATABASE_URL=file:./user-service.db
-ACCOUNT_ID_SALT=your-salt-here
-```
-
-### Notifications Service
-```env
-PORT=3003
-DATABASE_URL=file:./notifications-service.db
-USER_SERVICE_URL=http:/localhost:3001
-EXPO_ACCESS_TOKEN=your-expo-token
-```
-
-## Database Setup
-
-### Production (PostgreSQL)
-Update the `DATABASE_URL` in each service's environment to point to your PostgreSQL instance.
-
-## Service Communication
-
-### HTTP Communication
-Services communicate via HTTP APIs using the service clients in `@shapeshift/shared-utils`:
-
-```typescript
-import { UserServiceClient, NotificationsServiceClient } from '@shapeshift/shared-utils';
-
-const userClient = new UserServiceClient();
-const notificationsClient = new NotificationsServiceClient();
-
-/ Get user from user service
-const user = await userClient.getUserById(userId);
-
-/ Send notification
-await notificationsClient.createNotification({
-  userId,
-  title: 'Swap Completed',
-  body: 'Your swap has been completed successfully',
-  type: 'SWAP_COMPLETED',
-  swapId: swapId
-});
-```
-
-### WebSocket Communication
-- **Swap Service**: Handles swap-related WebSocket connections
-- **Notifications Service**: Handles notification-related WebSocket connections
-
-## Deployment
-
-### Docker Deployment
 ```bash
-# Build production images
-docker-compose -f docker-compose.prod.yml build
-
-# Deploy
-docker-compose -f docker-compose.prod.yml up -d
+cp apps/swap-service/.env.example apps/swap-service/.env
+cp apps/user-service/.env.example apps/user-service/.env
+cp apps/notifications-service/.env.example apps/notifications-service/.env
 ```
 
-### Individual Service Deployment
-Each service can be deployed independently as they are separate NestJS applications.
+Refer to each service's `.env.example` for the full list of required variables.
 
 ## Contributing
 
@@ -257,19 +212,6 @@ Each service can be deployed independently as they are separate NestJS applicati
 ### Common Issues
 
 1. **Port conflicts**: Make sure ports 3001, 3002, and 3003 are available
-2. **Database issues**: Run `yarn db:generate` and `yarn db:migrate`
+2. **Database issues**: Run `yarn db:generate` then `DATABASE_URL="..." yarn db:migrate`
 3. **Build issues**: Clean and rebuild: `yarn clean && yarn build`
 4. **Service communication**: Check environment variables for service URLs
-
-### Logs
-```bash
-# View service logs
-yarn workspace @shapeshift/user-service logs
-yarn workspace @shapeshift/swap-service logs
-yarn workspace @shapeshift/notifications-service logs
-
-# Docker logs
-docker-compose logs -f user-service
-docker-compose logs -f swap-service
-docker-compose logs -f notifications-service
-```

@@ -141,7 +141,7 @@ export class SwapsService {
         | undefined;
       const chainflipId =
         typeof metadata.chainflipSwapId === 'number'
-          ? (metadata.chainflipSwapId as number)
+          ? metadata.chainflipSwapId
           : undefined;
 
       const swap = await this.prisma.swap.create({
@@ -892,6 +892,7 @@ export class SwapsService {
           VITE_ACROSS_API_URL: process.env.VITE_ACROSS_API_URL || '',
           VITE_ACROSS_INTEGRATOR_ID:
             process.env.VITE_ACROSS_INTEGRATOR_ID || '',
+          VITE_DEBRIDGE_API_URL: process.env.VITE_DEBRIDGE_API_URL || '',
           VITE_FEATURE_THORCHAINSWAP_LONGTAIL: true,
           VITE_FEATURE_THORCHAINSWAP_L1_TO_LONGTAIL: true,
           VITE_FEATURE_CHAINFLIP_SWAP_DCA: true,
