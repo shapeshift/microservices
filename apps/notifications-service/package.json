@@ -9,17 +9,11 @@
     "start": "yarn run -T nest start",
     "start:dev": "yarn run -T nest start --watch",
     "start:debug": "yarn run -T nest start --debug --watch",
-    "start:prod": "node dist/main.js",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "start:prod": "node dist/main.js"
   },
   "dependencies": {
-    "@prisma/client": "6.13.0",
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
-    "expo-server-sdk": "^3.15.0",
-    "prisma": "6.13.0"
+    "expo-server-sdk": "^3.15.0"
   }
 }

@@ -15,7 +15,8 @@
   "include": [
     "apps/**/*",
     "packages/**/*",
-    "eslint.config.ts"
+    "eslint.config.ts",
+    "prisma.config.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }

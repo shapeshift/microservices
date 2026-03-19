@@ -17,10 +17,22 @@ services:
       init:
         condition: service_completed_successfully
 
+  db-migrate:
+    <<: *node-base
+    working_dir: /workspace
+    command: sh -c "corepack yarn db:migrate"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/microservices
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+
   user-service:
     <<: *node-base
     working_dir: /workspace/apps/user-service
-    command: sh -c "corepack yarn db:push && corepack yarn start:dev"
+    command: sh -c "corepack yarn start:dev"
     ports:
       - "3002:3002"
     env_file:
@@ -32,15 +44,13 @@ services:
       - SWAP_SERVICE_URL=http://swap-service:3001
       - NOTIFICATIONS_SERVICE_URL=http://notifications-service:3003
     depends_on:
-      packages:
-        condition: service_started
-      db:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
 
   swap-service:
     <<: *node-base
     working_dir: /workspace/apps/swap-service
-    command: sh -c "corepack yarn db:push && corepack yarn start:dev"
+    command: sh -c "corepack yarn start:dev"
     ports:
       - "3001:3001"
     env_file:
@@ -52,15 +62,13 @@ services:
       - USER_SERVICE_URL=http://user-service:3002
       - NOTIFICATIONS_SERVICE_URL=http://notifications-service:3003
     depends_on:
-      packages:
-        condition: service_started
-      db:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
 
   notifications-service:
     <<: *node-base
     working_dir: /workspace/apps/notifications-service
-    command: sh -c "corepack yarn db:push && corepack yarn start:dev"
+    command: sh -c "corepack yarn start:dev"
     ports:
       - "3003:3003"
     env_file:
@@ -71,12 +79,8 @@ services:
       - DATABASE_URL=postgresql://postgres:password@db:5432/microservices
       - USER_SERVICE_URL=http://user-service:3002
     depends_on:
-      packages:
-        condition: service_started
-      user-service:
-        condition: service_started
-      db:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
 
   db:
     image: postgres:15-alpine

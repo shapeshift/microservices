@@ -3,7 +3,7 @@
   "globalDependencies": ["**/.env.*local"],
   "tasks": {
     "build": {
-      "dependsOn": ["^build", "db:generate"],
+      "dependsOn": ["^build", "//#db:generate"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "lint": {
@@ -12,7 +12,7 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "dependsOn": ["db:generate"]
+      "dependsOn": ["//#db:generate"]
     },
     "start": {
       "cache": false,
@@ -26,16 +26,8 @@
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
-    "db:generate": {
+    "//#db:generate": {
       "cache": false
-    },
-    "db:migrate": {
-      "cache": false,
-      "dependsOn": ["db:generate"]
-    },
-    "db:push": {
-      "cache": false,
-      "dependsOn": ["db:generate"]
     },
     "clean": {
       "cache": false

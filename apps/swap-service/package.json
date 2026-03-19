@@ -9,21 +9,15 @@
     "start": "yarn run -T nest start",
     "start:dev": "yarn run -T nest start --watch",
     "start:debug": "yarn run -T nest start --debug --watch",
-    "start:prod": "node dist/main.js",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "start:prod": "node dist/main.js"
   },
   "dependencies": {
-    "@prisma/client": "6.13.0",
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
     "axios": "^1.6.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "jsonwebtoken": "^9.0.3",
-    "prisma": "6.13.0",
     "siwe": "^3.0.0"
   },
   "devDependencies": {
