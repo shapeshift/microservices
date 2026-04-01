@@ -8,7 +8,7 @@ async function bootstrap() {
   // Enable CORS
   app.enableCors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-      'http://localhost:3000',
+      /^http:\/\/(\w+\.)?localhost(:\d+)?$/,
       /\.shapeshift\.com$/,
     ],
     credentials: true,
