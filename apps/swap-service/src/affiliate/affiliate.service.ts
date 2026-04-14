@@ -294,9 +294,14 @@ export class AffiliateService {
     return {
       swaps: swaps.map((swap) => ({
         ...swap,
-        affiliateFeeUsd: swap.sellAmountUsd && swap.affiliateBps
-          ? (parseFloat(swap.sellAmountUsd) * parseInt(swap.affiliateBps, 10) / 10000).toFixed(2)
-          : null,
+        affiliateFeeUsd:
+          swap.sellAmountUsd && swap.affiliateBps
+            ? (
+                (parseFloat(swap.sellAmountUsd) *
+                  parseInt(swap.affiliateBps, 10)) /
+                10000
+              ).toFixed(2)
+            : null,
       })),
       total,
       limit,

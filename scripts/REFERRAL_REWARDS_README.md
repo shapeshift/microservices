@@ -9,10 +9,12 @@ The referral rewards system tracks swap volume from referred users and distribut
 ### Database Schema
 
 **user-service:**
+
 - `ReferralCode`: Stores referral codes with owner addresses
 - `ReferralUsage`: Tracks which addresses have used referral codes (one code per address)
 
 **swap-service:**
+
 - `Swap.referralCode`: Optional field to track which code was used for a swap
 - `Swap.sellAmountUsd`: USD value at the time of the swap
 - `Swap.isReferralEligible`: Boolean to exclude certain swaps from rewards
@@ -21,6 +23,7 @@ The referral rewards system tracks swap volume from referred users and distribut
 
 **POST /referrals/codes**
 Create a new referral code
+
 ```json
 {
   "code": "SHAPESHIFTER",
@@ -32,6 +35,7 @@ Create a new referral code
 
 **POST /referrals/use**
 Apply a referral code to an address
+
 ```json
 {
   "code": "SHAPESHIFTER",
@@ -68,6 +72,7 @@ yarn referral-rewards stats dist_1234567890
 ### Calculation Formula
 
 For each referrer:
+
 ```
 foxReward = (referrerVolume / totalVolume) * totalFoxDistributed
 ```
@@ -75,17 +80,20 @@ foxReward = (referrerVolume / totalVolume) * totalFoxDistributed
 ### Output Files
 
 Distributions are saved to `distributions/` directory:
+
 - `dist_xxxxx_Distribution_Name.json`: Full distribution data
 - `dist_xxxxx_safe_batch.json`: Safe multisig transaction batch
 
 ### Safe Multisig Integration
 
 The script generates a JSON file compatible with Safe's batch transaction interface:
+
 1. Import the `*_safe_batch.json` file into Safe UI
 2. Review the transactions (one deposit per referrer)
 3. Sign and execute the multisig transaction
 
 Each transaction calls the RFOX staking contract's deposit function with:
+
 - User address (referrer's address)
 - Amount in FOX wei (calculated reward amount)
 
@@ -98,6 +106,7 @@ RFOX_STAKING_CONTRACT=0x... # RFOX staking contract address
 ## Integration with Swap Flow
 
 When a user makes a swap:
+
 1. Frontend checks if user has used a referral code (GET /referrals/usage/:address)
 2. If yes, include referral code in swap creation
 3. Backend stores swap with referral code and USD value

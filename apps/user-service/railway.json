@@ -3,7 +3,12 @@
   "build": {
     "builder": "RAILPACK",
     "buildCommand": "yarn build",
-    "watchPatterns": ["yarn.lock", "apps/user-service/**", "packages/**", "prisma/**"]
+    "watchPatterns": [
+      "yarn.lock",
+      "apps/user-service/**",
+      "packages/**",
+      "prisma/**"
+    ]
   },
   "deploy": {
     "preDeployCommand": "yarn db:migrate",

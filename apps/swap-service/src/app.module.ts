@@ -4,7 +4,10 @@ import { HttpModule } from '@nestjs/axios';
 import { PrismaService } from './prisma/prisma.service';
 import { SwapsController } from './swaps/swaps.controller';
 import { SwapsService } from './swaps/swaps.service';
-import { AffiliateController, PartnerController } from './affiliate/affiliate.controller';
+import {
+  AffiliateController,
+  PartnerController,
+} from './affiliate/affiliate.controller';
 import { AffiliateService } from './affiliate/affiliate.service';
 import { SiweAuthController } from './affiliate/siwe-auth.controller';
 import { SwapPollingService } from './polling/swap-polling.service';
@@ -31,7 +34,12 @@ import { ConfigModule } from '@nestjs/config';
       envFilePath: ['.env', '../../.env'],
     }),
   ],
-  controllers: [SwapsController, AffiliateController, PartnerController, SiweAuthController],
+  controllers: [
+    SwapsController,
+    AffiliateController,
+    PartnerController,
+    SiweAuthController,
+  ],
   providers: [
     PrismaService,
     SwapsService,

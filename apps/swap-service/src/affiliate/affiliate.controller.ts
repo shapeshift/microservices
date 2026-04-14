@@ -18,7 +18,7 @@ import {
   CreateAffiliateDto,
   UpdateAffiliateDto,
 } from './affiliate.service';
-import { SiweAuthGuard } from './siwe-auth.guard';
+import { SiweAuthGuard, SiweRequest } from './siwe-auth.guard';
 
 @Controller('v1/affiliate')
 export class AffiliateController {
@@ -85,29 +85,37 @@ export class AffiliateController {
 
   @UseGuards(SiweAuthGuard)
   @Post()
-  async createAffiliate(@Req() req: any, @Body() data: CreateAffiliateDto) {
-    if (!data.walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(data.walletAddress)) {
+  async createAffiliate(
+    @Req() req: SiweRequest,
+    @Body() data: CreateAffiliateDto,
+  ) {
+    if (
+      !data.walletAddress ||
+      !/^0x[a-fA-F0-9]{40}$/.test(data.walletAddress)
+    ) {
       throw new BadRequestException('Invalid wallet address');
     }
 
     if (req.siweAddress !== data.walletAddress.toLowerCase()) {
-      throw new ForbiddenException('Authenticated address does not match walletAddress');
+      throw new ForbiddenException(
+        'Authenticated address does not match walletAddress',
+      );
     }
 
     if (data.bps !== undefined && (data.bps < 0 || data.bps > 1000)) {
       throw new BadRequestException('BPS must be between 0 and 1000');
     }
 
-    if (
-      data.partnerCode &&
-      !/^[a-zA-Z0-9-]{3,32}$/.test(data.partnerCode)
-    ) {
+    if (data.partnerCode && !/^[a-zA-Z0-9-]{3,32}$/.test(data.partnerCode)) {
       throw new BadRequestException(
         'Partner code must be 3-32 alphanumeric characters or hyphens',
       );
     }
 
-    if (data.receiveAddress && !/^0x[a-fA-F0-9]{40}$/.test(data.receiveAddress)) {
+    if (
+      data.receiveAddress &&
+      !/^0x[a-fA-F0-9]{40}$/.test(data.receiveAddress)
+    ) {
       throw new BadRequestException('Invalid receive address');
     }
 
@@ -126,19 +134,24 @@ export class AffiliateController {
   @UseGuards(SiweAuthGuard)
   @Patch(':address')
   async updateAffiliate(
-    @Req() req: any,
+    @Req() req: SiweRequest,
     @Param('address') address: string,
     @Body() data: UpdateAffiliateDto,
   ) {
     if (req.siweAddress !== address.toLowerCase()) {
-      throw new ForbiddenException('Authenticated address does not match target address');
+      throw new ForbiddenException(
+        'Authenticated address does not match target address',
+      );
     }
 
     if (data.bps !== undefined && (data.bps < 0 || data.bps > 1000)) {
       throw new BadRequestException('BPS must be between 0 and 1000');
     }
 
-    if (data.receiveAddress && !/^0x[a-fA-F0-9]{40}$/.test(data.receiveAddress)) {
+    if (
+      data.receiveAddress &&
+      !/^0x[a-fA-F0-9]{40}$/.test(data.receiveAddress)
+    ) {
       throw new BadRequestException('Invalid receive address');
     }
 
@@ -155,7 +168,7 @@ export class AffiliateController {
   @UseGuards(SiweAuthGuard)
   @Post('claim-code')
   async claimPartnerCode(
-    @Req() req: any,
+    @Req() req: SiweRequest,
     @Body() data: { walletAddress: string; partnerCode: string },
   ) {
     if (!data.walletAddress || !data.partnerCode) {
@@ -169,7 +182,9 @@ export class AffiliateController {
     }
 
     if (req.siweAddress !== data.walletAddress.toLowerCase()) {
-      throw new ForbiddenException('Authenticated address does not match walletAddress');
+      throw new ForbiddenException(
+        'Authenticated address does not match walletAddress',
+      );
     }
 
     try {

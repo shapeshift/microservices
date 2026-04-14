@@ -13,10 +13,10 @@ All 3 backend NestJS services must be running:
 yarn start:dev
 ```
 
-| Service | Port | Database |
-|---------|------|----------|
-| swap-service | 3001 | `swap_service` (PostgreSQL) |
-| user-service | 3002 | `user_service` (PostgreSQL) |
+| Service               | Port | Database                             |
+| --------------------- | ---- | ------------------------------------ |
+| swap-service          | 3001 | `swap_service` (PostgreSQL)          |
+| user-service          | 3002 | `user_service` (PostgreSQL)          |
 | notifications-service | 3003 | `notifications_service` (PostgreSQL) |
 
 PostgreSQL must be running on `localhost:5432` (Docker).
@@ -36,6 +36,7 @@ node tests/test-all-swappers.mjs
 ```
 
 The script runs 4 phases:
+
 1. **Cleanup** — Marks old `test-*` swaps as FAILED via `DELETE /swaps/test-cleanup` to clear the polling queue
 2. **Create** — POSTs fake pending swaps to `POST /swaps` for each swapper
 3. **Poll** — Polls ALL swaps in parallel for up to 2 minutes total
@@ -73,48 +74,51 @@ For each swapper, the test verifies:
 
 ### Resolves to SUCCESS (14 swappers)
 
-| Swapper | Status Check Method | Test Tx Type | Affiliate Verified | Notes |
-|---------|--------------------|--------------|--------------------|-------|
-| THORChain | Midgard API (`/thorchain/tx/{hash}`) | Real BTC swap tx | No (not a real affiliate tx) | Uses `VITE_THORCHAIN_NODE_URL` |
-| MAYAChain | Midgard API (`/mayachain/tx/{hash}`) | Real ZEC swap tx | No | Uses `VITE_MAYACHAIN_NODE_URL` |
-| CowSwap | CoW Protocol API (`/v1/trades?orderUid=`) | Real orderUid | No | `sellTxHash` IS the orderUid |
-| 0x (Zrx) | `checkEvmSwapStatus` (unchained) | Any confirmed ETH tx | No | Simple on-chain confirmation |
-| Portals | `checkEvmSwapStatus` (unchained) | Any confirmed ETH tx | No | Simple on-chain confirmation |
-| Bebop | `checkEvmSwapStatus` (unchained) | Any confirmed ETH tx | No | Simple on-chain confirmation |
-| Jupiter | `checkSolanaSwapStatus` (unchained) | Successful Solana tx | Yes (bps=60) | MUST be a successful tx (no `transactionError`) |
-| AVNU | `checkStarknetSwapStatus` (Starknet RPC) | Real Starknet tx | Yes (bps=60) | Uses `VITE_STARKNET_NODE_URL` |
-| Sun.io | `checkTronSwapStatus` (Tron RPC) | Real Tron tx | Yes (bps=60) | Uses `VITE_TRON_NODE_URL` |
-| Cetus | `checkSuiSwapStatus` (Sui RPC) | Confirmed Sui tx digest | Yes (bps=60) | Requires `receiveAddress` on swap |
-| Relay | Relay API (`/intents/status/v2?requestId=`) | Real Relay requestId | No (bps=85 from Relay) | Requires `metadata.relayTransactionMetadata.relayId` |
-| Arbitrum Bridge | `checkEvmSwapStatus` (unchained) | Confirmed Arbitrum tx | No | L2→L1 withdraw path returns SUCCESS on tx confirmation |
-| ButterSwap | `checkEvmSwapStatus` (unchained) | Any confirmed ETH tx | No | Same-chain EVM path, no bridge indexer needed |
-| NEAR Intents | 1Click API (`/v0/status?depositAddress=`) | Real completed deposit | No (bps=25 from real tx) | Requires `metadata.nearIntentsSpecific.depositAddress` |
+| Swapper         | Status Check Method                         | Test Tx Type            | Affiliate Verified           | Notes                                                  |
+| --------------- | ------------------------------------------- | ----------------------- | ---------------------------- | ------------------------------------------------------ |
+| THORChain       | Midgard API (`/thorchain/tx/{hash}`)        | Real BTC swap tx        | No (not a real affiliate tx) | Uses `VITE_THORCHAIN_NODE_URL`                         |
+| MAYAChain       | Midgard API (`/mayachain/tx/{hash}`)        | Real ZEC swap tx        | No                           | Uses `VITE_MAYACHAIN_NODE_URL`                         |
+| CowSwap         | CoW Protocol API (`/v1/trades?orderUid=`)   | Real orderUid           | No                           | `sellTxHash` IS the orderUid                           |
+| 0x (Zrx)        | `checkEvmSwapStatus` (unchained)            | Any confirmed ETH tx    | No                           | Simple on-chain confirmation                           |
+| Portals         | `checkEvmSwapStatus` (unchained)            | Any confirmed ETH tx    | No                           | Simple on-chain confirmation                           |
+| Bebop           | `checkEvmSwapStatus` (unchained)            | Any confirmed ETH tx    | No                           | Simple on-chain confirmation                           |
+| Jupiter         | `checkSolanaSwapStatus` (unchained)         | Successful Solana tx    | Yes (bps=60)                 | MUST be a successful tx (no `transactionError`)        |
+| AVNU            | `checkStarknetSwapStatus` (Starknet RPC)    | Real Starknet tx        | Yes (bps=60)                 | Uses `VITE_STARKNET_NODE_URL`                          |
+| Sun.io          | `checkTronSwapStatus` (Tron RPC)            | Real Tron tx            | Yes (bps=60)                 | Uses `VITE_TRON_NODE_URL`                              |
+| Cetus           | `checkSuiSwapStatus` (Sui RPC)              | Confirmed Sui tx digest | Yes (bps=60)                 | Requires `receiveAddress` on swap                      |
+| Relay           | Relay API (`/intents/status/v2?requestId=`) | Real Relay requestId    | No (bps=85 from Relay)       | Requires `metadata.relayTransactionMetadata.relayId`   |
+| Arbitrum Bridge | `checkEvmSwapStatus` (unchained)            | Confirmed Arbitrum tx   | No                           | L2→L1 withdraw path returns SUCCESS on tx confirmation |
+| ButterSwap      | `checkEvmSwapStatus` (unchained)            | Any confirmed ETH tx    | No                           | Same-chain EVM path, no bridge indexer needed          |
+| NEAR Intents    | 1Click API (`/v0/status?depositAddress=`)   | Real completed deposit  | No (bps=25 from real tx)     | Requires `metadata.nearIntentsSpecific.depositAddress` |
 
 ### Expected to Stay PENDING (3 swappers)
 
-| Swapper | Reason | How to Fix |
-|---------|--------|------------|
-| STON.fi | TON chain adapter `parseTx()` needs sender address; falls back when no `quoteId` | Provide real `quoteId` from STON.fi/Omniston SDK |
-| Across | Across deposit status API won't recognize a random ETH tx as a valid deposit | Use a real Across bridge deposit tx hash |
-| Chainflip | Broker API returns 404 for unknown swapId; the API key is broker-specific | Use a real swap ID created through this specific broker |
+| Swapper   | Reason                                                                           | How to Fix                                              |
+| --------- | -------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| STON.fi   | TON chain adapter `parseTx()` needs sender address; falls back when no `quoteId` | Provide real `quoteId` from STON.fi/Omniston SDK        |
+| Across    | Across deposit status API won't recognize a random ETH tx as a valid deposit     | Use a real Across bridge deposit tx hash                |
+| Chainflip | Broker API returns 404 for unknown swapId; the API key is broker-specific        | Use a real swap ID created through this specific broker |
 
 ### Not Tested
 
-| Swapper | Reason |
-|---------|--------|
-| Test | Internal test swapper, no real implementation |
+| Swapper | Reason                                        |
+| ------- | --------------------------------------------- |
+| Test    | Internal test swapper, no real implementation |
 
 ## Affiliate Verification Behavior
 
 There are two types of affiliate verification:
 
 ### On-chain Verification (THORChain, MAYAChain, CowSwap, 0x, Portals, Bebop, Relay, Arbitrum Bridge, ButterSwap)
+
 These check the actual transaction on-chain or via protocol APIs for affiliate fee data. Test txs are NOT real ShapeShift affiliate swaps, so they correctly report `hasAffiliate=false`. This is **expected behavior** — the verification logic works, it just doesn't find affiliate data in random txs.
 
 ### Metadata-based Verification (Jupiter, AVNU, Sun.io, Cetus, STON.fi)
+
 These check the swap's `affiliateBps` from the enriched metadata passed during verification. Since we set `affiliateBps=60` in the test payload, these correctly report `hasAffiliate=true, affiliateBps=60`.
 
 ### API-based Verification (NEAR Intents, Relay)
+
 These read affiliate data from the external API response. The real NEAR Intents deposit shows `bps=25` (the actual appFee from that transaction). Relay shows `bps=85` from the Relay API.
 
 ## Updating Test Data
@@ -124,6 +128,7 @@ These read affiliate data from the external API response. The real NEAR Intents 
 Some tx hashes may stop working over time (pruned from RPC nodes, API changes). To update:
 
 1. **EVM txs (0x, Portals, Bebop, ButterSwap, Arbitrum Bridge)**: Any confirmed mainnet tx works:
+
    ```bash
    # Ethereum
    curl -s 'https://api.ethereum.shapeshift.com/api/v1/tx/0x<ANY_ETH_TX_HASH>'
@@ -133,19 +138,21 @@ Some tx hashes may stop working over time (pruned from RPC nodes, API changes). 
    ```
 
 2. **Solana tx (Jupiter)**: Must be a SUCCESSFUL tx (no `transactionError`):
+
    ```bash
    # Find a recent successful Jupiter tx
    curl -s -X POST "https://api.solana.shapeshift.com/api/v1/jsonrpc" \
      -H "Content-Type: application/json" \
      -d '{"jsonrpc":"2.0","id":1,"method":"getSignaturesForAddress","params":["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",{"limit":30}]}'
    # Pick one where "err": null
-   
+
    # Verify it's successful
    curl -s "https://api.solana.shapeshift.com/api/v1/tx/<SIGNATURE>"
    # Should have "transactionError": null
    ```
 
 3. **Starknet tx (AVNU)**: Any confirmed Starknet tx:
+
    ```bash
    curl -s -X POST "https://rpc.starknet.lava.build" \
      -H "Content-Type: application/json" \
@@ -154,6 +161,7 @@ Some tx hashes may stop working over time (pruned from RPC nodes, API changes). 
    ```
 
 4. **Tron tx (Sun.io)**: Any confirmed Tron tx:
+
    ```bash
    curl -s "https://api.trongrid.io/walletsolidity/gettransactioninfobyid" \
      -X POST -H "Content-Type: application/json" \
@@ -162,6 +170,7 @@ Some tx hashes may stop working over time (pruned from RPC nodes, API changes). 
    ```
 
 5. **Sui tx digest (Cetus)**: Any confirmed Sui tx:
+
    ```bash
    curl -s -X POST https://fullnode.mainnet.sui.io:443 \
      -H "Content-Type: application/json" \
@@ -170,23 +179,27 @@ Some tx hashes may stop working over time (pruned from RPC nodes, API changes). 
    ```
 
 6. **THORChain tx**: Must be a real THORChain swap visible on Midgard:
+
    ```bash
    curl -s "https://thornode.ninerealms.com/thorchain/tx/<TX_HASH>"
    # Should return observed_tx with swap data
    ```
 
 7. **MAYAChain tx**: Same as THORChain but on MAYAChain Midgard:
+
    ```bash
    curl -s "https://mayanode.mayachain.info/mayachain/tx/<TX_HASH>"
    ```
 
 8. **CowSwap orderUid**: Get from CoW Protocol API:
+
    ```bash
    curl -s "https://api.cow.fi/mainnet/api/v1/orders/<ORDER_UID>"
    # Should return order with status: "fulfilled"
    ```
 
 9. **Relay requestId**: Get from Relay API:
+
    ```bash
    curl -s "https://api.relay.link/intents/status/v2?requestId=<REQUEST_ID>"
    # Should return status data
@@ -282,12 +295,12 @@ Sun.io, AVNU, STON.fi, Across, Arbitrum Bridge, Test
 
 ### Metadata Requirements per Swapper
 
-| Swapper | Required Metadata | Example |
-|---------|-------------------|---------|
-| Relay | `relayTransactionMetadata.relayId` | `{ relayTransactionMetadata: { relayId: "0xabc..." } }` |
-| Chainflip | `chainflipSwapId` (integer) | `{ chainflipSwapId: 12345 }` |
+| Swapper      | Required Metadata                    | Example                                                  |
+| ------------ | ------------------------------------ | -------------------------------------------------------- |
+| Relay        | `relayTransactionMetadata.relayId`   | `{ relayTransactionMetadata: { relayId: "0xabc..." } }`  |
+| Chainflip    | `chainflipSwapId` (integer)          | `{ chainflipSwapId: 12345 }`                             |
 | NEAR Intents | `nearIntentsSpecific.depositAddress` | `{ nearIntentsSpecific: { depositAddress: "1Q7c..." } }` |
-| All others | None required | `{}` |
+| All others   | None required                        | `{}`                                                     |
 
 ## Polling Behavior
 
@@ -384,13 +397,13 @@ test-all-swappers.mjs
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `tests/test-all-swappers.mjs` | The test script |
-| `apps/swap-service/src/swaps/swaps.service.ts` | Swap creation + pollSwapStatus |
-| `apps/swap-service/src/swaps/swaps.controller.ts` | REST endpoints including test-cleanup |
-| `apps/swap-service/src/polling/swap-polling.service.ts` | 5s cron loop |
-| `apps/swap-service/src/verification/swap-verification.service.ts` | All 18 affiliate verifiers |
-| `apps/swap-service/prisma/schema.prisma` | Swap model (53 columns) |
-| `packages/shared-types/src/index.ts` | CreateSwapDto, UpdateSwapStatusDto |
-| `.env` | All RPC/API URLs |
+| File                                                              | Purpose                               |
+| ----------------------------------------------------------------- | ------------------------------------- |
+| `tests/test-all-swappers.mjs`                                     | The test script                       |
+| `apps/swap-service/src/swaps/swaps.service.ts`                    | Swap creation + pollSwapStatus        |
+| `apps/swap-service/src/swaps/swaps.controller.ts`                 | REST endpoints including test-cleanup |
+| `apps/swap-service/src/polling/swap-polling.service.ts`           | 5s cron loop                          |
+| `apps/swap-service/src/verification/swap-verification.service.ts` | All 18 affiliate verifiers            |
+| `apps/swap-service/prisma/schema.prisma`                          | Swap model (53 columns)               |
+| `packages/shared-types/src/index.ts`                              | CreateSwapDto, UpdateSwapStatusDto    |
+| `.env`                                                            | All RPC/API URLs                      |
