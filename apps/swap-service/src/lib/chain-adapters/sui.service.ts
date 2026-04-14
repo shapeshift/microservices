@@ -18,7 +18,6 @@ export class SuiChainAdapterService {
 
     try {
       this.initializeSuiAdapter(chainAdapterManager);
-      this.logger.log('Sui chain adapter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Sui chain adapter:', error);
       throw error;
@@ -26,19 +25,27 @@ export class SuiChainAdapterService {
   }
 
   private initializeSuiAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_SUI_NODE_URL) {
+      throw new Error('VITE_SUI_NODE_URL required');
+    }
+
     const suiAdapter = new sui.ChainAdapter({
-      rpcUrl: process.env.VITE_SUI_NODE_URL || '',
+      rpcUrl: process.env.VITE_SUI_NODE_URL,
     });
 
     chainAdapterManager.set(suiChainId, suiAdapter);
-    this.logger.log('Sui adapter initialized');
+    this.logger.log('Sui chain adapter initialized');
   }
 
   assertGetSuiChainAdapter(chainId: ChainId): sui.ChainAdapter {
+    if (chainId !== suiChainId) {
+      throw new Error(`Chain ${chainId} is not Sui`);
+    }
+
     const chainAdapterManager =
       this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
 
+    const adapter = chainAdapterManager.get(chainId);
     if (!adapter) {
       throw new Error(`Sui chain adapter not found for chain ${chainId}`);
     }

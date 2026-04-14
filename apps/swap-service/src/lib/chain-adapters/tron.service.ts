@@ -19,7 +19,6 @@ export class TronChainAdapterService {
 
     try {
       this.initializeTronAdapter(chainAdapterManager);
-      this.logger.log('Tron chain adapter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Tron chain adapter:', error);
       throw error;
@@ -27,24 +26,32 @@ export class TronChainAdapterService {
   }
 
   private initializeTronAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_TRON_NODE_URL) {
+      throw new Error('VITE_TRON_NODE_URL required');
+    }
+
     const tronHttp = new unchained.tron.TronApi({
-      rpcUrl: process.env.VITE_TRON_NODE_URL || '',
+      rpcUrl: process.env.VITE_TRON_NODE_URL,
     });
 
     const tronAdapter = new tron.ChainAdapter({
       providers: { http: tronHttp },
-      rpcUrl: process.env.VITE_TRON_NODE_URL || '',
+      rpcUrl: process.env.VITE_TRON_NODE_URL,
     });
 
     chainAdapterManager.set(tronChainId, tronAdapter);
-    this.logger.log('Tron adapter initialized');
+    this.logger.log('Tron chain adapter initialized');
   }
 
   assertGetTronChainAdapter(chainId: ChainId): tron.ChainAdapter {
+    if (chainId !== tronChainId) {
+      throw new Error(`Chain ${chainId} is not Tron`);
+    }
+
     const chainAdapterManager =
       this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
 
+    const adapter = chainAdapterManager.get(chainId);
     if (!adapter) {
       throw new Error(`Tron chain adapter not found for chain ${chainId}`);
     }

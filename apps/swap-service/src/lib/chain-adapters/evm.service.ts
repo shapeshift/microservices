@@ -1,52 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service';
 import * as unchained from '@shapeshiftoss/unchained-client';
-import {
-  ethereum,
-  monad,
-  hyperevm,
-  ink,
-  plasma,
-  mantle,
-  megaeth,
-  berachain,
-  cronos,
-  katana,
-  flowEvm,
-  celo,
-  plume,
-  story,
-  zksyncera,
-  blast,
-  worldchain,
-  hemi,
-  linea,
-  scroll,
-  sonic,
-  unichain,
-  bob,
-  mode,
-  soneium,
-} from '@shapeshiftoss/chain-adapters';
-import {
-  ethChainId,
-  avalancheChainId,
-  optimismChainId,
-  bscChainId,
-  polygonChainId,
-  gnosisChainId,
-  arbitrumChainId,
-  arbitrumNovaChainId,
-  baseChainId,
-  monadChainId,
-  hyperEvmChainId,
-  plasmaChainId,
-  katanaChainId,
-} from '@shapeshiftoss/caip';
-import {
-  evmChainIds,
-  type EvmChainAdapter,
-} from '@shapeshiftoss/chain-adapters';
+import * as adapters from '@shapeshiftoss/chain-adapters';
+import * as caip from '@shapeshiftoss/caip';
+import type { EvmChainAdapter } from '@shapeshiftoss/chain-adapters';
 import type { ChainId } from '@shapeshiftoss/caip';
 import { EvmChainId, KnownChainIds } from '@shapeshiftoss/types';
 
@@ -64,69 +21,36 @@ export class EvmChainAdapterService {
 
     try {
       this.initializeEthereumAdapter(chainAdapterManager);
-
       this.initializeAvalancheAdapter(chainAdapterManager);
-
       this.initializeOptimismAdapter(chainAdapterManager);
-
       this.initializeBscAdapter(chainAdapterManager);
-
       this.initializePolygonAdapter(chainAdapterManager);
-
       this.initializeGnosisAdapter(chainAdapterManager);
-
       this.initializeArbitrumAdapter(chainAdapterManager);
-
-      this.initializeArbitrumNovaAdapter(chainAdapterManager);
-
       this.initializeBaseAdapter(chainAdapterManager);
-
       this.initializeMonadAdapter(chainAdapterManager);
-
       this.initializeHyperEvmAdapter(chainAdapterManager);
-
       this.initializeInkAdapter(chainAdapterManager);
-
       this.initializePlasmaAdapter(chainAdapterManager);
-
       this.initializeMantleAdapter(chainAdapterManager);
-
       this.initializeMegaEthAdapter(chainAdapterManager);
-
       this.initializeBerachainAdapter(chainAdapterManager);
-
       this.initializeCronosAdapter(chainAdapterManager);
-
       this.initializeKatanaAdapter(chainAdapterManager);
-
       this.initializeFlowEvmAdapter(chainAdapterManager);
-
       this.initializeCeloAdapter(chainAdapterManager);
-
       this.initializePlumeAdapter(chainAdapterManager);
-
       this.initializeStoryAdapter(chainAdapterManager);
-
       this.initializeZkSyncEraAdapter(chainAdapterManager);
-
       this.initializeBlastAdapter(chainAdapterManager);
-
       this.initializeWorldChainAdapter(chainAdapterManager);
-
       this.initializeHemiAdapter(chainAdapterManager);
-
       this.initializeLineaAdapter(chainAdapterManager);
-
       this.initializeScrollAdapter(chainAdapterManager);
-
       this.initializeSonicAdapter(chainAdapterManager);
-
       this.initializeUnichainAdapter(chainAdapterManager);
-
       this.initializeBobAdapter(chainAdapterManager);
-
       this.initializeModeAdapter(chainAdapterManager);
-
       this.initializeSoneiumAdapter(chainAdapterManager);
 
       this.logger.log('All EVM chain adapters initialized successfully');
@@ -137,6 +61,26 @@ export class EvmChainAdapterService {
   }
 
   private initializeEthereumAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_ETHEREUM_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_ETHEREUM_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_ETHEREUM_WS_URL) {
+      throw new Error('VITE_UNCHAINED_ETHEREUM_WS_URL required');
+    }
+
+    if (!process.env.VITE_ETHEREUM_NODE_URL) {
+      throw new Error('VITE_ETHEREUM_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const ethereumHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_ETHEREUM_HTTP_URL,
@@ -147,18 +91,38 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_ETHEREUM_WS_URL,
     );
 
-    const ethereumAdapter = new ethereum.ChainAdapter({
+    const ethereumAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: ethereumHttp, ws: ethereumWs },
       rpcUrl: process.env.VITE_ETHEREUM_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(ethChainId, ethereumAdapter);
-    this.logger.log('Ethereum adapter initialized');
+    chainAdapterManager.set(caip.ethChainId, ethereumAdapter);
+    this.logger.log('Ethereum chain adapter initialized');
   }
 
   private initializeAvalancheAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_AVALANCHE_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_AVALANCHE_WS_URL) {
+      throw new Error('VITE_UNCHAINED_AVALANCHE_WS_URL required');
+    }
+
+    if (!process.env.VITE_AVALANCHE_NODE_URL) {
+      throw new Error('VITE_AVALANCHE_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const avalancheHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL,
@@ -169,18 +133,38 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_AVALANCHE_WS_URL,
     );
 
-    const avalancheAdapter = new ethereum.ChainAdapter({
+    const avalancheAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: avalancheHttp, ws: avalancheWs },
       rpcUrl: process.env.VITE_AVALANCHE_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(avalancheChainId, avalancheAdapter);
-    this.logger.log('Avalanche adapter initialized');
+    chainAdapterManager.set(caip.avalancheChainId, avalancheAdapter);
+    this.logger.log('Avalanche chain adapter initialized');
   }
 
   private initializeOptimismAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_OPTIMISM_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_OPTIMISM_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_OPTIMISM_WS_URL) {
+      throw new Error('VITE_UNCHAINED_OPTIMISM_WS_URL required');
+    }
+
+    if (!process.env.VITE_OPTIMISM_NODE_URL) {
+      throw new Error('VITE_OPTIMISM_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const optimismHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_OPTIMISM_HTTP_URL,
@@ -191,18 +175,38 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_OPTIMISM_WS_URL,
     );
 
-    const optimismAdapter = new ethereum.ChainAdapter({
+    const optimismAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: optimismHttp, ws: optimismWs },
       rpcUrl: process.env.VITE_OPTIMISM_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(optimismChainId, optimismAdapter);
-    this.logger.log('Optimism adapter initialized');
+    chainAdapterManager.set(caip.optimismChainId, optimismAdapter);
+    this.logger.log('Optimism chain adapter initialized');
   }
 
   private initializeBscAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL) {
+      throw new Error('VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL required');
+    }
+
+    if (!process.env.VITE_BNBSMARTCHAIN_NODE_URL) {
+      throw new Error('VITE_BNBSMARTCHAIN_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const bscHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL,
@@ -213,18 +217,38 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL,
     );
 
-    const bscAdapter = new ethereum.ChainAdapter({
+    const bscAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: bscHttp, ws: bscWs },
       rpcUrl: process.env.VITE_BNBSMARTCHAIN_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(bscChainId, bscAdapter);
-    this.logger.log('BNB Smart Chain adapter initialized');
+    chainAdapterManager.set(caip.bscChainId, bscAdapter);
+    this.logger.log('BNB Smart Chain chain adapter initialized');
   }
 
   private initializePolygonAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_POLYGON_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_POLYGON_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_POLYGON_WS_URL) {
+      throw new Error('VITE_UNCHAINED_POLYGON_WS_URL required');
+    }
+
+    if (!process.env.VITE_POLYGON_NODE_URL) {
+      throw new Error('VITE_POLYGON_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const polygonHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_POLYGON_HTTP_URL,
@@ -235,18 +259,38 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_POLYGON_WS_URL,
     );
 
-    const polygonAdapter = new ethereum.ChainAdapter({
+    const polygonAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: polygonHttp, ws: polygonWs },
       rpcUrl: process.env.VITE_POLYGON_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(polygonChainId, polygonAdapter);
-    this.logger.log('Polygon adapter initialized');
+    chainAdapterManager.set(caip.polygonChainId, polygonAdapter);
+    this.logger.log('Polygon chain adapter initialized');
   }
 
   private initializeGnosisAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_GNOSIS_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_GNOSIS_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_GNOSIS_WS_URL) {
+      throw new Error('VITE_UNCHAINED_GNOSIS_WS_URL required');
+    }
+
+    if (!process.env.VITE_GNOSIS_NODE_URL) {
+      throw new Error('VITE_GNOSIS_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const gnosisHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_GNOSIS_HTTP_URL,
@@ -257,18 +301,38 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_GNOSIS_WS_URL,
     );
 
-    const gnosisAdapter = new ethereum.ChainAdapter({
+    const gnosisAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: gnosisHttp, ws: gnosisWs },
       rpcUrl: process.env.VITE_GNOSIS_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(gnosisChainId, gnosisAdapter);
-    this.logger.log('Gnosis adapter initialized');
+    chainAdapterManager.set(caip.gnosisChainId, gnosisAdapter);
+    this.logger.log('Gnosis chain adapter initialized');
   }
 
   private initializeArbitrumAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_ARBITRUM_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_ARBITRUM_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_ARBITRUM_WS_URL) {
+      throw new Error('VITE_UNCHAINED_ARBITRUM_WS_URL required');
+    }
+
+    if (!process.env.VITE_ARBITRUM_NODE_URL) {
+      throw new Error('VITE_ARBITRUM_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const arbitrumHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_ARBITRUM_HTTP_URL,
@@ -279,40 +343,38 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_ARBITRUM_WS_URL,
     );
 
-    const arbitrumAdapter = new ethereum.ChainAdapter({
+    const arbitrumAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: arbitrumHttp, ws: arbitrumWs },
       rpcUrl: process.env.VITE_ARBITRUM_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(arbitrumChainId, arbitrumAdapter);
-    this.logger.log('Arbitrum adapter initialized');
-  }
-
-  private initializeArbitrumNovaAdapter(chainAdapterManager: Map<string, any>) {
-    const arbitrumNovaHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({
-        basePath: process.env.VITE_UNCHAINED_ARBITRUM_NOVA_HTTP_URL,
-      }),
-    );
-
-    const arbitrumNovaWs = new unchained.ws.Client<unchained.ethereum.Tx>(
-      process.env.VITE_UNCHAINED_ARBITRUM_NOVA_WS_URL,
-    );
-
-    const arbitrumNovaAdapter = new ethereum.ChainAdapter({
-      providers: { http: arbitrumNovaHttp, ws: arbitrumNovaWs },
-      rpcUrl: process.env.VITE_ARBITRUM_NOVA_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
-    });
-
-    chainAdapterManager.set(arbitrumNovaChainId, arbitrumNovaAdapter);
-    this.logger.log('Arbitrum Nova adapter initialized');
+    chainAdapterManager.set(caip.arbitrumChainId, arbitrumAdapter);
+    this.logger.log('Arbitrum chain adapter initialized');
   }
 
   private initializeBaseAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_BASE_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_BASE_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_BASE_WS_URL) {
+      throw new Error('VITE_UNCHAINED_BASE_WS_URL required');
+    }
+
+    if (!process.env.VITE_BASE_NODE_URL) {
+      throw new Error('VITE_BASE_NODE_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const baseHttp = new unchained.ethereum.V1Api(
       new unchained.ethereum.Configuration({
         basePath: process.env.VITE_UNCHAINED_BASE_HTTP_URL,
@@ -323,248 +385,366 @@ export class EvmChainAdapterService {
       process.env.VITE_UNCHAINED_BASE_WS_URL,
     );
 
-    const baseAdapter = new ethereum.ChainAdapter({
+    const baseAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: baseHttp, ws: baseWs },
       rpcUrl: process.env.VITE_BASE_NODE_URL,
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
     });
 
-    chainAdapterManager.set(baseChainId, baseAdapter);
-    this.logger.log('Base adapter initialized');
+    chainAdapterManager.set(caip.baseChainId, baseAdapter);
+    this.logger.log('Base chain adapter initialized');
   }
 
   private initializeMonadAdapter(chainAdapterManager: Map<string, any>) {
-    const monadAdapter = new monad.ChainAdapter({
-      rpcUrl: process.env.VITE_MONAD_NODE_URL || '',
+    if (!process.env.VITE_MONAD_NODE_URL) {
+      throw new Error('VITE_MONAD_NODE_URL required');
+    }
+
+    const monadAdapter = new adapters.monad.ChainAdapter({
+      rpcUrl: process.env.VITE_MONAD_NODE_URL,
       getKnownTokens: () => [],
     });
-    chainAdapterManager.set(monadChainId, monadAdapter);
-    this.logger.log('Monad adapter initialized');
+
+    chainAdapterManager.set(caip.monadChainId, monadAdapter);
+    this.logger.log('Monad chain adapter initialized');
   }
 
   private initializeHyperEvmAdapter(chainAdapterManager: Map<string, any>) {
-    const hyperEvmAdapter = new hyperevm.ChainAdapter({
-      rpcUrl: process.env.VITE_HYPEREVM_NODE_URL || '',
+    if (!process.env.VITE_HYPEREVM_NODE_URL) {
+      throw new Error('VITE_HYPEREVM_NODE_URL required');
+    }
+
+    const hyperEvmAdapter = new adapters.hyperevm.ChainAdapter({
+      rpcUrl: process.env.VITE_HYPEREVM_NODE_URL,
       getKnownTokens: () => [],
     });
-    chainAdapterManager.set(hyperEvmChainId, hyperEvmAdapter);
-    this.logger.log('HyperEVM adapter initialized');
+
+    chainAdapterManager.set(caip.hyperEvmChainId, hyperEvmAdapter);
+    this.logger.log('HyperEVM chain adapter initialized');
   }
 
   private initializeInkAdapter(chainAdapterManager: Map<string, any>) {
-    const inkAdapter = new ink.ChainAdapter({
-      rpcUrl: process.env.VITE_INK_NODE_URL || '',
+    if (!process.env.VITE_INK_NODE_URL) {
+      throw new Error('VITE_INK_NODE_URL required');
+    }
+
+    const inkAdapter = new adapters.ink.ChainAdapter({
+      rpcUrl: process.env.VITE_INK_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.InkMainnet, inkAdapter);
-    this.logger.log('Ink adapter initialized');
+    this.logger.log('Ink chain adapter initialized');
   }
 
   private initializePlasmaAdapter(chainAdapterManager: Map<string, any>) {
-    const plasmaAdapter = new plasma.ChainAdapter({
-      rpcUrl: process.env.VITE_PLASMA_NODE_URL || '',
+    if (!process.env.VITE_PLASMA_NODE_URL) {
+      throw new Error('VITE_PLASMA_NODE_URL required');
+    }
+
+    const plasmaAdapter = new adapters.plasma.ChainAdapter({
+      rpcUrl: process.env.VITE_PLASMA_NODE_URL,
       getKnownTokens: () => [],
     });
-    chainAdapterManager.set(plasmaChainId, plasmaAdapter);
-    this.logger.log('Plasma adapter initialized');
+
+    chainAdapterManager.set(caip.plasmaChainId, plasmaAdapter);
+    this.logger.log('Plasma chain adapter initialized');
   }
 
   private initializeMantleAdapter(chainAdapterManager: Map<string, any>) {
-    const mantleAdapter = new mantle.ChainAdapter({
-      rpcUrl: process.env.VITE_MANTLE_NODE_URL || '',
+    if (!process.env.VITE_MANTLE_NODE_URL) {
+      throw new Error('VITE_MANTLE_NODE_URL required');
+    }
+
+    const mantleAdapter = new adapters.mantle.ChainAdapter({
+      rpcUrl: process.env.VITE_MANTLE_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.MantleMainnet, mantleAdapter);
-    this.logger.log('Mantle adapter initialized');
+    this.logger.log('Mantle chain adapter initialized');
   }
 
   private initializeMegaEthAdapter(chainAdapterManager: Map<string, any>) {
-    const megaEthAdapter = new megaeth.ChainAdapter({
-      rpcUrl: process.env.VITE_MEGAETH_NODE_URL || '',
+    if (!process.env.VITE_MEGAETH_NODE_URL) {
+      throw new Error('VITE_MEGAETH_NODE_URL required');
+    }
+
+    const megaEthAdapter = new adapters.megaeth.ChainAdapter({
+      rpcUrl: process.env.VITE_MEGAETH_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.MegaEthMainnet, megaEthAdapter);
-    this.logger.log('MegaETH adapter initialized');
+    this.logger.log('MegaETH chain adapter initialized');
   }
 
   private initializeBerachainAdapter(chainAdapterManager: Map<string, any>) {
-    const berachainAdapter = new berachain.ChainAdapter({
-      rpcUrl: process.env.VITE_BERACHAIN_NODE_URL || '',
+    if (!process.env.VITE_BERACHAIN_NODE_URL) {
+      throw new Error('VITE_BERACHAIN_NODE_URL required');
+    }
+
+    const berachainAdapter = new adapters.berachain.ChainAdapter({
+      rpcUrl: process.env.VITE_BERACHAIN_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.BerachainMainnet, berachainAdapter);
-    this.logger.log('Berachain adapter initialized');
+    this.logger.log('Berachain chain adapter initialized');
   }
 
   private initializeCronosAdapter(chainAdapterManager: Map<string, any>) {
-    const cronosAdapter = new cronos.ChainAdapter({
-      rpcUrl: process.env.VITE_CRONOS_NODE_URL || '',
+    if (!process.env.VITE_CRONOS_NODE_URL) {
+      throw new Error('VITE_CRONOS_NODE_URL required');
+    }
+
+    const cronosAdapter = new adapters.cronos.ChainAdapter({
+      rpcUrl: process.env.VITE_CRONOS_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.CronosMainnet, cronosAdapter);
-    this.logger.log('Cronos adapter initialized');
+    this.logger.log('Cronos chain adapter initialized');
   }
 
   private initializeKatanaAdapter(chainAdapterManager: Map<string, any>) {
-    const katanaAdapter = new katana.ChainAdapter({
-      rpcUrl: process.env.VITE_KATANA_NODE_URL || '',
+    if (!process.env.VITE_KATANA_NODE_URL) {
+      throw new Error('VITE_KATANA_NODE_URL required');
+    }
+
+    const katanaAdapter = new adapters.katana.ChainAdapter({
+      rpcUrl: process.env.VITE_KATANA_NODE_URL,
       getKnownTokens: () => [],
     });
-    chainAdapterManager.set(katanaChainId, katanaAdapter);
-    this.logger.log('Katana adapter initialized');
+
+    chainAdapterManager.set(caip.katanaChainId, katanaAdapter);
+    this.logger.log('Katana chain adapter initialized');
   }
 
   private initializeFlowEvmAdapter(chainAdapterManager: Map<string, any>) {
-    const flowEvmAdapter = new flowEvm.ChainAdapter({
-      rpcUrl: process.env.VITE_FLOWEVM_NODE_URL || '',
+    if (!process.env.VITE_FLOWEVM_NODE_URL) {
+      throw new Error('VITE_FLOWEVM_NODE_URL required');
+    }
+
+    const flowEvmAdapter = new adapters.flowEvm.ChainAdapter({
+      rpcUrl: process.env.VITE_FLOWEVM_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.FlowEvmMainnet, flowEvmAdapter);
-    this.logger.log('Flow EVM adapter initialized');
+    this.logger.log('Flow EVM chain adapter initialized');
   }
 
   private initializeCeloAdapter(chainAdapterManager: Map<string, any>) {
-    const celoAdapter = new celo.ChainAdapter({
-      rpcUrl: process.env.VITE_CELO_NODE_URL || '',
+    if (!process.env.VITE_CELO_NODE_URL) {
+      throw new Error('VITE_CELO_NODE_URL required');
+    }
+
+    const celoAdapter = new adapters.celo.ChainAdapter({
+      rpcUrl: process.env.VITE_CELO_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.CeloMainnet, celoAdapter);
-    this.logger.log('Celo adapter initialized');
+    this.logger.log('Celo chain adapter initialized');
   }
 
   private initializePlumeAdapter(chainAdapterManager: Map<string, any>) {
-    const plumeAdapter = new plume.ChainAdapter({
-      rpcUrl: process.env.VITE_PLUME_NODE_URL || '',
+    if (!process.env.VITE_PLUME_NODE_URL) {
+      throw new Error('VITE_PLUME_NODE_URL required');
+    }
+
+    const plumeAdapter = new adapters.plume.ChainAdapter({
+      rpcUrl: process.env.VITE_PLUME_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.PlumeMainnet, plumeAdapter);
-    this.logger.log('Plume adapter initialized');
+    this.logger.log('Plume chain adapter initialized');
   }
 
   private initializeStoryAdapter(chainAdapterManager: Map<string, any>) {
-    const storyAdapter = new story.ChainAdapter({
-      rpcUrl: process.env.VITE_STORY_NODE_URL || '',
+    if (!process.env.VITE_STORY_NODE_URL) {
+      throw new Error('VITE_STORY_NODE_URL required');
+    }
+
+    const storyAdapter = new adapters.story.ChainAdapter({
+      rpcUrl: process.env.VITE_STORY_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.StoryMainnet, storyAdapter);
-    this.logger.log('Story adapter initialized');
+    this.logger.log('Story chain adapter initialized');
   }
 
   private initializeZkSyncEraAdapter(chainAdapterManager: Map<string, any>) {
-    const zkSyncEraAdapter = new zksyncera.ChainAdapter({
-      rpcUrl: process.env.VITE_ZKSYNCERA_NODE_URL || '',
+    if (!process.env.VITE_ZKSYNCERA_NODE_URL) {
+      throw new Error('VITE_ZKSYNCERA_NODE_URL required');
+    }
+
+    const zkSyncEraAdapter = new adapters.zksyncera.ChainAdapter({
+      rpcUrl: process.env.VITE_ZKSYNCERA_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.ZkSyncEraMainnet, zkSyncEraAdapter);
-    this.logger.log('zkSync Era adapter initialized');
+    this.logger.log('zkSync Era chain adapter initialized');
   }
 
   private initializeBlastAdapter(chainAdapterManager: Map<string, any>) {
-    const blastAdapter = new blast.ChainAdapter({
-      rpcUrl: process.env.VITE_BLAST_NODE_URL || '',
+    if (!process.env.VITE_BLAST_NODE_URL) {
+      throw new Error('VITE_BLAST_NODE_URL required');
+    }
+
+    const blastAdapter = new adapters.blast.ChainAdapter({
+      rpcUrl: process.env.VITE_BLAST_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.BlastMainnet, blastAdapter);
-    this.logger.log('Blast adapter initialized');
+    this.logger.log('Blast chain adapter initialized');
   }
 
   private initializeWorldChainAdapter(chainAdapterManager: Map<string, any>) {
-    const worldChainAdapter = new worldchain.ChainAdapter({
-      rpcUrl: process.env.VITE_WORLDCHAIN_NODE_URL || '',
+    if (!process.env.VITE_WORLDCHAIN_NODE_URL) {
+      throw new Error('VITE_WORLDCHAIN_NODE_URL required');
+    }
+
+    const worldChainAdapter = new adapters.worldchain.ChainAdapter({
+      rpcUrl: process.env.VITE_WORLDCHAIN_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.WorldChainMainnet, worldChainAdapter);
-    this.logger.log('World Chain adapter initialized');
+    this.logger.log('World Chain chain adapter initialized');
   }
 
   private initializeHemiAdapter(chainAdapterManager: Map<string, any>) {
-    const hemiAdapter = new hemi.ChainAdapter({
-      rpcUrl: process.env.VITE_HEMI_NODE_URL || '',
+    if (!process.env.VITE_HEMI_NODE_URL) {
+      throw new Error('VITE_HEMI_NODE_URL required');
+    }
+
+    const hemiAdapter = new adapters.hemi.ChainAdapter({
+      rpcUrl: process.env.VITE_HEMI_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.HemiMainnet, hemiAdapter);
-    this.logger.log('Hemi adapter initialized');
+    this.logger.log('Hemi chain adapter initialized');
   }
 
   private initializeLineaAdapter(chainAdapterManager: Map<string, any>) {
-    const lineaAdapter = new linea.ChainAdapter({
-      rpcUrl: process.env.VITE_LINEA_NODE_URL || '',
+    if (!process.env.VITE_LINEA_NODE_URL) {
+      throw new Error('VITE_LINEA_NODE_URL required');
+    }
+
+    const lineaAdapter = new adapters.linea.ChainAdapter({
+      rpcUrl: process.env.VITE_LINEA_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.LineaMainnet, lineaAdapter);
-    this.logger.log('Linea adapter initialized');
+    this.logger.log('Linea chain adapter initialized');
   }
 
   private initializeScrollAdapter(chainAdapterManager: Map<string, any>) {
-    const scrollAdapter = new scroll.ChainAdapter({
-      rpcUrl: process.env.VITE_SCROLL_NODE_URL || '',
+    if (!process.env.VITE_SCROLL_NODE_URL) {
+      throw new Error('VITE_SCROLL_NODE_URL required');
+    }
+
+    const scrollAdapter = new adapters.scroll.ChainAdapter({
+      rpcUrl: process.env.VITE_SCROLL_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.ScrollMainnet, scrollAdapter);
-    this.logger.log('Scroll adapter initialized');
+    this.logger.log('Scroll chain adapter initialized');
   }
 
   private initializeSonicAdapter(chainAdapterManager: Map<string, any>) {
-    const sonicAdapter = new sonic.ChainAdapter({
-      rpcUrl: process.env.VITE_SONIC_NODE_URL || '',
+    if (!process.env.VITE_SONIC_NODE_URL) {
+      throw new Error('VITE_SONIC_NODE_URL required');
+    }
+
+    const sonicAdapter = new adapters.sonic.ChainAdapter({
+      rpcUrl: process.env.VITE_SONIC_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.SonicMainnet, sonicAdapter);
-    this.logger.log('Sonic adapter initialized');
+    this.logger.log('Sonic chain adapter initialized');
   }
 
   private initializeUnichainAdapter(chainAdapterManager: Map<string, any>) {
-    const unichainAdapter = new unichain.ChainAdapter({
-      rpcUrl: process.env.VITE_UNICHAIN_NODE_URL || '',
+    if (!process.env.VITE_UNICHAIN_NODE_URL) {
+      throw new Error('VITE_UNICHAIN_NODE_URL required');
+    }
+
+    const unichainAdapter = new adapters.unichain.ChainAdapter({
+      rpcUrl: process.env.VITE_UNICHAIN_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.UnichainMainnet, unichainAdapter);
-    this.logger.log('Unichain adapter initialized');
+    this.logger.log('Unichain chain adapter initialized');
   }
 
   private initializeBobAdapter(chainAdapterManager: Map<string, any>) {
-    const bobAdapter = new bob.ChainAdapter({
-      rpcUrl: process.env.VITE_BOB_NODE_URL || '',
+    if (!process.env.VITE_BOB_NODE_URL) {
+      throw new Error('VITE_BOB_NODE_URL required');
+    }
+
+    const bobAdapter = new adapters.bob.ChainAdapter({
+      rpcUrl: process.env.VITE_BOB_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.BobMainnet, bobAdapter);
-    this.logger.log('BOB adapter initialized');
+    this.logger.log('BOB chain adapter initialized');
   }
 
   private initializeModeAdapter(chainAdapterManager: Map<string, any>) {
-    const modeAdapter = new mode.ChainAdapter({
-      rpcUrl: process.env.VITE_MODE_NODE_URL || '',
+    if (!process.env.VITE_MODE_NODE_URL) {
+      throw new Error('VITE_MODE_NODE_URL required');
+    }
+
+    const modeAdapter = new adapters.mode.ChainAdapter({
+      rpcUrl: process.env.VITE_MODE_NODE_URL,
       getKnownTokens: () => [],
     });
+
     chainAdapterManager.set(KnownChainIds.ModeMainnet, modeAdapter);
-    this.logger.log('Mode adapter initialized');
+    this.logger.log('Mode chain adapter initialized');
   }
 
   private initializeSoneiumAdapter(chainAdapterManager: Map<string, any>) {
-    const soneiumAdapter = new soneium.ChainAdapter({
-      rpcUrl: process.env.VITE_SONEIUM_NODE_URL || '',
+    if (!process.env.VITE_SONEIUM_NODE_URL) {
+      throw new Error('VITE_SONEIUM_NODE_URL required');
+    }
+
+    const soneiumAdapter = new adapters.soneium.ChainAdapter({
+      rpcUrl: process.env.VITE_SONEIUM_NODE_URL,
       getKnownTokens: () => [],
     });
-    chainAdapterManager.set(KnownChainIds.SoneiumMainnet, soneiumAdapter);
-    this.logger.log('Soneium adapter initialized');
-  }
 
-  isEvmChainAdapter(chainAdapter: unknown): chainAdapter is EvmChainAdapter {
-    return evmChainIds.includes(
-      (chainAdapter as EvmChainAdapter).getChainId() as EvmChainId,
-    );
+    chainAdapterManager.set(KnownChainIds.SoneiumMainnet, soneiumAdapter);
+    this.logger.log('Soneium chain adapter initialized');
   }
 
   assertGetEvmChainAdapter(chainId: ChainId): EvmChainAdapter {
-    const chainAdapterManager =
-      this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
-
-    if (!this.isEvmChainAdapter(adapter)) {
-      throw Error('invalid chain adapter');
+    if (!adapters.evmChainIds.includes(chainId as EvmChainId)) {
+      throw new Error(`Chain ${chainId} is not a EVM chain`);
     }
 
-    return adapter;
+    const chainAdapterManager =
+      this.chainAdapterManagerService.getChainAdapterManager();
+
+    const adapter = chainAdapterManager.get(chainId);
+    if (!adapter) {
+      throw new Error(`EVM chain adapter not found for chain ${chainId}`);
+    }
+
+    return adapter as EvmChainAdapter;
   }
 }
