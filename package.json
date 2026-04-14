@@ -13,6 +13,7 @@
     "packages/*"
   ],
   "scripts": {
+    "clean": "turbo run clean && rm -rf node_modules",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "start": "turbo run start",
@@ -30,7 +31,6 @@
     "db:migrate:status": "prisma migrate status",
     "db:migrate:create": "prisma migrate dev --create-only --name",
     "db:studio": "prisma studio",
-    "clean": "turbo run clean && rm -rf node_modules",
     "referral-rewards": "ts-node scripts/referral-rewards.ts"
   },
   "dependencies": {

@@ -24,12 +24,14 @@ shapeshift-backend/
 ## Services
 
 ### User Service (`apps/user-service`)
+
 - **Port**: 3002
 - **Purpose**: Manages user accounts, devices, and authentication
 - **Database**: PostgreSQL
 - **API**: `/users/*`
 
 ### Swap Service (`apps/swap-service`)
+
 - **Port**: 3001
 - **Purpose**: Handles swaps and WebSocket connections
 - **Database**: PostgreSQL
@@ -38,6 +40,7 @@ shapeshift-backend/
 - **Dependencies**: User Service, Notifications Service
 
 ### Notifications Service (`apps/notifications-service`)
+
 - **Port**: 3003
 - **Purpose**: Manages notifications and push notifications
 - **Database**: PostgreSQL
@@ -65,6 +68,7 @@ shapeshift-backend/
 ## Getting Started
 
 ### Prerequisites
+
 - Node.js 22+
 - Yarn 4+
 - Docker (for containerized development)
@@ -75,6 +79,7 @@ shapeshift-backend/
    Ask the team for the EXPO token used to launch notifications.
 
 2. **Install dependencies**:
+
    ```bash
    yarn install
    ```
@@ -87,6 +92,7 @@ shapeshift-backend/
 ### Development
 
 #### Option 1: Docker Development (recommended)
+
 ```bash
 # Start all services
 docker-compose up -d
@@ -99,6 +105,7 @@ docker-compose logs -f swap-service db
 ```
 
 #### Option 2: Local Development
+
 ```bash
 yarn start:dev
 ```
@@ -106,6 +113,7 @@ yarn start:dev
 ### Available Scripts
 
 #### Root Level
+
 - `yarn build` - Build all packages and apps (runs `db:generate` first)
 - `yarn dev` - Start all services in development mode
 - `yarn test` - Run tests
@@ -126,12 +134,14 @@ All migrations are managed from the root using a shared Prisma schema at `prisma
 1. Update the relevant schema file in `prisma/schema/`
 
 2. Start a fresh local DB and apply existing migrations as baseline:
+
    ```bash
    docker-compose down -v && docker-compose up -d db
    DATABASE_URL="postgresql://postgres:password@localhost:5432/microservices" yarn db:migrate
    ```
 
 3. Generate the migration (creates the file without applying it):
+
    ```bash
    DATABASE_URL="postgresql://postgres:password@localhost:5432/microservices" yarn db:migrate:create <migration_name>
    ```
@@ -139,6 +149,7 @@ All migrations are managed from the root using a shared Prisma schema at `prisma
 4. Review the generated SQL in `prisma/migrations/<timestamp>_<name>/migration.sql`
 
 5. Apply and test locally:
+
    ```bash
    DATABASE_URL="postgresql://postgres:password@localhost:5432/microservices" yarn db:migrate
    ```
@@ -146,6 +157,7 @@ All migrations are managed from the root using a shared Prisma schema at `prisma
 6. Commit and open a PR — production migrations are applied automatically on deployment.
 
 ### Validating migration state against a database
+
 ```bash
 DATABASE_URL="postgresql://..." yarn db:migrate:status
 ```

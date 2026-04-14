@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import * as jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.SIWE_JWT_SECRET || 'affiliate-siwe-secret-dev';
@@ -14,10 +15,14 @@ interface SiweJwtPayload {
   exp: number;
 }
 
+export interface SiweRequest extends Request {
+  siweAddress: string;
+}
+
 @Injectable()
 export class SiweAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<SiweRequest>();
     const authHeader = request.headers['authorization'];
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

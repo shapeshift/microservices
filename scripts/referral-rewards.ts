@@ -38,7 +38,7 @@ const userPrisma = new UserPrismaClient();
 const RFOX_STAKING_CONTRACT = process.env.RFOX_STAKING_CONTRACT || '0x...';
 
 async function getFoxPriceUsd(): Promise<number> {
-  return 0.10;
+  return 0.1;
 }
 
 async function calculateReferralRewards(
@@ -47,7 +47,9 @@ async function calculateReferralRewards(
   totalFoxToDistribute: number,
   distributionName: string,
 ): Promise<ReferralRewardDistribution> {
-  console.log(`Calculating referral rewards from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+  console.log(
+    `Calculating referral rewards from ${startDate.toISOString()} to ${endDate.toISOString()}`,
+  );
   console.log(`Total FOX to distribute: ${totalFoxToDistribute}`);
 
   const swaps = await swapPrisma.swap.findMany({
@@ -140,8 +142,12 @@ async function calculateReferralRewards(
       continue;
     }
 
-    const percentageOfTotal = totalVolume > 0 ? (stats.totalVolumeUsd / totalVolume) * 100 : 0;
-    const foxReward = totalVolume > 0 ? (stats.totalVolumeUsd / totalVolume) * totalFoxToDistribute : 0;
+    const percentageOfTotal =
+      totalVolume > 0 ? (stats.totalVolumeUsd / totalVolume) * 100 : 0;
+    const foxReward =
+      totalVolume > 0
+        ? (stats.totalVolumeUsd / totalVolume) * totalFoxToDistribute
+        : 0;
 
     rewards.push({
       referralCode: code,
@@ -162,7 +168,9 @@ async function calculateReferralRewards(
     safeTxData.operation.push(0);
   }
 
-  rewards.sort((a, b) => parseFloat(b.totalVolumeUsd) - parseFloat(a.totalVolumeUsd));
+  rewards.sort(
+    (a, b) => parseFloat(b.totalVolumeUsd) - parseFloat(a.totalVolumeUsd),
+  );
 
   const distribution: ReferralRewardDistribution = {
     id: `dist_${Date.now()}`,
@@ -179,14 +187,19 @@ async function calculateReferralRewards(
   return distribution;
 }
 
-function encodeDepositFunctionData(userAddress: string, amount: string): string {
+function encodeDepositFunctionData(
+  userAddress: string,
+  amount: string,
+): string {
   const functionSelector = '47e7ef24';
   const addressParam = userAddress.slice(2).padStart(64, '0');
   const amountParam = BigInt(amount).toString(16).padStart(64, '0');
   return `${functionSelector}${addressParam}${amountParam}`;
 }
 
-async function saveDistribution(distribution: ReferralRewardDistribution): Promise<void> {
+async function saveDistribution(
+  distribution: ReferralRewardDistribution,
+): Promise<void> {
   const outputDir = path.join(__dirname, '../distributions');
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -199,8 +212,13 @@ async function saveDistribution(distribution: ReferralRewardDistribution): Promi
   console.log(`Distribution saved to: ${filepath}`);
 }
 
-async function generateSafeTransactionFile(distributionId: string): Promise<void> {
-  const distributionFile = path.join(__dirname, `../distributions/${distributionId}.json`);
+async function generateSafeTransactionFile(
+  distributionId: string,
+): Promise<void> {
+  const distributionFile = path.join(
+    __dirname,
+    `../distributions/${distributionId}.json`,
+  );
 
   if (!fs.existsSync(distributionFile)) {
     throw new Error(`Distribution file not found: ${distributionFile}`);
@@ -224,7 +242,10 @@ async function generateSafeTransactionFile(distributionId: string): Promise<void
 }
 
 async function printDistributionStats(distributionId: string): Promise<void> {
-  const distributionFile = path.join(__dirname, `../distributions/${distributionId}.json`);
+  const distributionFile = path.join(
+    __dirname,
+    `../distributions/${distributionId}.json`,
+  );
 
   if (!fs.existsSync(distributionFile)) {
     throw new Error(`Distribution file not found: ${distributionFile}`);
@@ -243,10 +264,16 @@ async function printDistributionStats(distributionId: string): Promise<void> {
   console.log('\n=== Top 10 Referrers ===');
 
   distribution.rewards.slice(0, 10).forEach((reward, index) => {
-    console.log(`${index + 1}. ${reward.referralCode} (${reward.ownerAddress})`);
-    console.log(`   Volume: $${reward.totalVolumeUsd} (${reward.percentageOfTotal}%)`);
+    console.log(
+      `${index + 1}. ${reward.referralCode} (${reward.ownerAddress})`,
+    );
+    console.log(
+      `   Volume: $${reward.totalVolumeUsd} (${reward.percentageOfTotal}%)`,
+    );
     console.log(`   FOX Reward: ${reward.foxReward}`);
-    console.log(`   Swaps: ${reward.swapCount} | Unique Referees: ${reward.uniqueReferees}`);
+    console.log(
+      `   Swaps: ${reward.swapCount} | Unique Referees: ${reward.uniqueReferees}`,
+    );
   });
 }
 
@@ -260,9 +287,15 @@ async function main() {
         const startDate = new Date(args[1]);
         const endDate = new Date(args[2]);
         const totalFox = parseFloat(args[3]);
-        const name = args[4] || `Distribution ${startDate.toISOString().split('T')[0]}`;
+        const name =
+          args[4] || `Distribution ${startDate.toISOString().split('T')[0]}`;
 
-        const distribution = await calculateReferralRewards(startDate, endDate, totalFox, name);
+        const distribution = await calculateReferralRewards(
+          startDate,
+          endDate,
+          totalFox,
+          name,
+        );
         await saveDistribution(distribution);
         await printDistributionStats(distribution.id);
         break;
@@ -283,7 +316,9 @@ async function main() {
       default:
         console.log('Usage:');
         console.log('  calculate <start-date> <end-date> <total-fox> [name]');
-        console.log('    Example: calculate 2024-01-01 2024-01-31 10000 "January 2024"');
+        console.log(
+          '    Example: calculate 2024-01-01 2024-01-31 10000 "January 2024"',
+        );
         console.log('');
         console.log('  generate <distribution-id>');
         console.log('    Example: generate dist_1234567890');
