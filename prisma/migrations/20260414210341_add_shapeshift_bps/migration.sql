@@ -1,8 +1,3 @@
-/*
-  Warnings:
-
-  - Added the required column `shapeshiftBps` to the `swaps` table without a default value. This is not possible if the table is not empty.
-
-*/
 -- AlterTable
-ALTER TABLE "public"."swaps" ADD COLUMN     "shapeshiftBps" INTEGER NOT NULL;
+ALTER TABLE "public"."swaps" ADD COLUMN "shapeshiftBps" INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE "public"."swaps" ALTER COLUMN "shapeshiftBps" DROP DEFAULT;
