@@ -304,7 +304,7 @@ export class SwapsService {
     }));
   }
 
-  async getSwapsByAccountId(accountId: string) {
+  async getSwapsByAccountId(accountId: string, limit = 50) {
     const hashedAccountId = hashAccountId(accountId);
     const swaps = await this.prisma.swap.findMany({
       where: {
@@ -313,6 +313,8 @@ export class SwapsService {
           { buyAccountId: hashedAccountId },
         ],
       },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
     });
 
     return swaps.map((swap) => ({
