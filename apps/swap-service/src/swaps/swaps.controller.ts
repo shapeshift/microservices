@@ -10,7 +10,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SwapsService } from './swaps.service';
-import { SwapPollingService } from '../polling/swap-polling.service';
 import { SwapVerificationService } from '../verification/swap-verification.service';
 export { Swap, Prisma } from '@prisma/client';
 import { Asset } from '@shapeshiftoss/types';
@@ -24,7 +23,6 @@ import {
 export class SwapsController {
   constructor(
     private swapsService: SwapsService,
-    private swapPollingService: SwapPollingService,
     private swapVerificationService: SwapVerificationService,
   ) {}
 
