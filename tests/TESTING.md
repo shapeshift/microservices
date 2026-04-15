@@ -82,7 +82,6 @@ For each swapper, the test verifies:
 | 0x (Zrx)        | `checkEvmSwapStatus` (unchained)            | Any confirmed ETH tx    | No                           | Simple on-chain confirmation                           |
 | Portals         | `checkEvmSwapStatus` (unchained)            | Any confirmed ETH tx    | No                           | Simple on-chain confirmation                           |
 | Bebop           | `checkEvmSwapStatus` (unchained)            | Any confirmed ETH tx    | No                           | Simple on-chain confirmation                           |
-| Jupiter         | `checkSolanaSwapStatus` (unchained)         | Successful Solana tx    | Yes (bps=60)                 | MUST be a successful tx (no `transactionError`)        |
 | AVNU            | `checkStarknetSwapStatus` (Starknet RPC)    | Real Starknet tx        | Yes (bps=60)                 | Uses `VITE_STARKNET_NODE_URL`                          |
 | Sun.io          | `checkTronSwapStatus` (Tron RPC)            | Real Tron tx            | Yes (bps=60)                 | Uses `VITE_TRON_NODE_URL`                              |
 | Cetus           | `checkSuiSwapStatus` (Sui RPC)              | Confirmed Sui tx digest | Yes (bps=60)                 | Requires `receiveAddress` on swap                      |
@@ -113,7 +112,7 @@ There are two types of affiliate verification:
 
 These check the actual transaction on-chain or via protocol APIs for affiliate fee data. Test txs are NOT real ShapeShift affiliate swaps, so they correctly report `hasAffiliate=false`. This is **expected behavior** — the verification logic works, it just doesn't find affiliate data in random txs.
 
-### Metadata-based Verification (Jupiter, AVNU, Sun.io, Cetus, STON.fi)
+### Metadata-based Verification (AVNU, Sun.io, Cetus, STON.fi)
 
 These check the swap's `affiliateBps` from the enriched metadata passed during verification. Since we set `affiliateBps=60` in the test payload, these correctly report `hasAffiliate=true, affiliateBps=60`.
 
@@ -137,10 +136,10 @@ Some tx hashes may stop working over time (pruned from RPC nodes, API changes). 
    # Should return JSON with "status": 1
    ```
 
-2. **Solana tx (Jupiter)**: Must be a SUCCESSFUL tx (no `transactionError`):
+2. **Solana tx (Relay)**: Must be a SUCCESSFUL tx (no `transactionError`):
 
    ```bash
-   # Find a recent successful Jupiter tx
+   # Find a recent successful Relay tx
    curl -s -X POST "https://api.solana.shapeshift.com/api/v1/jsonrpc" \
      -H "Content-Type: application/json" \
      -d '{"jsonrpc":"2.0","id":1,"method":"getSignaturesForAddress","params":["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",{"limit":30}]}'
@@ -226,7 +225,7 @@ VITE_MAYACHAIN_NODE_URL="https://mayanode.mayachain.info"
 # Critical for EVM swappers
 VITE_UNCHAINED_ETHEREUM_HTTP_URL="https://api.ethereum.shapeshift.com"
 
-# Critical for Solana/Jupiter
+# Critical for Solana/Relay
 VITE_UNCHAINED_SOLANA_HTTP_URL="https://api.solana.shapeshift.com"
 
 # Critical for AVNU/Starknet
@@ -289,7 +288,7 @@ Every test swap requires these fields:
 
 ```
 THORChain, MAYAChain, CoW Swap, 0x, Portals, Chainflip,
-Jupiter, Relay, ButterSwap, Bebop, NEAR Intents, Cetus,
+Relay, ButterSwap, Bebop, NEAR Intents, Cetus,
 Sun.io, AVNU, STON.fi, Across, Arbitrum Bridge, Test
 ```
 
