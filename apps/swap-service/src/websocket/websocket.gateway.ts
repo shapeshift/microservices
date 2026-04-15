@@ -10,7 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { SwapsService } from '../swaps/swaps.service';
-import { Asset } from '@shapeshiftoss/types';
+import type { SwapWithAssets } from '../swaps/swaps.service';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -18,14 +18,11 @@ interface AuthenticatedSocket extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(',')
-      : [
-          'http://localhost:3000',
-          'http://localhost:5173',
-          'http://localhost:5174',
-          'http://localhost:5175',
-        ],
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
+      /^http:\/\/(\w+\.)?localhost(:\d+)?$/,
+      /\.shapeshift\.com$/,
+    ],
+    credentials: true,
   },
 })
 export class WebsocketGateway
@@ -71,32 +68,12 @@ export class WebsocketGateway
     }
   }
 
-  sendSwapUpdateToUser(
-    userId: string,
-    swap: {
-      id: string;
-      swapId: string;
-      status: string;
-      sellAsset: Asset;
-      buyAsset: Asset;
-      sellAmountCryptoBaseUnit: string;
-      expectedBuyAmountCryptoBaseUnit: string;
-      sellAccountId: string;
-      buyAccountId?: string;
-      sellTxHash?: string;
-      buyTxHash?: string;
-      statusMessage?: string;
-    },
-  ) {
+  sendSwapUpdateToUser(userId: string, swap: SwapWithAssets) {
     const client = this.connectedClients.get(userId);
     if (client) {
       client.emit('swapUpdate', swap);
     }
 
     this.server.to(`user:${userId}`).emit('swapUpdate', swap);
-  }
-
-  broadcastToAll(event: string, data: Record<string, unknown>) {
-    this.server.emit(event, data);
   }
 }
