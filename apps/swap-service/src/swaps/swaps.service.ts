@@ -42,6 +42,11 @@ type AffiliateVerificationDetails = {
   hasAffiliate?: boolean;
 };
 
+export type SwapWithAssets = Omit<Swap, 'sellAsset' | 'buyAsset'> & {
+  sellAsset: Asset;
+  buyAsset: Asset;
+};
+
 @Injectable()
 export class SwapsService {
   private readonly logger = new Logger(SwapsService.name);
@@ -172,6 +177,7 @@ export class SwapsService {
           affiliateAddress: affiliateAddress,
           affiliateBps: data.affiliateBps || null,
           origin: data.origin || null,
+          shapeshiftBps: SwapsService.API_BASE_BPS,
           affiliateFeeAssetId,
           relayTransactionMetadata: relayMeta ?? undefined,
           chainflipSwapId: chainflipId ?? undefined,
@@ -191,7 +197,7 @@ export class SwapsService {
     }
   }
 
-  async updateSwapStatus(data: UpdateSwapStatusDto) {
+  async updateSwapStatus(data: UpdateSwapStatusDto): Promise<SwapWithAssets> {
     try {
       const swap = await this.prisma.swap.update({
         where: { swapId: data.swapId },
@@ -202,7 +208,6 @@ export class SwapsService {
           txLink: data.txLink,
           statusMessage: data.statusMessage,
           actualBuyAmountCryptoPrecision: data.actualBuyAmountCryptoPrecision,
-          pollFailCount: 0,
         },
       });
 
@@ -593,6 +598,7 @@ export class SwapsService {
       affiliateFeeAmountCryptoBaseUnit: true,
       affiliateVerificationDetails: true,
       createdAt: true,
+      shapeshiftBps: true,
     } as const;
 
     const periodSwaps = await this.prisma.swap.findMany({
@@ -694,13 +700,14 @@ export class SwapsService {
   private getAffiliateCommissionRate(
     origin: string | null,
     verifiedBps: number,
+    shapeshiftBps: number,
   ): number {
     if (origin === 'web') {
-      // Referrer gets 10bps of volume (API_BASE_BPS / verifiedBps of the fee)
-      return SwapsService.API_BASE_BPS / verifiedBps;
+      // Referrer gets shapeshiftBps of volume (shapeshiftBps / verifiedBps of the fee)
+      return shapeshiftBps / verifiedBps;
     }
-    if (!origin || verifiedBps <= SwapsService.API_BASE_BPS) return 0;
-    return (verifiedBps - SwapsService.API_BASE_BPS) / verifiedBps;
+    if (!origin || verifiedBps <= shapeshiftBps) return 0;
+    return (verifiedBps - shapeshiftBps) / verifiedBps;
   }
 
   private async calculateFeeForSwap(
@@ -719,6 +726,7 @@ export class SwapsService {
       affiliateFeeAssetId: string | null;
       affiliateVerificationDetails: unknown;
       createdAt: Date;
+      shapeshiftBps: number;
     },
     priceMap: Map<string, number | null>,
     freezeCutoff: Date,
@@ -745,6 +753,7 @@ export class SwapsService {
     const commissionRate = this.getAffiliateCommissionRate(
       swap.origin,
       verifiedBps,
+      swap.shapeshiftBps,
     );
 
     const verifiedSell = verificationDetails?.verifiedSellAmountCryptoBaseUnit;
@@ -855,7 +864,6 @@ export class SwapsService {
           VITE_COWSWAP_BASE_URL: process.env.VITE_COWSWAP_BASE_URL || '',
           VITE_CHAINFLIP_API_KEY: process.env.VITE_CHAINFLIP_API_KEY || '',
           VITE_CHAINFLIP_API_URL: process.env.VITE_CHAINFLIP_API_URL || '',
-          VITE_JUPITER_API_URL: process.env.VITE_JUPITER_API_URL || '',
           VITE_RELAY_API_URL: process.env.VITE_RELAY_API_URL || '',
           VITE_PORTALS_BASE_URL: process.env.VITE_PORTALS_BASE_URL || '',
           VITE_ZRX_BASE_URL: process.env.VITE_ZRX_BASE_URL || '',
@@ -1033,14 +1041,6 @@ export class SwapsService {
         statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
-  }
-
-  async incrementPollFailCount(swapId: string): Promise<number> {
-    const updated = await this.prisma.swap.update({
-      where: { id: swapId },
-      data: { pollFailCount: { increment: 1 } },
-    });
-    return updated.pollFailCount;
   }
 
   async findSwapBySwapId(swapId: string) {
