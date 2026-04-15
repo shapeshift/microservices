@@ -57,6 +57,7 @@ model Swap {
   affiliateFeeAssetId              String?
   affiliateFeeAmountCryptoBaseUnit String?
   pollFailCount                    Int       @default(0)
+  shapeshiftBps                    Int
 
   @@index([referralCode])
   @@index([affiliateAddress])
