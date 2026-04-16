@@ -319,25 +319,6 @@ const testCases = [
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 7. Jupiter — Solana on-chain check (SOL → USDC)
-  // ═══════════════════════════════════════════════════════════════════════════
-  {
-    key: 'Jupiter',
-    swapperName: 'Jupiter',
-    sellAsset: assets.SOL,
-    buyAsset: assets.USDC_SOL,
-    sellTxHash: 'pgu7kyvPSaVjx7gCnBSy8ZujdcdpMTJRw3Cj7CGyMvzaA9NnYzNhnB5U7Avvo2Yd4JdMBBuP23ZFPqCRQNZa66b',
-    sellAmountBaseUnit: '1000000000',
-    expectedBuyAmountBaseUnit: '150000000',
-    sellPrecision: '1.0',
-    buyPrecision: '150.0',
-    receiveAddress: RECEIVE_ADDRESSES.SOL,
-    metadata: {},
-    expectResolution: true,
-    notes: 'Real Solana tx signature, on-chain confirmation check',
-  },
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // 8. AVNU — Starknet on-chain check (STRK → USDC)
   // ═══════════════════════════════════════════════════════════════════════════
   {

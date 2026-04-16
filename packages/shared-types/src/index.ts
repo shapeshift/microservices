@@ -1,4 +1,4 @@
-import { Asset } from '@shapeshiftoss/types';
+import type { Asset } from '@shapeshiftoss/types';
 
 export type DeviceType = 'MOBILE' | 'WEB';
 export type SwapStatus = 'IDLE' | 'PENDING' | 'SUCCESS' | 'FAILED';

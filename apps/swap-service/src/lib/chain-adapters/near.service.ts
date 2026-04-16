@@ -18,7 +18,6 @@ export class NearChainAdapterService {
 
     try {
       this.initializeNearAdapter(chainAdapterManager);
-      this.logger.log('Near chain adapter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Near chain adapter:', error);
       throw error;
@@ -26,26 +25,32 @@ export class NearChainAdapterService {
   }
 
   private initializeNearAdapter(chainAdapterManager: Map<string, any>) {
-    const nearRpcUrls = (process.env.VITE_NEAR_NODE_URLS || '')
-      .split(',')
-      .filter(Boolean);
+    if (!process.env.VITE_NEAR_NODE_URLS) {
+      throw new Error('VITE_NEAR_NODE_URLS required');
+    }
+
+    if (!process.env.VITE_NEAR_FAST_API_URL) {
+      throw new Error('VITE_NEAR_FAST_API_URL required');
+    }
 
     const nearAdapter = new near.ChainAdapter({
-      rpcUrls:
-        nearRpcUrls.length > 0 ? nearRpcUrls : ['https://rpc.mainnet.near.org'],
-      fastNearApiUrl:
-        process.env.VITE_NEAR_FAST_API_URL || 'https://api.fastnear.com',
+      rpcUrls: process.env.VITE_NEAR_NODE_URLS.split(',').filter(Boolean),
+      fastNearApiUrl: process.env.VITE_NEAR_FAST_API_URL,
     });
 
     chainAdapterManager.set(nearChainId, nearAdapter);
-    this.logger.log('Near adapter initialized');
+    this.logger.log('Near chain adapter initialized');
   }
 
   assertGetNearChainAdapter(chainId: ChainId): near.ChainAdapter {
+    if (chainId !== nearChainId) {
+      throw new Error(`Chain ${chainId} is not Near`);
+    }
+
     const chainAdapterManager =
       this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
 
+    const adapter = chainAdapterManager.get(chainId);
     if (!adapter) {
       throw new Error(`Near chain adapter not found for chain ${chainId}`);
     }

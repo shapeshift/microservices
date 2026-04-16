@@ -18,7 +18,6 @@ export class TonChainAdapterService {
 
     try {
       this.initializeTonAdapter(chainAdapterManager);
-      this.logger.log('Ton chain adapter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Ton chain adapter:', error);
       throw error;
@@ -26,19 +25,27 @@ export class TonChainAdapterService {
   }
 
   private initializeTonAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_TON_NODE_URL) {
+      throw new Error('VITE_TON_NODE_URL required');
+    }
+
     const tonAdapter = new ton.ChainAdapter({
-      rpcUrl: process.env.VITE_TON_NODE_URL || '',
+      rpcUrl: process.env.VITE_TON_NODE_URL,
     });
 
     chainAdapterManager.set(tonChainId, tonAdapter);
-    this.logger.log('Ton adapter initialized');
+    this.logger.log('Ton chain adapter initialized');
   }
 
   assertGetTonChainAdapter(chainId: ChainId): ton.ChainAdapter {
+    if (chainId !== tonChainId) {
+      throw new Error(`Chain ${chainId} is not Ton`);
+    }
+
     const chainAdapterManager =
       this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
 
+    const adapter = chainAdapterManager.get(chainId);
     if (!adapter) {
       throw new Error(`Ton chain adapter not found for chain ${chainId}`);
     }

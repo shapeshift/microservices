@@ -3139,13 +3139,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jup-ag/api@npm:^6.0.30":
-  version: 6.0.47
-  resolution: "@jup-ag/api@npm:6.0.47"
-  checksum: 10/5995c4d541126dc86dde9255f2359835d492a5a47d8c0fd302dd66b5ece4b89493b6e51655cbc1638fa70037f651886dd50a127567490bb100b99d848f902e70
-  languageName: node
-  linkType: hard
-
 "@ledgerhq/client-ids@npm:0.5.1":
   version: 0.5.1
   resolution: "@ledgerhq/client-ids@npm:0.5.1"
@@ -5476,9 +5469,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@shapeshiftoss/swapper@npm:17.6.11":
-  version: 17.6.11
-  resolution: "@shapeshiftoss/swapper@npm:17.6.11"
+"@shapeshiftoss/swapper@npm:17.7.0":
+  version: 17.7.0
+  resolution: "@shapeshiftoss/swapper@npm:17.7.0"
   dependencies:
     "@arbitrum/sdk": "npm:^4.0.1"
     "@avnu/avnu-sdk": "npm:^4.0.1"
@@ -5487,7 +5480,6 @@ __metadata:
     "@coral-xyz/anchor": "npm:0.29.0"
     "@cowprotocol/app-data": "npm:^2.3.0"
     "@defuse-protocol/one-click-sdk-typescript": "npm:^0.1.1-0.2"
-    "@jup-ag/api": "npm:^6.0.30"
     "@mysten/sui": "npm:^1.45.2"
     "@shapeshiftoss/bitcoinjs-lib": "npm:7.0.0-shapeshift.0"
     "@shapeshiftoss/caip": "npm:^8.16.7"
@@ -5516,7 +5508,7 @@ __metadata:
     retry-axios: "npm:^2.6.0"
     uuid: "npm:^9.0.0"
     viem: "npm:2.43.5"
-  checksum: 10/aa0926b91d6e98eb6e2ea1e2ae1b11e13477c22422441c409196f4ece4d7acf13de63133b8e13a7b776cf250a057f9af4ff93bb97a5fb51b11a2ffa65298bbb4
+  checksum: 10/488518817eec6f91b5c8d7f712a7d5e5c815f8caa6439757faea00b9456056fb309b4d7e4c2eb92ebf90f989093f7e34b56affaaaeffd59ce878b13dc604933f
   languageName: node
   linkType: hard
 
@@ -16689,7 +16681,7 @@ __metadata:
     "@pulumi/pulumi": "npm:3.160.0"
     "@shapeshiftoss/caip": "npm:8.16.7"
     "@shapeshiftoss/chain-adapters": "npm:11.3.9"
-    "@shapeshiftoss/swapper": "npm:17.6.11"
+    "@shapeshiftoss/swapper": "npm:17.7.0"
     "@shapeshiftoss/types": "npm:8.6.7"
     "@shapeshiftoss/unchained-client": "npm:10.14.10"
     "@shapeshiftoss/unchained-pulumi": "npm:1.0.2"

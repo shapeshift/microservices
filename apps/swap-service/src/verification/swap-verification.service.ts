@@ -234,9 +234,6 @@ export class SwapVerificationService {
         case 'bebop':
           return await this.verifyBebop(swapId, txHash, metadata);
 
-        case 'jupiter':
-          return await this.verifyJupiter(swapId, txHash, metadata);
-
         case 'arbitrum bridge':
           return await this.verifyArbitrumBridge(swapId);
 
@@ -1314,72 +1311,6 @@ export class SwapVerificationService {
             ? error.message
             : 'Failed to verify Bebop trade',
       };
-    }
-  }
-
-  private verifyJupiter(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
-    if (!txHash) {
-      return Promise.resolve({
-        isVerified: false,
-        hasAffiliate: false,
-        protocol: 'jupiter',
-        swapId,
-        error: 'Missing txHash for Jupiter verification',
-      });
-    }
-
-    try {
-      const referralKey =
-        process.env.SHAPESHIFT_JUPITER_REFERRAL_KEY ||
-        'Ajgmo453yGmcHDPoJBrMUj3GFwLVL7HaaZGNLkB8vREG';
-
-      // TODO: Implement on-chain/API verification for Jupiter
-      const affiliateBps = metadata?.affiliateBps
-        ? parseInt(metadata.affiliateBps as string)
-        : undefined;
-      const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0;
-
-      const verifiedSellAmountCryptoBaseUnit = (
-        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as
-          | string
-          | undefined) ?? (metadata?.sellAmount as string | undefined)
-      )?.toString();
-
-      this.logger.log(
-        `Jupiter verification for swap ${swapId}: affiliateBps=${affiliateBps}, hasAffiliate=${hasAffiliate}, referralKey=${referralKey}`,
-      );
-
-      return Promise.resolve({
-        isVerified: false,
-        hasAffiliate,
-        affiliateBps: hasAffiliate ? affiliateBps : undefined,
-        affiliateAddress: referralKey,
-        verifiedSellAmountCryptoBaseUnit,
-        protocol: 'jupiter',
-        swapId,
-        details: {
-          txHash,
-          affiliateBps: metadata?.affiliateBps as string | undefined,
-          referralKey,
-          verificationMethod: 'client_metadata_only',
-        },
-      });
-    } catch (error) {
-      this.logger.error(`Error verifying Jupiter for swap ${swapId}:`, error);
-      return Promise.resolve({
-        isVerified: false,
-        hasAffiliate: false,
-        protocol: 'jupiter',
-        swapId,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to verify Jupiter trade',
-      });
     }
   }
 

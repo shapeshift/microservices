@@ -1,6 +1,11 @@
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
+import type { AxiosInstance } from 'axios';
 import { getRequiredEnvVar } from './index';
-import { User, Device, CreateNotificationDto } from '@shapeshift/shared-types';
+import type {
+  User,
+  Device,
+  CreateNotificationDto,
+} from '@shapeshift/shared-types';
 
 export class UserServiceClient {
   private readonly axios: AxiosInstance;

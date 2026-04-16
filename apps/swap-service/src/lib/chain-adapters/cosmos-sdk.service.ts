@@ -1,16 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service';
 import * as unchained from '@shapeshiftoss/unchained-client';
-import { cosmos, thorchain, mayachain } from '@shapeshiftoss/chain-adapters';
-import {
-  cosmosChainId,
-  thorchainChainId,
-  mayachainChainId,
-} from '@shapeshiftoss/caip';
-import {
-  cosmosSdkChainIds,
-  type CosmosSdkChainAdapter,
-} from '@shapeshiftoss/chain-adapters';
+import * as adapters from '@shapeshiftoss/chain-adapters';
+import * as caip from '@shapeshiftoss/caip';
+import type { CosmosSdkChainAdapter } from '@shapeshiftoss/chain-adapters';
 import type { ChainId } from '@shapeshiftoss/caip';
 import { CosmosSdkChainId } from '@shapeshiftoss/types';
 
@@ -42,6 +35,18 @@ export class CosmosSdkChainAdapterService {
   }
 
   private initializeCosmosAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_COSMOS_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_COSMOS_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_COSMOS_WS_URL) {
+      throw new Error('VITE_UNCHAINED_COSMOS_WS_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
     const cosmosHttp = new unchained.cosmos.V1Api(
       new unchained.cosmos.Configuration({
         basePath: process.env.VITE_UNCHAINED_COSMOS_HTTP_URL,
@@ -52,17 +57,37 @@ export class CosmosSdkChainAdapterService {
       process.env.VITE_UNCHAINED_COSMOS_WS_URL,
     );
 
-    const cosmosAdapter = new cosmos.ChainAdapter({
+    const cosmosAdapter = new adapters.cosmos.ChainAdapter({
       providers: { http: cosmosHttp, ws: cosmosWs },
       midgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       coinName: 'Cosmos',
     });
 
-    chainAdapterManager.set(cosmosChainId, cosmosAdapter);
-    this.logger.log('Cosmos adapter initialized');
+    chainAdapterManager.set(caip.cosmosChainId, cosmosAdapter);
+    this.logger.log('Cosmos chain adapter initialized');
   }
 
   private initializeThorchainAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_THORCHAIN_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_THORCHAIN_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_THORCHAIN_V1_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_THORCHAIN_V1_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_THORCHAIN_WS_URL) {
+      throw new Error('VITE_UNCHAINED_THORCHAIN_WS_URL required');
+    }
+
+    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) {
+      throw new Error('VITE_THORCHAIN_MIDGARD_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const http = new unchained.thorchain.V1Api(
       new unchained.thorchain.Configuration({
         basePath: process.env.VITE_UNCHAINED_THORCHAIN_HTTP_URL,
@@ -79,7 +104,7 @@ export class CosmosSdkChainAdapterService {
       process.env.VITE_UNCHAINED_THORCHAIN_WS_URL,
     );
 
-    const thorchainAdapter = new thorchain.ChainAdapter({
+    const thorchainAdapter = new adapters.thorchain.ChainAdapter({
       providers: { http, ws },
       thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
@@ -87,11 +112,23 @@ export class CosmosSdkChainAdapterService {
       httpV1,
     });
 
-    chainAdapterManager.set(thorchainChainId, thorchainAdapter);
-    this.logger.log('Thorchain adapter initialized');
+    chainAdapterManager.set(caip.thorchainChainId, thorchainAdapter);
+    this.logger.log('Thorchain chain adapter initialized');
   }
 
   private initializeMayachainAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_MAYACHAIN_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_MAYACHAIN_WS_URL) {
+      throw new Error('VITE_UNCHAINED_MAYACHAIN_WS_URL required');
+    }
+
+    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) {
+      throw new Error('VITE_MAYACHAIN_MIDGARD_URL required');
+    }
+
     const mayachainHttp = new unchained.mayachain.V1Api(
       new unchained.mayachain.Configuration({
         basePath: process.env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL,
@@ -102,25 +139,25 @@ export class CosmosSdkChainAdapterService {
       process.env.VITE_UNCHAINED_MAYACHAIN_WS_URL,
     );
 
-    const mayachainAdapter = new mayachain.ChainAdapter({
+    const mayachainAdapter = new adapters.mayachain.ChainAdapter({
       providers: { http: mayachainHttp, ws: mayachainWs },
       midgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
       coinName: 'MAYA',
     });
 
-    chainAdapterManager.set(mayachainChainId, mayachainAdapter);
-    this.logger.log('Mayachain adapter initialized');
+    chainAdapterManager.set(caip.mayachainChainId, mayachainAdapter);
+    this.logger.log('Mayachain chain adapter initialized');
   }
 
   assertGetCosmosSdkChainAdapter(chainId: ChainId): CosmosSdkChainAdapter {
-    if (!cosmosSdkChainIds.includes(chainId as CosmosSdkChainId)) {
+    if (!adapters.cosmosSdkChainIds.includes(chainId as CosmosSdkChainId)) {
       throw new Error(`Chain ${chainId} is not a Cosmos SDK chain`);
     }
 
     const chainAdapterManager =
       this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
 
+    const adapter = chainAdapterManager.get(chainId);
     if (!adapter) {
       throw new Error(
         `Cosmos SDK chain adapter not found for chain ${chainId}`,

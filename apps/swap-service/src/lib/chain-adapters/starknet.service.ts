@@ -18,7 +18,6 @@ export class StarknetChainAdapterService {
 
     try {
       this.initializeStarknetAdapter(chainAdapterManager);
-      this.logger.log('Starknet chain adapter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Starknet chain adapter:', error);
       throw error;
@@ -26,19 +25,27 @@ export class StarknetChainAdapterService {
   }
 
   private initializeStarknetAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_STARKNET_NODE_URL) {
+      throw new Error('VITE_STARKNET_NODE_URL required');
+    }
+
     const starknetAdapter = new starknet.ChainAdapter({
-      rpcUrl: process.env.VITE_STARKNET_NODE_URL || '',
+      rpcUrl: process.env.VITE_STARKNET_NODE_URL,
     });
 
     chainAdapterManager.set(starknetChainId, starknetAdapter);
-    this.logger.log('Starknet adapter initialized');
+    this.logger.log('Starknet chain adapter initialized');
   }
 
   assertGetStarknetChainAdapter(chainId: ChainId): starknet.ChainAdapter {
+    if (chainId !== starknetChainId) {
+      throw new Error(`Chain ${chainId} is not Starknet`);
+    }
+
     const chainAdapterManager =
       this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
 
+    const adapter = chainAdapterManager.get(chainId);
     if (!adapter) {
       throw new Error(`Starknet chain adapter not found for chain ${chainId}`);
     }

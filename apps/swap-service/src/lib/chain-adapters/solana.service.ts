@@ -19,7 +19,6 @@ export class SolanaChainAdapterService {
 
     try {
       this.initializeSolanaAdapter(chainAdapterManager);
-      this.logger.log('Solana chain adapter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Solana chain adapter:', error);
       throw error;
@@ -27,6 +26,18 @@ export class SolanaChainAdapterService {
   }
 
   private initializeSolanaAdapter(chainAdapterManager: Map<string, any>) {
+    if (!process.env.VITE_UNCHAINED_SOLANA_HTTP_URL) {
+      throw new Error('VITE_UNCHAINED_SOLANA_HTTP_URL required');
+    }
+
+    if (!process.env.VITE_UNCHAINED_SOLANA_WS_URL) {
+      throw new Error('VITE_UNCHAINED_SOLANA_WS_URL required');
+    }
+
+    if (!process.env.VITE_SOLANA_NODE_URL) {
+      throw new Error('VITE_SOLANA_NODE_URL required');
+    }
+
     const solanaHttp = new unchained.solana.V1Api(
       new unchained.solana.Configuration({
         basePath: process.env.VITE_UNCHAINED_SOLANA_HTTP_URL,
@@ -43,14 +54,18 @@ export class SolanaChainAdapterService {
     });
 
     chainAdapterManager.set(solanaChainId, solanaAdapter);
-    this.logger.log('Solana adapter initialized');
+    this.logger.log('Solana chain adapter initialized');
   }
 
   assertGetSolanaChainAdapter(chainId: ChainId): solana.ChainAdapter {
+    if (chainId !== solanaChainId) {
+      throw new Error(`Chain ${chainId} is not Solana`);
+    }
+
     const chainAdapterManager =
       this.chainAdapterManagerService.getChainAdapterManager();
-    const adapter = chainAdapterManager.get(chainId);
 
+    const adapter = chainAdapterManager.get(chainId);
     if (!adapter) {
       throw new Error(`Solana chain adapter not found for chain ${chainId}`);
     }

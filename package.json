@@ -51,7 +51,7 @@
     "@pulumi/pulumi": "3.160.0",
     "@shapeshiftoss/caip": "8.16.7",
     "@shapeshiftoss/chain-adapters": "11.3.9",
-    "@shapeshiftoss/swapper": "17.6.11",
+    "@shapeshiftoss/swapper": "17.7.0",
     "@shapeshiftoss/types": "8.6.7",
     "@shapeshiftoss/unchained-client": "10.14.10",
     "@shapeshiftoss/unchained-pulumi": "1.0.2",
