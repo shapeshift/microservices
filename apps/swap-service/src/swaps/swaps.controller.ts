@@ -51,16 +51,18 @@ export class SwapsController {
   async getSwapsByUser(
     @Param('userId') userId: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.swapsService.getSwapsByUser(userId, limit);
+    return this.swapsService.getSwapsByUser(userId, { limit, cursor });
   }
 
   @Get('account/:accountId')
   async getSwapsByAccountId(
     @Param('accountId') accountId: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.swapsService.getSwapsByAccountId(accountId, limit);
+    return this.swapsService.getSwapsByAccountId(accountId, { limit, cursor });
   }
 
   @Get('pending')

@@ -290,38 +290,45 @@ export class SwapsService {
     }
   }
 
-  async getSwapsByUser(userId: string, limit = 50) {
-    const swaps = await this.prisma.swap.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
-
-    return swaps.map((swap) => ({
-      ...swap,
-      sellAsset: swap.sellAsset as Asset,
-      buyAsset: swap.buyAsset as Asset,
-    }));
+  async getSwapsByUser(
+    userId: string,
+    { limit = 50, cursor }: { limit?: number; cursor?: string } = {},
+  ) {
+    return this.paginateSwaps({ userId }, { limit, cursor });
   }
 
-  async getSwapsByAccountId(accountId: string, limit = 50) {
+  async getSwapsByAccountId(
+    accountId: string,
+    { limit = 50, cursor }: { limit?: number; cursor?: string } = {},
+  ) {
     const hashedAccountId = hashAccountId(accountId);
-    const swaps = await this.prisma.swap.findMany({
-      where: {
+
+    return this.paginateSwaps(
+      {
         OR: [
           { sellAccountId: hashedAccountId },
           { buyAccountId: hashedAccountId },
         ],
       },
-      orderBy: { createdAt: 'desc' },
+      { limit, cursor },
+    );
+  }
+
+  private async paginateSwaps(
+    where: Prisma.SwapWhereInput,
+    { limit, cursor }: { limit: number; cursor?: string },
+  ) {
+    const items = await this.prisma.swap.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
 
-    return swaps.map((swap) => ({
-      ...swap,
-      sellAsset: swap.sellAsset,
-      buyAsset: swap.buyAsset,
-    }));
+    const nextCursor =
+      items.length === limit ? items[items.length - 1].id : null;
+
+    return { items, nextCursor };
   }
 
   async getPendingSwaps() {

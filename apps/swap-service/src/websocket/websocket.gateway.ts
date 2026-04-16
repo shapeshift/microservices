@@ -49,7 +49,7 @@ export class WebsocketGateway
 
   @SubscribeMessage('getSwaps')
   async handleGetSwaps(
-    @MessageBody() data: { limit?: number },
+    @MessageBody() data: { limit?: number; cursor?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.userId) {
@@ -57,11 +57,11 @@ export class WebsocketGateway
     }
 
     try {
-      const swaps = await this.swapsService.getSwapsByUser(
+      const { items, nextCursor } = await this.swapsService.getSwapsByUser(
         client.userId,
-        data.limit || 50,
+        { limit: data.limit || 50, cursor: data.cursor },
       );
-      return { success: true, swaps };
+      return { success: true, swaps: items, nextCursor };
     } catch (error) {
       this.logger.error('Failed to get swaps', error);
       return { error: 'Failed to get swaps' };
