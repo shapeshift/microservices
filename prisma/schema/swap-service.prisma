@@ -1,8 +1,8 @@
 model Affiliate {
   id             String   @id @default(cuid())
-  walletAddress  String   @unique @map("wallet_address")
-  receiveAddress String?  @map("receive_address")
-  partnerCode    String?  @unique @map("partner_code")
+  walletAddress  String   @unique @map("wallet_address") @db.Citext
+  receiveAddress String?  @map("receive_address") @db.Citext
+  partnerCode    String?  @unique @map("partner_code") @db.Citext
   bps            Int      @default(60)
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -51,7 +51,7 @@ model Swap {
   isAffiliateVerified              Boolean?
   affiliateVerificationDetails     Json?
   affiliateVerifiedAt              DateTime?
-  affiliateAddress                 String?
+  affiliateAddress                 String?   @db.Citext
   affiliateBps                     String?
   origin                           String?
   affiliateFeeAssetId              String?

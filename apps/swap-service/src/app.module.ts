@@ -1,63 +1,20 @@
-import { Module } from '@nestjs/common';
-import { ScheduleModule } from '@nestjs/schedule';
-import { HttpModule } from '@nestjs/axios';
-import { PrismaService } from './prisma/prisma.service';
-import { SwapsController } from './swaps/swaps.controller';
-import { SwapsService } from './swaps/swaps.service';
-import {
-  AffiliateController,
-  PartnerController,
-} from './affiliate/affiliate.controller';
-import { AffiliateService } from './affiliate/affiliate.service';
-import { SiweAuthController } from './affiliate/siwe-auth.controller';
-import { SwapPollingService } from './polling/swap-polling.service';
-import { SwapVerificationService } from './verification/swap-verification.service';
-import { WebsocketGateway } from './websocket/websocket.gateway';
-import { ChainAdapterInitService } from './lib/chain-adapter-init.service';
-import { ChainAdapterManagerService } from './lib/chain-adapter-manager.service';
-import { EvmChainAdapterService } from './lib/chain-adapters/evm.service';
-import { UtxoChainAdapterService } from './lib/chain-adapters/utxo.service';
-import { CosmosSdkChainAdapterService } from './lib/chain-adapters/cosmos-sdk.service';
-import { SolanaChainAdapterService } from './lib/chain-adapters/solana.service';
-import { TronChainAdapterService } from './lib/chain-adapters/tron.service';
-import { SuiChainAdapterService } from './lib/chain-adapters/sui.service';
-import { NearChainAdapterService } from './lib/chain-adapters/near.service';
-import { StarknetChainAdapterService } from './lib/chain-adapters/starknet.service';
-import { TonChainAdapterService } from './lib/chain-adapters/ton.service';
-import { ConfigModule } from '@nestjs/config';
+import { Module } from '@nestjs/common'
+import { ConfigModule } from '@nestjs/config'
+import { ScheduleModule } from '@nestjs/schedule'
+
+import { AffiliateModule } from './affiliate/affiliate.module'
+import { ChainAdaptersModule } from './lib/chain-adapters.module'
+import { PrismaModule } from './prisma/prisma.module'
+import { SwapsModule } from './swaps/swaps.module'
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ envFilePath: ['.env'] }),
     ScheduleModule.forRoot(),
-    HttpModule,
-    ConfigModule.forRoot({
-      envFilePath: ['.env', '../../.env'],
-    }),
-  ],
-  controllers: [
-    SwapsController,
-    AffiliateController,
-    PartnerController,
-    SiweAuthController,
-  ],
-  providers: [
-    PrismaService,
-    SwapsService,
-    AffiliateService,
-    SwapPollingService,
-    SwapVerificationService,
-    WebsocketGateway,
-    ChainAdapterInitService,
-    ChainAdapterManagerService,
-    EvmChainAdapterService,
-    UtxoChainAdapterService,
-    CosmosSdkChainAdapterService,
-    SolanaChainAdapterService,
-    TronChainAdapterService,
-    SuiChainAdapterService,
-    NearChainAdapterService,
-    StarknetChainAdapterService,
-    TonChainAdapterService,
+    AffiliateModule,
+    ChainAdaptersModule,
+    PrismaModule,
+    SwapsModule,
   ],
 })
 export class AppModule {}

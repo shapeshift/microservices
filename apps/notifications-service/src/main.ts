@@ -1,30 +1,27 @@
-import { NestFactory } from '@nestjs/core';
-import type { Response } from 'express';
-import { AppModule } from './app.module';
+import { NestFactory } from '@nestjs/core'
+import type { Response } from 'express'
+
+import { AppModule } from './app.module'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule)
 
   // Enable CORS
   app.enableCors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
-      /^http:\/\/(\w+\.)?localhost(:\d+)?$/,
-      /\.shapeshift\.com$/,
-    ],
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || [/^http:\/\/(\w+\.)?localhost(:\d+)?$/, /\.shapeshift\.com$/],
     credentials: true,
-  });
+  })
 
   app.getHttpAdapter().get('/health', (_, res: Response) => {
-    res.status(200).json({ status: 'ok' });
-  });
+    res.status(200).json({ status: 'ok' })
+  })
 
-  app.enableShutdownHooks();
+  app.enableShutdownHooks()
 
-  const port =
-    process.env.NOTIFICATIONS_SERVICE_PORT || process.env.PORT || 3003;
-  await app.listen(port);
+  const port = process.env.NOTIFICATIONS_SERVICE_PORT || process.env.PORT || 3003
+  await app.listen(port)
 
-  console.log(`Notifications service is running on: http://localhost:${port}`);
+  console.log(`Notifications service is running on: http://localhost:${port}`)
 }
 
-void bootstrap();
+void bootstrap()

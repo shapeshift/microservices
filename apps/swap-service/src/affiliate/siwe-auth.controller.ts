@@ -1,73 +1,69 @@
-import {
-  Controller,
-  Post,
-  Body,
-  BadRequestException,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { SiweMessage } from 'siwe';
-import * as jwt from 'jsonwebtoken';
-import * as crypto from 'crypto';
+import { BadRequestException, Body, Controller, Post, UnauthorizedException } from '@nestjs/common'
+import * as crypto from 'crypto'
+import * as jwt from 'jsonwebtoken'
+import { SiweMessage } from 'siwe'
 
-const JWT_SECRET = process.env.SIWE_JWT_SECRET || 'affiliate-siwe-secret-dev';
-const NONCE_EXPIRY_MS = 5 * 60 * 1000;
+const NONCE_EXPIRY_MS = 5 * 60 * 1000
 
-const nonceStore = new Map<string, { createdAt: number }>();
+const nonceStore = new Map<string, { createdAt: number }>()
 
 setInterval(() => {
-  const now = Date.now();
+  const now = Date.now()
   for (const [nonce, data] of nonceStore.entries()) {
     if (now - data.createdAt > NONCE_EXPIRY_MS) {
-      nonceStore.delete(nonce);
+      nonceStore.delete(nonce)
     }
   }
-}, 60_000);
+}, 60_000)
 
 @Controller('v1/auth/siwe')
 export class SiweAuthController {
+  private readonly jwtSecret: string
+
+  constructor() {
+    const secret = process.env.SIWE_JWT_SECRET
+    if (!secret) throw new Error('SIWE_JWT_SECRET is required')
+    this.jwtSecret = secret
+  }
+
   @Post('nonce')
   generateNonce(): { nonce: string } {
-    const nonce = crypto.randomBytes(16).toString('hex');
-    nonceStore.set(nonce, { createdAt: Date.now() });
-    return { nonce };
+    const nonce = crypto.randomBytes(16).toString('hex')
+    nonceStore.set(nonce, { createdAt: Date.now() })
+    return { nonce }
   }
 
   @Post('verify')
-  async verify(
-    @Body() body: { message: string; signature: string },
-  ): Promise<{ token: string; address: string }> {
-    if (!body.message || !body.signature) {
-      throw new BadRequestException('message and signature are required');
-    }
+  async verify(@Body() body: { message: string; signature: string }): Promise<{ token: string; address: string }> {
+    if (!body.message || !body.signature) throw new BadRequestException('message and signature are required')
 
-    let siweMessage: SiweMessage;
-    try {
-      siweMessage = new SiweMessage(body.message);
-    } catch {
-      throw new BadRequestException('Invalid SIWE message format');
-    }
+    const siweMessage = (() => {
+      try {
+        return new SiweMessage(body.message)
+      } catch {
+        throw new BadRequestException('Invalid SIWE message format')
+      }
+    })()
 
-    const nonceData = nonceStore.get(siweMessage.nonce);
-    if (!nonceData) {
-      throw new UnauthorizedException('Invalid or expired nonce');
-    }
+    const nonceData = nonceStore.get(siweMessage.nonce)
+    if (!nonceData) throw new UnauthorizedException('Invalid or expired nonce')
 
     if (Date.now() - nonceData.createdAt > NONCE_EXPIRY_MS) {
-      nonceStore.delete(siweMessage.nonce);
-      throw new UnauthorizedException('Nonce has expired');
+      nonceStore.delete(siweMessage.nonce)
+      throw new UnauthorizedException('Nonce has expired')
     }
 
     try {
-      await siweMessage.verify({ signature: body.signature });
+      await siweMessage.verify({ signature: body.signature })
     } catch {
-      throw new UnauthorizedException('Invalid signature');
+      throw new UnauthorizedException('Invalid signature')
     }
 
-    nonceStore.delete(siweMessage.nonce);
+    nonceStore.delete(siweMessage.nonce)
 
-    const address = siweMessage.address.toLowerCase();
-    const token = jwt.sign({ address }, JWT_SECRET, { expiresIn: '24h' });
+    const address = siweMessage.address.toLowerCase()
+    const token = jwt.sign({ address }, this.jwtSecret, { expiresIn: '24h' })
 
-    return { token, address };
+    return { token, address }
   }
 }

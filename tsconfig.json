@@ -12,11 +12,6 @@
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false
   },
-  "include": [
-    "apps/**/*",
-    "packages/**/*",
-    "eslint.config.ts",
-    "prisma.config.ts"
-  ],
+  "include": ["apps/**/*", "packages/**/*", "eslint.config.ts", "prisma.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

@@ -1,28 +1,27 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Put,
-  Delete,
-  Param,
   Body,
-  Query,
-  NotFoundException,
-  ForbiddenException,
+  Controller,
   DefaultValuePipe,
-  ParseIntPipe,
+  Delete,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Param,
   ParseDatePipe,
-} from '@nestjs/common';
-import { SwapsService } from './swaps.service';
-import { SwapVerificationService } from '../verification/swap-verification.service';
-import type { Asset } from '@shapeshiftoss/types';
-import type {
-  CreateSwapDto,
-  UpdateSwapStatusDto,
-  VerifySwapAffiliateDto,
-} from '@shapeshift/shared-types';
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common'
 
-const OptionalDatePipe = new ParseDatePipe({ optional: true });
+import type { CreateSwapDto, UpdateSwapStatusDto, VerifySwapAffiliateDto } from '@shapeshift/shared-types'
+import type { Asset } from '@shapeshiftoss/types'
+
+import { SwapVerificationService } from '../verification/swap-verification.service'
+
+import { SwapsService } from './swaps.service'
+
+const OptionalDatePipe = new ParseDatePipe({ optional: true })
 
 @Controller('swaps')
 export class SwapsController {
@@ -33,18 +32,12 @@ export class SwapsController {
 
   @Post()
   async createSwap(@Body() data: CreateSwapDto) {
-    return this.swapsService.createSwap(data);
+    return this.swapsService.createSwap(data)
   }
 
   @Put(':swapId/status')
-  async updateSwapStatus(
-    @Param('swapId') swapId: string,
-    @Body() data: Omit<UpdateSwapStatusDto, 'swapId'>,
-  ) {
-    return this.swapsService.updateSwapStatus({
-      swapId,
-      ...data,
-    });
+  async updateSwapStatus(@Param('swapId') swapId: string, @Body() data: Omit<UpdateSwapStatusDto, 'swapId'>) {
+    return this.swapsService.updateSwapStatus({ swapId, ...data })
   }
 
   @Get('user/:userId')
@@ -53,7 +46,7 @@ export class SwapsController {
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
   ) {
-    return this.swapsService.getSwapsByUser(userId, { limit, cursor });
+    return this.swapsService.getSwapsByUser(userId, { limit, cursor })
   }
 
   @Get('account/:accountId')
@@ -62,12 +55,12 @@ export class SwapsController {
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
   ) {
-    return this.swapsService.getSwapsByAccountId(accountId, { limit, cursor });
+    return this.swapsService.getSwapsByAccountId(accountId, { limit, cursor })
   }
 
   @Get('pending')
   async getPendingSwaps() {
-    return this.swapsService.getPendingSwaps();
+    return this.swapsService.getPendingSwaps()
   }
 
   @Get('referral-fees/:referralCode')
@@ -76,11 +69,7 @@ export class SwapsController {
     @Query('startDate', OptionalDatePipe) startDate?: Date,
     @Query('endDate', OptionalDatePipe) endDate?: Date,
   ) {
-    return this.swapsService.calculateReferralFees(
-      referralCode,
-      startDate,
-      endDate,
-    );
+    return this.swapsService.calculateReferralFees(referralCode, startDate, endDate)
   }
 
   @Get('affiliate-fees/:affiliateAddress')
@@ -89,42 +78,26 @@ export class SwapsController {
     @Query('startDate', OptionalDatePipe) startDate?: Date,
     @Query('endDate', OptionalDatePipe) endDate?: Date,
   ) {
-    return this.swapsService.calculateAffiliateFees(
-      affiliateAddress,
-      startDate,
-      endDate,
-    );
+    return this.swapsService.calculateAffiliateFees(affiliateAddress, startDate, endDate)
   }
 
   @Get(':swapId')
   async getSwap(@Param('swapId') swapId: string) {
-    const swap = await this.swapsService.findSwapBySwapId(swapId);
-
-    if (!swap) {
-      throw new NotFoundException(`Swap ${swapId} not found`);
-    }
-
-    return swap;
+    const swap = await this.swapsService.findSwapBySwapId(swapId)
+    if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
+    return swap
   }
 
   @Delete('test-cleanup')
   async cleanupTestSwaps() {
-    if (process.env.NODE_ENV === 'production') {
-      throw new ForbiddenException('test-cleanup is disabled in production');
-    }
-    return this.swapsService.cleanupTestSwaps();
+    if (process.env.NODE_ENV === 'production') throw new ForbiddenException('test-cleanup is disabled in production')
+    return this.swapsService.cleanupTestSwaps()
   }
 
   @Post(':swapId/verify-affiliate')
-  async verifySwapAffiliate(
-    @Param('swapId') swapId: string,
-    @Body() data: Omit<VerifySwapAffiliateDto, 'swapId'>,
-  ) {
-    const swap = await this.swapsService.findSwapBySwapId(swapId);
-
-    if (!swap) {
-      throw new NotFoundException(`Swap ${swapId} not found`);
-    }
+  async verifySwapAffiliate(@Param('swapId') swapId: string, @Body() data: Omit<VerifySwapAffiliateDto, 'swapId'>) {
+    const swap = await this.swapsService.findSwapBySwapId(swapId)
+    if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
 
     return this.swapVerificationService.verifySwapAffiliate(
       swapId,
@@ -132,6 +105,6 @@ export class SwapsController {
       (swap.sellAsset as Asset).chainId,
       data.txHash || swap.sellTxHash || undefined,
       swap.metadata as Record<string, any>,
-    );
+    )
   }
 }

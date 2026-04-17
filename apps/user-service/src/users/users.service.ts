@@ -1,18 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { ReferralService } from '../referral/referral.service';
-import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils';
-import {
-  CreateUserDto,
-  AddAccountIdDto,
-  RegisterDeviceDto,
-  DeviceType,
-} from '@shapeshift/shared-types';
-import { User, UserAccount, Device } from '@prisma/client';
+import { Injectable, Logger } from '@nestjs/common'
+import { Device, User, UserAccount } from '@prisma/client'
+
+import { AddAccountIdDto, CreateUserDto, DeviceType, RegisterDeviceDto } from '@shapeshift/shared-types'
+import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils'
+
+import { PrismaService } from '../prisma/prisma.service'
+import { ReferralService } from '../referral/referral.service'
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name);
+  private readonly logger = new Logger(UsersService.name)
 
   constructor(
     private prisma: PrismaService,
@@ -22,9 +19,9 @@ export class UsersService {
   // Type assertion helpers for Prisma results
   private assertDeviceType(deviceType: string): DeviceType {
     if (deviceType === 'MOBILE' || deviceType === 'WEB') {
-      return deviceType;
+      return deviceType
     }
-    throw new Error(`Invalid device type: ${deviceType}`);
+    throw new Error(`Invalid device type: ${deviceType}`)
   }
 
   private async findUserByHashedAccountId(hashedAccountId: string) {
@@ -40,32 +37,28 @@ export class UsersService {
         userAccounts: true,
         devices: true,
       },
-    });
-    return user;
+    })
+    return user
   }
 
   async createUser(data: CreateUserDto): Promise<User> {
     try {
-      const hashedAccountIds = data.accountIds.map((id) => hashAccountId(id));
+      const hashedAccountIds = data.accountIds.map((id) => hashAccountId(id))
 
       for (const hashedAccountId of hashedAccountIds) {
-        const existingUser =
-          await this.findUserByHashedAccountId(hashedAccountId);
+        const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
         if (existingUser) {
-          this.logger.log(
-            `User already exists with account ID: ${existingUser.id}`,
-          );
+          this.logger.log(`User already exists with account ID: ${existingUser.id}`)
 
           const newAccountIds = hashedAccountIds.filter(
-            (id) =>
-              !existingUser.userAccounts.some((ua) => ua.accountId === id),
-          );
+            (id) => !existingUser.userAccounts.some((ua) => ua.accountId === id),
+          )
 
           if (newAccountIds.length > 0) {
-            await this.addHashedAccountIds(existingUser.id, newAccountIds);
+            await this.addHashedAccountIds(existingUser.id, newAccountIds)
           }
 
-          return this.getUserById(existingUser.id);
+          return this.getUserById(existingUser.id)
         }
       }
 
@@ -77,41 +70,33 @@ export class UsersService {
             })),
           },
         },
-      });
+      })
 
-      this.logger.log(
-        `Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`,
-      );
-      return this.getUserById(user.id);
+      this.logger.log(`Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`)
+      return this.getUserById(user.id)
     } catch (error) {
-      this.logger.error('Failed to create user', error);
-      throw error;
+      this.logger.error('Failed to create user', error)
+      throw error
     }
   }
 
-  async addAccountIds(
-    userId: string,
-    accountIds: string[],
-  ): Promise<UserAccount[]> {
+  async addAccountIds(userId: string, accountIds: string[]): Promise<UserAccount[]> {
     try {
       const hashedAccountIds = accountIds.map((id) => {
         if (!isValidAccountId(id)) {
-          throw new Error('Invalid account ID');
+          throw new Error('Invalid account ID')
         }
-        return hashAccountId(id);
-      });
+        return hashAccountId(id)
+      })
 
-      return this.addHashedAccountIds(userId, hashedAccountIds);
+      return this.addHashedAccountIds(userId, hashedAccountIds)
     } catch (error) {
-      this.logger.error('Failed to add account IDs', error);
-      throw error;
+      this.logger.error('Failed to add account IDs', error)
+      throw error
     }
   }
 
-  private async addHashedAccountIds(
-    userId: string,
-    hashedAccountIds: string[],
-  ): Promise<UserAccount[]> {
+  private async addHashedAccountIds(userId: string, hashedAccountIds: string[]): Promise<UserAccount[]> {
     try {
       const userAccounts = await Promise.all(
         hashedAccountIds.map((hashedAccountId) =>
@@ -129,32 +114,27 @@ export class UsersService {
             },
           }),
         ),
-      );
+      )
 
-      this.logger.log(
-        `Added ${userAccounts.length} account IDs for user ${userId}`,
-      );
-      return userAccounts;
+      this.logger.log(`Added ${userAccounts.length} account IDs for user ${userId}`)
+      return userAccounts
     } catch (error) {
-      this.logger.error('Failed to add hashed account IDs', error);
-      throw error;
+      this.logger.error('Failed to add hashed account IDs', error)
+      throw error
     }
   }
 
   async addAccountId(data: AddAccountIdDto): Promise<UserAccount> {
     try {
       if (!isValidAccountId(data.accountId)) {
-        throw new Error('Invalid account ID');
+        throw new Error('Invalid account ID')
       }
 
-      const hashedAccountId = hashAccountId(data.accountId);
+      const hashedAccountId = hashAccountId(data.accountId)
 
-      const existingUser =
-        await this.findUserByHashedAccountId(hashedAccountId);
+      const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
       if (existingUser && existingUser.id !== data.userId) {
-        throw new Error(
-          `Account ID already belongs to user ${existingUser.id}`,
-        );
+        throw new Error(`Account ID already belongs to user ${existingUser.id}`)
       }
 
       const userAccount = await this.prisma.userAccount.upsert({
@@ -169,13 +149,13 @@ export class UsersService {
           userId: data.userId,
           accountId: hashedAccountId,
         },
-      });
+      })
 
-      this.logger.log(`Added account ID for user ${data.userId}`);
-      return userAccount;
+      this.logger.log(`Added account ID for user ${data.userId}`)
+      return userAccount
     } catch (error) {
-      this.logger.error('Failed to add account ID', error);
-      throw error;
+      this.logger.error('Failed to add account ID', error)
+      throw error
     }
   }
 
@@ -186,16 +166,16 @@ export class UsersService {
         userAccounts: true,
         devices: true,
       },
-    });
-    return user;
+    })
+    return user
   }
 
   async getUserByAccountId(accountId: string): Promise<User | null> {
     if (!isValidAccountId(accountId)) {
-      throw new Error('Invalid account ID');
+      throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashAccountId(accountId);
+    const hashedAccountId = hashAccountId(accountId)
 
     const user = await this.prisma.user.findFirst({
       where: {
@@ -209,8 +189,8 @@ export class UsersService {
         userAccounts: true,
         devices: true,
       },
-    });
-    return user;
+    })
+    return user
   }
 
   async getAllUsers(limit = 50): Promise<User[]> {
@@ -223,74 +203,68 @@ export class UsersService {
         },
       },
       orderBy: { createdAt: 'desc' },
-    });
-    return users;
+    })
+    return users
   }
 
   async userExistsWithAccountId(accountId: string): Promise<boolean> {
     if (!isValidAccountId(accountId)) {
-      return false;
+      return false
     }
 
-    const hashedAccountId = hashAccountId(accountId);
-    const user = await this.findUserByHashedAccountId(hashedAccountId);
-    return !!user;
+    const hashedAccountId = hashAccountId(accountId)
+    const user = await this.findUserByHashedAccountId(hashedAccountId)
+    return !!user
   }
 
   async getOrCreateUserByAccountId(accountId: string): Promise<User> {
     if (!isValidAccountId(accountId)) {
-      throw new Error('Invalid account ID');
+      throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashAccountId(accountId);
-    const existingUser = await this.findUserByHashedAccountId(hashedAccountId);
+    const hashedAccountId = hashAccountId(accountId)
+    const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
 
     if (existingUser) {
-      this.logger.log(`Found existing user: ${existingUser.id} for account ID`);
-      return existingUser;
+      this.logger.log(`Found existing user: ${existingUser.id} for account ID`)
+      return existingUser
     }
 
     return this.createUser({
       accountIds: [accountId],
-    });
+    })
   }
 
-  async getOrCreateUserByAccountIds(
-    accountIds: string[],
-    referralCode?: string,
-  ): Promise<User> {
+  async getOrCreateUserByAccountIds(accountIds: string[], referralCode?: string): Promise<User> {
     this.logger.log(
       `getOrCreateUserByAccountIds called with accountIds: ${JSON.stringify(accountIds)}, referralCode: ${referralCode}`,
-    );
+    )
 
     if (!accountIds || accountIds.length === 0) {
-      throw new Error('At least one account ID is required');
+      throw new Error('At least one account ID is required')
     }
 
     // Validate all account IDs
     accountIds.forEach((id) => {
       if (!isValidAccountId(id)) {
-        throw new Error(`Invalid account ID: ${id}`);
+        throw new Error(`Invalid account ID: ${id}`)
       }
-    });
+    })
 
-    const hashedAccountIds = accountIds.map((id) => hashAccountId(id));
-    this.logger.log(`Hashed account IDs: ${JSON.stringify(hashedAccountIds)}`);
+    const hashedAccountIds = accountIds.map((id) => hashAccountId(id))
+    this.logger.log(`Hashed account IDs: ${JSON.stringify(hashedAccountIds)}`)
 
     for (const hashedAccountId of hashedAccountIds) {
-      const existingUser =
-        await this.findUserByHashedAccountId(hashedAccountId);
+      const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
       if (existingUser) {
-        this.logger.log(
-          `Found existing user: ${existingUser.id} for account ID`,
-        );
+        this.logger.log(`Found existing user: ${existingUser.id} for account ID`)
 
         const newAccountIds = hashedAccountIds.filter(
           (id) => !existingUser.userAccounts.some((ua) => ua.accountId === id),
-        );
+        )
 
         if (newAccountIds.length > 0) {
-          await this.addHashedAccountIds(existingUser.id, newAccountIds);
+          await this.addHashedAccountIds(existingUser.id, newAccountIds)
         }
 
         // Try to apply referral code for existing user if provided
@@ -300,27 +274,23 @@ export class UsersService {
             await this.referralService.useReferralCode({
               code: referralCode,
               refereeAddress: hashedAccountIds[0],
-            });
-            this.logger.log(
-              `Successfully applied referral code ${referralCode} for existing user ${existingUser.id}`,
-            );
+            })
+            this.logger.log(`Successfully applied referral code ${referralCode} for existing user ${existingUser.id}`)
           } catch (error) {
             // Log but don't fail - user might already be referred or code might be invalid
             this.logger.log(
               `Could not apply referral code ${referralCode} for existing user ${existingUser.id}: ${error instanceof Error ? error.message : String(error)}`,
-            );
+            )
           }
         }
 
-        const result = await this.getUserById(existingUser.id);
-        this.logger.log(`Returning existing user: ${result?.id}`);
-        return result;
+        const result = await this.getUserById(existingUser.id)
+        this.logger.log(`Returning existing user: ${result?.id}`)
+        return result
       }
     }
 
-    this.logger.log(
-      `No existing user found, creating new user with ${hashedAccountIds.length} account IDs`,
-    );
+    this.logger.log(`No existing user found, creating new user with ${hashedAccountIds.length} account IDs`)
     const user = await this.prisma.user.create({
       data: {
         userAccounts: {
@@ -329,11 +299,9 @@ export class UsersService {
           })),
         },
       },
-    });
+    })
 
-    this.logger.log(
-      `Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`,
-    );
+    this.logger.log(`Created new user: ${user.id} with ${hashedAccountIds.length} account IDs`)
 
     // Handle referral code if provided
     if (referralCode) {
@@ -342,30 +310,25 @@ export class UsersService {
         await this.referralService.useReferralCode({
           code: referralCode,
           refereeAddress: hashedAccountIds[0],
-        });
-        this.logger.log(
-          `Successfully applied referral code ${referralCode} for new user ${user.id}`,
-        );
+        })
+        this.logger.log(`Successfully applied referral code ${referralCode} for new user ${user.id}`)
       } catch (error) {
-        this.logger.warn(
-          `Failed to apply referral code ${referralCode} for user ${user.id}:`,
-          error,
-        );
+        this.logger.warn(`Failed to apply referral code ${referralCode} for user ${user.id}:`, error)
         // Don't fail user creation if referral code application fails
       }
     }
 
-    const result = await this.getUserById(user.id);
-    this.logger.log(`Returning new user: ${result?.id}`);
-    return result;
+    const result = await this.getUserById(user.id)
+    this.logger.log(`Returning new user: ${result?.id}`)
+    return result
   }
 
   async registerDevice(data: RegisterDeviceDto): Promise<Device> {
     try {
       // Check if user exists
-      const user = await this.getUserById(data.userId);
+      const user = await this.getUserById(data.userId)
       if (!user) {
-        throw new Error('User not found');
+        throw new Error('User not found')
       }
 
       const device = await this.prisma.device.upsert({
@@ -382,15 +345,13 @@ export class UsersService {
           deviceType: data.deviceType,
           userId: data.userId,
         },
-      });
+      })
 
-      this.logger.log(
-        `Device registered: ${data.deviceToken} for user ${data.userId} (${data.deviceType})`,
-      );
-      return device;
+      this.logger.log(`Device registered: ${data.deviceToken} for user ${data.userId} (${data.deviceType})`)
+      return device
     } catch (error) {
-      this.logger.error('Failed to register device', error);
-      throw error;
+      this.logger.error('Failed to register device', error)
+      throw error
     }
   }
 
@@ -400,14 +361,11 @@ export class UsersService {
         userId,
         isActive: true,
       },
-    });
-    return devices;
+    })
+    return devices
   }
 
-  async removeDevice(
-    userId: string,
-    deviceId: string,
-  ): Promise<{ success: boolean }> {
+  async removeDevice(userId: string, deviceId: string): Promise<{ success: boolean }> {
     try {
       await this.prisma.device.updateMany({
         where: {
@@ -417,13 +375,13 @@ export class UsersService {
         data: {
           isActive: false,
         },
-      });
+      })
 
-      this.logger.log(`Removed device ${deviceId} for user ${userId}`);
-      return { success: true };
+      this.logger.log(`Removed device ${deviceId} for user ${userId}`)
+      return { success: true }
     } catch (error) {
-      this.logger.error('Failed to remove device', error);
-      throw error;
+      this.logger.error('Failed to remove device', error)
+      throw error
     }
   }
 }

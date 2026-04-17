@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { UsersController } from './users/users.controller';
-import { UsersService } from './users/users.service';
-import { ReferralController } from './referral/referral.controller';
-import { ReferralService } from './referral/referral.service';
-import { PrismaService } from './prisma/prisma.service';
+import { Module } from '@nestjs/common'
+import { ConfigModule } from '@nestjs/config'
+
+import { PrismaService } from './prisma/prisma.service'
+import { ReferralController } from './referral/referral.controller'
+import { ReferralService } from './referral/referral.service'
+import { UsersController } from './users/users.controller'
+import { UsersService } from './users/users.service'
 
 @Module({
   imports: [

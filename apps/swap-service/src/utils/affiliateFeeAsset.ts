@@ -1,6 +1,6 @@
-import type { Asset } from '@shapeshiftoss/types';
+import type { Asset } from '@shapeshiftoss/types'
 
-type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | 'fixed_base';
+type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | 'fixed_base'
 
 const SWAPPER_FEE_STRATEGY: Record<string, FeeAssetStrategy> = {
   Across: 'buy_asset',
@@ -18,30 +18,24 @@ const SWAPPER_FEE_STRATEGY: Record<string, FeeAssetStrategy> = {
   'Sun.io': 'buy_asset',
   THORChain: 'sell_asset',
   '0x': 'buy_asset',
-};
+}
 
-export function resolveAffiliateFeeAssetId(
-  swapperName: string,
-  sellAsset: Asset,
-  buyAsset: Asset,
-): string | null {
-  const strategy = SWAPPER_FEE_STRATEGY[swapperName];
-  if (!strategy) return null;
+export function resolveAffiliateFeeAssetId(swapperName: string, sellAsset: Asset, buyAsset: Asset): string | null {
+  const strategy = SWAPPER_FEE_STRATEGY[swapperName]
+  if (!strategy) return null
 
   switch (strategy) {
     case 'buy_asset':
-      return buyAsset.assetId;
+      return buyAsset.assetId
     case 'sell_asset':
-      return sellAsset.assetId;
+      return sellAsset.assetId
     case 'fixed_base':
-      return 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
+      return 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
     default:
-      return null;
+      return null
   }
 }
 
-export function getSwapperFeeStrategy(
-  swapperName: string,
-): FeeAssetStrategy | null {
-  return SWAPPER_FEE_STRATEGY[swapperName] ?? null;
+export function getSwapperFeeStrategy(swapperName: string): FeeAssetStrategy | null {
+  return SWAPPER_FEE_STRATEGY[swapperName] ?? null
 }
