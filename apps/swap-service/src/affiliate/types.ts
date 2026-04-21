@@ -9,14 +9,18 @@ export interface AffiliateSwapItem {
   status: string
   sellAsset: unknown
   buyAsset: unknown
-  sellAmountCryptoPrecision: string
-  expectedBuyAmountCryptoPrecision: string
-  actualBuyAmountCryptoPrecision: string | null
+  sellAmountCryptoBaseUnit: string
+  expectedBuyAmountCryptoBaseUnit: string
+  actualBuyAmountCryptoBaseUnit: string | null
   sellAmountUsd: string | null
-  affiliateBps: string | null
+  buyAssetUsd: string | null
+  affiliateBps: number | null
+  shapeshiftBps: number
   affiliateFeeUsd: string | null
   swapperName: string
   sellTxHash: string | null
+  buyTxHash: string | null
+  isAffiliateVerified: boolean | null
   createdAt: Date
 }
 

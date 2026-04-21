@@ -80,6 +80,7 @@ export class AffiliateService {
     const where: Prisma.SwapWhereInput = {
       affiliateAddress,
       status: 'SUCCESS',
+      isAffiliateVerified: true,
       ...(startDate && endDate && { createdAt: { gte: startDate, lte: endDate } }),
     }
 
@@ -91,7 +92,7 @@ export class AffiliateService {
 
     for (const swap of swaps) {
       const volumeUsd = parseFloat(swap.sellAmountUsd || '0')
-      const bps = parseInt(swap.affiliateBps || '0', 10)
+      const bps = swap.affiliateBps ?? 0
 
       totalVolumeUsd += volumeUsd
       totalFeesEarnedUsd += volumeUsd * (bps / 10000)
@@ -117,25 +118,27 @@ export class AffiliateService {
         ...(startDate && endDate && { createdAt: { gte: startDate, lte: endDate } }),
       },
       select: {
-        id: true,
         swapId: true,
         status: true,
         sellAsset: true,
         buyAsset: true,
-        sellAmountCryptoPrecision: true,
-        expectedBuyAmountCryptoPrecision: true,
-        actualBuyAmountCryptoPrecision: true,
+        sellAmountCryptoBaseUnit: true,
+        expectedBuyAmountCryptoBaseUnit: true,
+        actualBuyAmountCryptoBaseUnit: true,
         sellAmountUsd: true,
+        buyAssetUsd: true,
         affiliateBps: true,
+        shapeshiftBps: true,
         swapperName: true,
         sellTxHash: true,
+        buyTxHash: true,
+        isAffiliateVerified: true,
         createdAt: true,
       },
     })
 
     return {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      swaps: items.map(({ id: _id, ...swap }) => ({
+      swaps: items.map((swap) => ({
         ...swap,
         affiliateFeeUsd: calculateAffiliateFeeUsd(swap.sellAmountUsd, swap.affiliateBps),
       })),

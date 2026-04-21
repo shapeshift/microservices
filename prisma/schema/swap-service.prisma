@@ -14,49 +14,39 @@ model Affiliate {
 }
 
 model Swap {
-  id                               String    @id @default(cuid())
-  swapId                           String    @unique
-  sellAsset                        Json
-  buyAsset                         Json
-  sellAmountCryptoBaseUnit         String
-  expectedBuyAmountCryptoBaseUnit  String
-  sellAmountCryptoPrecision        String
-  expectedBuyAmountCryptoPrecision String
-  actualBuyAmountCryptoPrecision   String?
-  status                           String    @default("PENDING")
-  source                           String
-  swapperName                      String
-  sellAccountId                    String
-  buyAccountId                     String?
-  receiveAddress                   String?
-  sellTxHash                       String?
-  buyTxHash                        String?
-  txLink                           String?
-  statusMessage                    String?
-  isStreaming                      Boolean   @default(false)
-  estimatedCompletion              DateTime?
-  createdAt                        DateTime  @default(now())
-  updatedAt                        DateTime  @updatedAt
-  metadata                         Json
-  chainflipSwapId                  Int?
-  relayTransactionMetadata         Json?
-  relayerExplorerTxLink            String?
-  relayerTxHash                    String?
-  stepIndex                        Int       @default(0)
-  streamingSwapMetadata            Json?
-  userId                           String
-  sellAmountUsd                    String?
-  referralCode                     String?
-  isReferralEligible               Boolean   @default(true)
-  isAffiliateVerified              Boolean?
-  affiliateVerificationDetails     Json?
-  affiliateVerifiedAt              DateTime?
-  affiliateAddress                 String?   @db.Citext
-  affiliateBps                     String?
-  origin                           String?
-  affiliateFeeAssetId              String?
-  affiliateFeeAmountCryptoBaseUnit String?
-  shapeshiftBps                    Int
+  swapId                                 String   @id
+  sellAsset                              Json
+  buyAsset                               Json
+  sellAmountCryptoBaseUnit               String
+  expectedBuyAmountCryptoBaseUnit        String
+  actualBuyAmountCryptoBaseUnit          String?
+  status                                 String   @default("PENDING")
+  source                                 String
+  swapperName                            String
+  sellAccountId                          String
+  buyAccountId                           String?
+  receiveAddress                         String?
+  sellTxHash                             String?
+  buyTxHash                              String?
+  txLink                                 String?
+  statusMessage                          String?
+  isStreaming                            Boolean  @default(false)
+  createdAt                              DateTime @default(now())
+  updatedAt                              DateTime @updatedAt
+  metadata                               Json
+  userId                                 String
+  referralCode                           String?
+  sellAmountUsd                          String?
+  buyAssetUsd                            String?
+  affiliateAssetUsd                      String?
+  isAffiliateVerified                    Boolean?
+  affiliateVerificationDetails           Json?
+  affiliateAddress                       String?  @db.Citext
+  affiliateBps                           Int?
+  origin                                 String?
+  affiliateFeeAssetId                    String?
+  actualAffiliateFeeAmountCryptoBaseUnit String?
+  shapeshiftBps                          Int
 
   @@index([referralCode])
   @@index([affiliateAddress])

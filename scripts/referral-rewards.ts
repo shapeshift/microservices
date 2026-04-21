@@ -1,7 +1,7 @@
-import { PrismaClient as SwapPrismaClient } from '../apps/swap-service/node_modules/.prisma/client'
-import { PrismaClient as UserPrismaClient } from '../apps/user-service/node_modules/.prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
+
+import { PrismaClient } from '../node_modules/.prisma/client'
 
 type ReferralRewardDistribution = {
   id: string
@@ -32,8 +32,7 @@ type SafeTransactionData = {
   operation: number[]
 }
 
-const swapPrisma = new SwapPrismaClient()
-const userPrisma = new UserPrismaClient()
+const prisma = new PrismaClient()
 
 const RFOX_STAKING_CONTRACT = process.env.RFOX_STAKING_CONTRACT || '0x...'
 
@@ -50,7 +49,7 @@ async function calculateReferralRewards(
   console.log(`Calculating referral rewards from ${startDate.toISOString()} to ${endDate.toISOString()}`)
   console.log(`Total FOX to distribute: ${totalFoxToDistribute}`)
 
-  const swaps = await swapPrisma.swap.findMany({
+  const swaps = await prisma.swap.findMany({
     where: {
       createdAt: {
         gte: startDate,
@@ -59,7 +58,6 @@ async function calculateReferralRewards(
       referralCode: {
         not: null,
       },
-      isReferralEligible: true,
       sellAmountUsd: {
         not: null,
       },
@@ -103,7 +101,7 @@ async function calculateReferralRewards(
   }
 
   const referralCodes = Array.from(referralStats.keys())
-  const referralCodeData = await userPrisma.referralCode.findMany({
+  const referralCodeData = await prisma.referralCode.findMany({
     where: {
       code: {
         in: referralCodes,
@@ -284,8 +282,7 @@ async function main() {
     console.error('Error:', error)
     process.exit(1)
   } finally {
-    await swapPrisma.$disconnect()
-    await userPrisma.$disconnect()
+    await prisma.$disconnect()
   }
 }
 

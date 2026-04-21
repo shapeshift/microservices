@@ -17,7 +17,6 @@ The referral rewards system tracks swap volume from referred users and distribut
 
 - `Swap.referralCode`: Optional field to track which code was used for a swap
 - `Swap.sellAmountUsd`: USD value at the time of the swap
-- `Swap.isReferralEligible`: Boolean to exclude certain swaps from rewards
 
 ### API Endpoints
 
