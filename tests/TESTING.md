@@ -373,13 +373,13 @@ test-all-swappers.mjs
 
 ## Key Files
 
-| File                                                              | Purpose                               |
-| ----------------------------------------------------------------- | ------------------------------------- |
-| `tests/test-all-swappers.mjs`                                     | The test script                       |
-| `apps/swap-service/src/swaps/swaps.service.ts`                    | Swap creation + pollSwapStatus        |
-| `apps/swap-service/src/swaps/swaps.controller.ts`                 | REST endpoints                        |
-| `apps/swap-service/src/polling/swap-polling.service.ts`           | 5s cron loop                          |
-| `apps/swap-service/src/verification/swap-verification.service.ts` | All 18 affiliate verifiers            |
-| `apps/swap-service/prisma/schema.prisma`                          | Swap model (53 columns)               |
-| `packages/shared-types/src/index.ts`                              | CreateSwapDto, UpdateSwapStatusDto    |
-| `.env`                                                            | All RPC/API URLs                      |
+| File                                                              | Purpose                            |
+| ----------------------------------------------------------------- | ---------------------------------- |
+| `tests/test-all-swappers.mjs`                                     | The test script                    |
+| `apps/swap-service/src/swaps/swaps.service.ts`                    | Swap creation + pollSwapStatus     |
+| `apps/swap-service/src/swaps/swaps.controller.ts`                 | REST endpoints                     |
+| `apps/swap-service/src/polling/swap-polling.service.ts`           | 5s cron loop                       |
+| `apps/swap-service/src/verification/swap-verification.service.ts` | All 18 affiliate verifiers         |
+| `apps/swap-service/prisma/schema.prisma`                          | Swap model (53 columns)            |
+| `packages/shared-types/src/index.ts`                              | CreateSwapDto, UpdateSwapStatusDto |
+| `.env`                                                            | All RPC/API URLs                   |
