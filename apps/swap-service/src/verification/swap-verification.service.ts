@@ -4,7 +4,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { firstValueFrom } from 'rxjs'
 
 import { SwapVerificationResult } from '@shapeshift/shared-types'
-import { assertGetCowNetwork, getTreasuryAddressFromChainId, THORCHAIN_PRECISION } from '@shapeshiftoss/swapper'
+import { assertGetCowNetwork, getTreasuryAddressFromChainId, SwapperName } from '@shapeshiftoss/swapper'
 
 import {
   AcrossDepositStatusResponse,
@@ -22,7 +22,7 @@ import {
   ZrxApiResponse,
   ZrxTrade,
 } from './types'
-import { thorchainToNativePrecision } from './utils'
+import { THORCHAIN_PRECISION, thorchainToNativePrecision } from './utils'
 
 @Injectable()
 export class SwapVerificationService {
@@ -52,73 +52,53 @@ export class SwapVerificationService {
     try {
       this.logger.log(`Verifying affiliate for swap ${swapId} on protocol ${protocol}`)
 
-      switch (protocol.toLowerCase()) {
-        case 'near':
-        case 'nearintents':
-        case 'near intents':
+      const swapperName = protocol as SwapperName
+      switch (swapperName) {
+        case SwapperName.NearIntents:
           return await this.verifyNearIntents(swapId, metadata)
-
-        case 'relay': {
+        case SwapperName.Relay: {
           const relayId = (metadata?.relayTransactionMetadata as { relayId?: string } | undefined)?.relayId
           if (!relayId) {
             return {
               isVerified: false,
               hasAffiliate: false,
-              protocol: 'relay',
+              protocol: SwapperName.Relay,
               swapId,
               error: 'Missing relay transaction metadata',
             }
           }
           return await this.verifyRelay(swapId, relayId)
         }
-
-        case 'cow swap':
+        case SwapperName.CowSwap:
           return await this.verifyCowSwap(swapId, sellChainId, txHash, metadata)
-
-        case 'portals':
+        case SwapperName.Portals:
           return await this.verifyPortals(swapId, sellChainId, metadata)
-
-        case 'thorchain':
+        case SwapperName.Thorchain:
           return await this.verifyThorchain(swapId, txHash, metadata)
-
-        case 'maya':
-        case 'mayachain':
+        case SwapperName.Mayachain:
           return await this.verifyMaya(swapId, txHash, metadata)
-
-        case 'chainflip':
+        case SwapperName.Chainflip:
           return await this.verifyChainflip(swapId, metadata)
-
-        case '0x':
-        case 'zrx':
+        case SwapperName.Zrx:
           return await this.verifyZrx(swapId, txHash, metadata)
-
-        case 'bebop':
+        case SwapperName.Bebop:
           return await this.verifyBebop(swapId, txHash, metadata)
-
-        case 'arbitrum bridge':
+        case SwapperName.ArbitrumBridge:
           return await this.verifyArbitrumBridge(swapId)
-
-        case 'butterswap':
+        case SwapperName.ButterSwap:
           return await this.verifyButterSwap(swapId, txHash, metadata)
-
-        case 'cetus':
+        case SwapperName.Cetus:
           return await this.verifyCetus(swapId, txHash, metadata)
-
-        case 'sun.io':
-        case 'sunio':
+        case SwapperName.Sunio:
           return await this.verifySunio(swapId, txHash, metadata)
-
-        case 'avnu':
+        case SwapperName.Avnu:
           return await this.verifyAvnu(swapId, txHash, metadata)
-
-        case 'ston.fi':
-        case 'stonfi':
+        case SwapperName.Stonfi:
           return await this.verifyStonfi(swapId, txHash, metadata)
-
-        case 'across':
+        case SwapperName.Across:
           return await this.verifyAcross(swapId, txHash, metadata)
-
-        default:
+        case SwapperName.Test:
+        case SwapperName.Debridge:
           return {
             isVerified: false,
             hasAffiliate: false,
@@ -126,6 +106,18 @@ export class SwapVerificationService {
             swapId,
             error: `Verification not implemented for protocol: ${protocol}`,
           }
+        default: {
+          const _exhaustive: never = swapperName
+          void _exhaustive
+
+          return {
+            isVerified: false,
+            hasAffiliate: false,
+            protocol,
+            swapId,
+            error: `Verification not implemented for protocol: ${protocol}`,
+          }
+        }
       }
     } catch (error) {
       this.logger.error(`Error verifying swap ${swapId} for protocol ${protocol}:`, error)
@@ -1034,7 +1026,7 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'butterswap',
+        protocol: SwapperName.ButterSwap,
         swapId,
         error: 'Missing txHash for ButterSwap verification',
       }
