@@ -2,7 +2,12 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Prisma, Swap } from '@prisma/client'
 
 import { CreateSwapDto, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
-import { hashAccountId, NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
+import {
+  baseUnitToPrecision,
+  hashAccountId,
+  NotificationsServiceClient,
+  UserServiceClient,
+} from '@shapeshift/shared-utils'
 import { ChainId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
@@ -25,20 +30,7 @@ import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { getAssetPriceUsd } from '../utils/pricing'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-type AffiliateVerificationDetails = {
-  affiliateBps?: number
-  affiliateAddress?: string
-  verifiedSellAmountCryptoBaseUnit?: string
-  hasAffiliate?: boolean
-}
-
-export type SwapWithAssets = Omit<Swap, 'sellAsset' | 'buyAsset'> & {
-  sellAsset: Asset
-  buyAsset: Asset
-}
-
-const baseUnitToPrecision = (baseUnit: string, precision: number): string =>
-  bnOrZero(baseUnit).div(bnOrZero(10).pow(precision)).toFixed()
+import type { AffiliateVerificationDetails, PaginationOptions, SwapWithAssets, UsdPrices } from './types'
 
 @Injectable()
 export class SwapsService {
@@ -65,64 +57,24 @@ export class SwapsService {
     this.userServiceClient = new UserServiceClient()
   }
 
-  async createSwap(data: CreateSwapDto) {
+  async createSwap(data: CreateSwapDto): Promise<Swap> {
     try {
-      const referralCode = data.userId ? await this.userServiceClient.getUserReferralCode(data.userId) : null
-
-      if (referralCode) {
-        this.logger.debug(`Found referral code ${referralCode} for user ${data.userId}`)
-      }
-
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
 
-      let sellAmountUsd: string | null = null
-      let buyAssetUsd: string | null = null
-      let affiliateAssetUsd: string | null = null
-      try {
-        const needsAffiliatePrice =
-          !!affiliateFeeAssetId &&
-          affiliateFeeAssetId !== data.sellAsset.assetId &&
-          affiliateFeeAssetId !== data.buyAsset.assetId
-        const [sellPrice, buyPrice, affiliatePrice] = await Promise.all([
-          getAssetPriceUsd(data.sellAsset),
-          getAssetPriceUsd(data.buyAsset),
-          needsAffiliatePrice
-            ? getAssetPriceUsd({ assetId: affiliateFeeAssetId } as Asset)
-            : Promise.resolve<number | null>(null),
-        ])
-        if (sellPrice) {
-          sellAmountUsd = bnOrZero(data.sellAmountCryptoBaseUnit)
-            .div(bnOrZero(10).pow(data.sellAsset.precision))
-            .times(sellPrice)
-            .toFixed(2)
-        }
-        if (buyPrice) buyAssetUsd = buyPrice.toString()
-        if (affiliatePrice) affiliateAssetUsd = affiliatePrice.toString()
-      } catch (err) {
-        this.logger.warn(`Failed to fetch creation-time USD prices for swap ${data.swapId}:`, err)
-      }
+      const [referralCode, prices, affiliateAddress] = await Promise.all([
+        this.getReferralCode(data.userId),
+        this.fetchUsdPrices(data, affiliateFeeAssetId),
+        this.resolveAffiliateAddress(data),
+      ])
 
-      let affiliateAddress = data.affiliateAddress || null
-      if (!affiliateAddress && data.partnerCode) {
-        try {
-          const affiliate = await this.prisma.affiliate.findFirst({
-            where: { partnerCode: data.partnerCode },
-            select: { receiveAddress: true, walletAddress: true },
-          })
-          if (affiliate) {
-            affiliateAddress = affiliate.receiveAddress ?? affiliate.walletAddress
-          }
-        } catch (error) {
-          this.logger.warn(`Failed to resolve partner code ${data.partnerCode}:`, error)
-        }
-      }
+      if (referralCode) this.logger.debug(`Found referral code ${referralCode} for user ${data.userId}`)
 
       const swap = await this.prisma.swap.create({
         data: {
           swapId: data.swapId,
           sellAsset: data.sellAsset,
           buyAsset: data.buyAsset,
-          sellTxHash: data.sellTxHash || null,
+          sellTxHash: data.sellTxHash ?? null,
           sellAmountCryptoBaseUnit: data.sellAmountCryptoBaseUnit,
           expectedBuyAmountCryptoBaseUnit: data.expectedBuyAmountCryptoBaseUnit,
           source: data.source,
@@ -130,31 +82,82 @@ export class SwapsService {
           sellAccountId: data.sellAccountId ? hashAccountId(data.sellAccountId) : 'api',
           buyAccountId: data.buyAccountId ? hashAccountId(data.buyAccountId) : null,
           receiveAddress: data.receiveAddress,
-          isStreaming: data.isStreaming || false,
-          metadata: (data.metadata || {}) as Prisma.InputJsonValue,
-          userId: data.userId || 'api',
+          isStreaming: data.isStreaming ?? false,
+          metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
+          userId: data.userId ?? 'api',
           referralCode,
-          sellAmountUsd,
-          buyAssetUsd,
-          affiliateAssetUsd,
+          sellAmountUsd: prices.sellAmountUsd,
+          buyAssetUsd: prices.buyAssetUsd,
+          affiliateAssetUsd: prices.affiliateAssetUsd,
           affiliateAddress,
           affiliateBps: data.affiliateBps ?? null,
-          origin: data.origin || null,
+          origin: data.origin ?? null,
           shapeshiftBps: SwapsService.API_BASE_BPS,
           affiliateFeeAssetId,
         },
       })
 
       this.logger.log(
-        `Swap created: ${swap.swapId}` +
-          `${referralCode ? ` with referral code ${referralCode}` : ''}` +
-          `${data.affiliateAddress ? ` with affiliate ${data.affiliateAddress}` : ''}` +
-          `${sellAmountUsd ? ` ($${sellAmountUsd})` : ''}`,
+        [
+          `Swap created: ${swap.swapId}`,
+          referralCode && `referral ${referralCode}`,
+          affiliateAddress && `affiliate ${affiliateAddress}`,
+          prices.sellAmountUsd && `$${prices.sellAmountUsd}`,
+        ]
+          .filter(Boolean)
+          .join(' | '),
       )
+
       return swap
     } catch (error) {
       this.logger.error('Failed to create swap', error)
       throw error
+    }
+  }
+
+  private async getReferralCode(userId: string | undefined): Promise<string | null> {
+    if (!userId) return null
+    return this.userServiceClient.getUserReferralCode(userId)
+  }
+
+  private async fetchUsdPrices(data: CreateSwapDto, affiliateFeeAssetId: string | null): Promise<UsdPrices> {
+    try {
+      const [sellAssetUsd, buyAssetUsd, affiliateAssetUsd] = await Promise.all([
+        getAssetPriceUsd(data.sellAsset.assetId),
+        getAssetPriceUsd(data.buyAsset.assetId),
+        affiliateFeeAssetId ? getAssetPriceUsd(affiliateFeeAssetId) : Promise.resolve<number | null>(null),
+      ])
+
+      const sellAmountUsd = sellAssetUsd
+        ? bnOrZero(baseUnitToPrecision(data.sellAmountCryptoBaseUnit, data.sellAsset.precision))
+            .times(sellAssetUsd)
+            .toFixed(2)
+        : null
+
+      return {
+        sellAmountUsd,
+        buyAssetUsd: buyAssetUsd?.toString() ?? null,
+        affiliateAssetUsd: affiliateAssetUsd?.toString() ?? null,
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to fetch USD prices for swap ${data.swapId}:`, err)
+      return { sellAmountUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
+    }
+  }
+
+  private async resolveAffiliateAddress(data: CreateSwapDto): Promise<string | null> {
+    if (data.affiliateAddress) return data.affiliateAddress
+    if (!data.partnerCode) return null
+
+    try {
+      const affiliate = await this.prisma.affiliate.findFirst({
+        where: { partnerCode: data.partnerCode },
+        select: { receiveAddress: true, walletAddress: true },
+      })
+      return affiliate?.receiveAddress ?? affiliate?.walletAddress ?? null
+    } catch (error) {
+      this.logger.warn(`Failed to resolve affiliate address for partner code ${data.partnerCode}:`, error)
+      return null
     }
   }
 
@@ -250,22 +253,22 @@ export class SwapsService {
     }
   }
 
-  async getSwapsByUser(userId: string, { limit = 50, cursor }: { limit?: number; cursor?: string } = {}) {
-    return this.paginateSwaps({ userId }, { limit, cursor })
+  async getSwapsByUser(userId: string, options: PaginationOptions = {}) {
+    return this.paginateSwaps({ userId }, options)
   }
 
-  async getSwapsByAccountId(accountId: string, { limit = 50, cursor }: { limit?: number; cursor?: string } = {}) {
+  async getSwapsByAccountId(accountId: string, options: PaginationOptions = {}) {
     const hashedAccountId = hashAccountId(accountId)
 
     return this.paginateSwaps(
       {
         OR: [{ sellAccountId: hashedAccountId }, { buyAccountId: hashedAccountId }],
       },
-      { limit, cursor },
+      options,
     )
   }
 
-  private async paginateSwaps(where: Prisma.SwapWhereInput, { limit, cursor }: { limit: number; cursor?: string }) {
+  private async paginateSwaps(where: Prisma.SwapWhereInput, { limit = 50, cursor }: PaginationOptions) {
     const items = await this.prisma.swap.findMany({ where, ...swapCursorArgs(limit, cursor) })
 
     return { items, nextCursor: getNextCursor(items, limit) }

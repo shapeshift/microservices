@@ -10,8 +10,8 @@ import {
 } from '@nestjs/websockets'
 import { Server, Socket } from 'socket.io'
 
-import type { SwapWithAssets } from '../swaps/swaps.service'
 import { SwapsService } from '../swaps/swaps.service'
+import type { SwapWithAssets } from '../swaps/types'
 
 interface AuthenticatedSocket extends Socket {
   userId?: string

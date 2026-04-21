@@ -3,7 +3,6 @@ import axios from 'axios'
 
 import { adapters } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
-import type { Asset } from '@shapeshiftoss/types'
 
 const logger = new Logger('Pricing')
 
@@ -18,16 +17,14 @@ type CoinGeckoAssetData = {
   }
 }
 
-export async function getAssetPriceUsd(asset: Asset): Promise<number | null> {
-  const cacheKey = asset.assetId
-
-  const cached = priceCache.get(cacheKey)
+export async function getAssetPriceUsd(assetId: string): Promise<number | null> {
+  const cached = priceCache.get(assetId)
   if (cached !== undefined) return cached
 
   try {
-    const url = adapters.makeCoingeckoAssetUrl(asset.assetId)
+    const url = adapters.makeCoingeckoAssetUrl(assetId)
     if (!url) {
-      logger.warn(`No CoinGecko URL mapping for assetId: ${asset.assetId}`)
+      logger.warn(`No CoinGecko URL mapping for assetId: ${assetId}`)
       return null
     }
 
@@ -35,16 +32,16 @@ export async function getAssetPriceUsd(asset: Asset): Promise<number | null> {
 
     const price = data?.market_data?.current_price?.usd
     if (!price) {
-      logger.warn(`No price data found for ${asset.assetId} (symbol: ${asset.symbol})`)
+      logger.warn(`No price data found for ${assetId}`)
       return null
     }
 
-    priceCache.set(cacheKey, price)
-    setTimeout(() => priceCache.delete(cacheKey), CACHE_TTL_MS).unref()
+    priceCache.set(assetId, price)
+    setTimeout(() => priceCache.delete(assetId), CACHE_TTL_MS).unref()
 
     return price
   } catch (error) {
-    logger.error(`Failed to fetch price for ${asset.assetId}:`, error)
+    logger.error(`Failed to fetch price for ${assetId}:`, error)
     return null
   }
 }
