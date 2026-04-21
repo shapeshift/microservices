@@ -35,12 +35,11 @@ cd /Users/0xm4king/Projects/shapeshift-backend
 node tests/test-all-swappers.mjs
 ```
 
-The script runs 4 phases:
+The script runs 3 phases:
 
-1. **Cleanup** — Marks old `test-*` swaps as FAILED via `DELETE /swaps/test-cleanup` to clear the polling queue
-2. **Create** — POSTs fake pending swaps to `POST /swaps` for each swapper
-3. **Poll** — Polls ALL swaps in parallel for up to 2 minutes total
-4. **Report** — Prints pass/fail summary with affiliate verification status
+1. **Create** — POSTs fake pending swaps to `POST /swaps` for each swapper
+2. **Poll** — Polls ALL swaps in parallel for up to 2 minutes total
+3. **Report** — Prints pass/fail summary with affiliate verification status
 
 ### Expected Runtime
 
@@ -271,15 +270,13 @@ Every test swap requires these fields:
   sellTxHash: string;          // REQUIRED for polling to pick up the swap
   sellAmountCryptoBaseUnit: string;
   expectedBuyAmountCryptoBaseUnit: string;
-  sellAmountCryptoPrecision: string;
-  expectedBuyAmountCryptoPrecision: string;
   source: string;              // "test-script"
   swapperName: string;         // Must match SwapperName enum display value
   sellAccountId: string;       // Gets hashed by hashAccountId()
   receiveAddress?: string;     // REQUIRED for Cetus, Solana — some swappers use it
   metadata?: Record<string, any>; // Relay needs relayTransactionMetadata here
   affiliateAddress?: string;   // Our affiliate address for verification
-  affiliateBps?: string;       // "60" — the affiliate fee in basis points
+  affiliateBps?: number;       // 60 — the affiliate fee in basis points
   origin?: 'web' | 'api' | 'widget'; // Affects commission rate calculation
 }
 ```
@@ -308,16 +305,6 @@ Sun.io, AVNU, STON.fi, Across, Arbitrum Bridge, Test
 - No retry limits or age limits — polls indefinitely
 - Affiliate verification runs on **every poll cycle**
 - On error: returns `status: 'PENDING'` (doesn't fail the swap)
-
-## Cleanup Endpoint
-
-The test script uses `DELETE /swaps/test-cleanup` to mark old test swaps as FAILED before creating new ones. This prevents old swaps from clogging the polling queue.
-
-```bash
-# Manual cleanup
-curl -X DELETE http://localhost:3001/swaps/test-cleanup
-# Returns: { "cleaned": N }
-```
 
 ## Troubleshooting
 
@@ -358,20 +345,10 @@ curl -sv --max-time 5 "https://the-url.com" 2>&1 | head -5
 # MAYAChain: https://mayanode.mayachain.info
 ```
 
-### Old test swaps clogging polling queue
-
-If old test swaps are slowing down polling (24+ pending swaps), cleanup before running:
-
-```bash
-curl -X DELETE http://localhost:3001/swaps/test-cleanup
-```
-
 ## Architecture Reference
 
 ```
 test-all-swappers.mjs
-  |
-  +-- DELETE /swaps/test-cleanup (mark old test-* swaps as FAILED)
   |
   +-- POST /swaps (swap-service:3001)
   |     |
@@ -396,13 +373,13 @@ test-all-swappers.mjs
 
 ## Key Files
 
-| File                                                              | Purpose                               |
-| ----------------------------------------------------------------- | ------------------------------------- |
-| `tests/test-all-swappers.mjs`                                     | The test script                       |
-| `apps/swap-service/src/swaps/swaps.service.ts`                    | Swap creation + pollSwapStatus        |
-| `apps/swap-service/src/swaps/swaps.controller.ts`                 | REST endpoints including test-cleanup |
-| `apps/swap-service/src/polling/swap-polling.service.ts`           | 5s cron loop                          |
-| `apps/swap-service/src/verification/swap-verification.service.ts` | All 18 affiliate verifiers            |
-| `apps/swap-service/prisma/schema.prisma`                          | Swap model (53 columns)               |
-| `packages/shared-types/src/index.ts`                              | CreateSwapDto, UpdateSwapStatusDto    |
-| `.env`                                                            | All RPC/API URLs                      |
+| File                                                              | Purpose                            |
+| ----------------------------------------------------------------- | ---------------------------------- |
+| `tests/test-all-swappers.mjs`                                     | The test script                    |
+| `apps/swap-service/src/swaps/swaps.service.ts`                    | Swap creation + pollSwapStatus     |
+| `apps/swap-service/src/swaps/swaps.controller.ts`                 | REST endpoints                     |
+| `apps/swap-service/src/polling/swap-polling.service.ts`           | 5s cron loop                       |
+| `apps/swap-service/src/verification/swap-verification.service.ts` | All 18 affiliate verifiers         |
+| `apps/swap-service/prisma/schema.prisma`                          | Swap model (53 columns)            |
+| `packages/shared-types/src/index.ts`                              | CreateSwapDto, UpdateSwapStatusDto |
+| `.env`                                                            | All RPC/API URLs                   |

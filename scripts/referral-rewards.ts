@@ -1,5 +1,4 @@
-import { PrismaClient as SwapPrismaClient } from '../apps/swap-service/node_modules/.prisma/client'
-import { PrismaClient as UserPrismaClient } from '../apps/user-service/node_modules/.prisma/client'
+import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -32,14 +31,9 @@ type SafeTransactionData = {
   operation: number[]
 }
 
-const swapPrisma = new SwapPrismaClient()
-const userPrisma = new UserPrismaClient()
+const prisma = new PrismaClient()
 
 const RFOX_STAKING_CONTRACT = process.env.RFOX_STAKING_CONTRACT || '0x...'
-
-async function getFoxPriceUsd(): Promise<number> {
-  return 0.1
-}
 
 async function calculateReferralRewards(
   startDate: Date,
@@ -50,7 +44,7 @@ async function calculateReferralRewards(
   console.log(`Calculating referral rewards from ${startDate.toISOString()} to ${endDate.toISOString()}`)
   console.log(`Total FOX to distribute: ${totalFoxToDistribute}`)
 
-  const swaps = await swapPrisma.swap.findMany({
+  const swaps = await prisma.swap.findMany({
     where: {
       createdAt: {
         gte: startDate,
@@ -59,7 +53,6 @@ async function calculateReferralRewards(
       referralCode: {
         not: null,
       },
-      isReferralEligible: true,
       sellAmountUsd: {
         not: null,
       },
@@ -103,7 +96,7 @@ async function calculateReferralRewards(
   }
 
   const referralCodes = Array.from(referralStats.keys())
-  const referralCodeData = await userPrisma.referralCode.findMany({
+  const referralCodeData = await prisma.referralCode.findMany({
     where: {
       code: {
         in: referralCodes,
@@ -181,7 +174,7 @@ function encodeDepositFunctionData(userAddress: string, amount: string): string 
   return `${functionSelector}${addressParam}${amountParam}`
 }
 
-async function saveDistribution(distribution: ReferralRewardDistribution): Promise<void> {
+function saveDistribution(distribution: ReferralRewardDistribution): void {
   const outputDir = path.join(__dirname, '../distributions')
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true })
@@ -194,14 +187,14 @@ async function saveDistribution(distribution: ReferralRewardDistribution): Promi
   console.log(`Distribution saved to: ${filepath}`)
 }
 
-async function generateSafeTransactionFile(distributionId: string): Promise<void> {
+function generateSafeTransactionFile(distributionId: string): void {
   const distributionFile = path.join(__dirname, `../distributions/${distributionId}.json`)
 
   if (!fs.existsSync(distributionFile)) {
     throw new Error(`Distribution file not found: ${distributionFile}`)
   }
 
-  const distribution: ReferralRewardDistribution = JSON.parse(fs.readFileSync(distributionFile, 'utf-8'))
+  const distribution = JSON.parse(fs.readFileSync(distributionFile, 'utf-8')) as ReferralRewardDistribution
 
   const safeFile = path.join(__dirname, `../distributions/${distributionId}_safe_batch.json`)
 
@@ -213,18 +206,18 @@ async function generateSafeTransactionFile(distributionId: string): Promise<void
   console.log(`3. Sign and execute the multisig transaction`)
 }
 
-async function printDistributionStats(distributionId: string): Promise<void> {
+function printDistributionStats(distributionId: string): void {
   const distributionFile = path.join(__dirname, `../distributions/${distributionId}.json`)
 
   if (!fs.existsSync(distributionFile)) {
     throw new Error(`Distribution file not found: ${distributionFile}`)
   }
 
-  const distribution: ReferralRewardDistribution = JSON.parse(fs.readFileSync(distributionFile, 'utf-8'))
+  const distribution = JSON.parse(fs.readFileSync(distributionFile, 'utf-8')) as ReferralRewardDistribution
 
   console.log('\n=== Distribution Summary ===')
   console.log(`Name: ${distribution.name}`)
-  console.log(`Period: ${distribution.startDate} to ${distribution.endDate}`)
+  console.log(`Period: ${distribution.startDate.toDateString()} to ${distribution.endDate.toDateString()}`)
   console.log(`Total Volume: $${distribution.totalVolume}`)
   console.log(`Total FOX Distributed: ${distribution.totalFoxDistributed}`)
   console.log(`Number of Referrers: ${distribution.rewards.length}`)
@@ -251,20 +244,20 @@ async function main() {
         const name = args[4] || `Distribution ${startDate.toISOString().split('T')[0]}`
 
         const distribution = await calculateReferralRewards(startDate, endDate, totalFox, name)
-        await saveDistribution(distribution)
-        await printDistributionStats(distribution.id)
+        saveDistribution(distribution)
+        printDistributionStats(distribution.id)
         break
       }
 
       case 'generate': {
         const distributionId = args[1]
-        await generateSafeTransactionFile(distributionId)
+        generateSafeTransactionFile(distributionId)
         break
       }
 
       case 'stats': {
         const distributionId = args[1]
-        await printDistributionStats(distributionId)
+        printDistributionStats(distributionId)
         break
       }
 
@@ -280,13 +273,12 @@ async function main() {
         console.log('    Example: stats dist_1234567890')
         process.exit(1)
     }
-  } catch (error) {
-    console.error('Error:', error)
-    process.exit(1)
   } finally {
-    await swapPrisma.$disconnect()
-    await userPrisma.$disconnect()
+    await prisma.$disconnect()
   }
 }
 
-main()
+main().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})

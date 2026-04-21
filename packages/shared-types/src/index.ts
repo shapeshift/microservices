@@ -68,8 +68,6 @@ export interface CreateSwapDto {
   sellTxHash?: string
   sellAmountCryptoBaseUnit: string
   expectedBuyAmountCryptoBaseUnit: string
-  sellAmountCryptoPrecision: string
-  expectedBuyAmountCryptoPrecision: string
   source: string
   swapperName: string
   sellAccountId: string
@@ -78,10 +76,9 @@ export interface CreateSwapDto {
   isStreaming?: boolean
   metadata?: Record<string, any>
   affiliateAddress?: string
-  affiliateBps?: string
+  affiliateBps?: number
   partnerCode?: string
   origin?: 'web' | 'api' | 'widget'
-  sellAmountUsd?: string
 }
 
 export interface UpdateSwapStatusDto {
@@ -91,7 +88,7 @@ export interface UpdateSwapStatusDto {
   buyTxHash?: string
   txLink?: string
   statusMessage?: string
-  actualBuyAmountCryptoPrecision?: string
+  actualBuyAmountCryptoBaseUnit?: string
 }
 
 // API Response types
