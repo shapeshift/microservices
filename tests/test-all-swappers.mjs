@@ -16,7 +16,7 @@ const SWAP_SERVICE_URL = 'http://localhost:3001';
 const POLL_INTERVAL_MS = 6_000; // slightly > 5s poll interval
 const MAX_POLL_ATTEMPTS = 20; // 2 minutes max wait per swap
 const AFFILIATE_ADDRESS = '0xc770eefad204b5180df6a14ee197d99d808ee52d'; // ShapeShift DAO treasury
-const AFFILIATE_BPS = '60';
+const AFFILIATE_BPS = 60;
 
 // Dummy receive addresses per chain (valid format, used by some checkTradeStatus impls)
 const RECEIVE_ADDRESSES = {
@@ -215,8 +215,6 @@ const testCases = [
     sellTxHash: '1B7022CB1DCAE945060875242C77CB030BC7E1665F47C9C150A55516B890BD55',
     sellAmountBaseUnit: '265263',
     expectedBuyAmountBaseUnit: '28816802',
-    sellPrecision: '0.00265263',
-    buyPrecision: '0.028816802',
     receiveAddress: RECEIVE_ADDRESSES.ETH,
     metadata: {},
     expectResolution: true,
@@ -234,8 +232,6 @@ const testCases = [
     sellTxHash: 'C871AC207D81E4C3F83FC8E674E22CED9C3A857ABB146B4BE3DC954813423BED',
     sellAmountBaseUnit: '1035839375',
     expectedBuyAmountBaseUnit: '3831339',
-    sellPrecision: '10.35839375',
-    buyPrecision: '0.03831339',
     receiveAddress: RECEIVE_ADDRESSES.BTC,
     metadata: {},
     expectResolution: true,
@@ -253,8 +249,6 @@ const testCases = [
     sellTxHash: '0x68953906f8b73fb07df4b02fc311153a97cb5b7d36117cea9ffc7268db7e4304e75745886f1c28043710fbccb4ae3e25011c6073663b5b13',
     sellAmountBaseUnit: '624441726887100729007594',
     expectedBuyAmountBaseUnit: '1000000000000000000',
-    sellPrecision: '624441.726887',
-    buyPrecision: '1.0',
     receiveAddress: RECEIVE_ADDRESSES.ETH,
     metadata: {},
     expectResolution: true,
@@ -272,8 +266,6 @@ const testCases = [
     sellTxHash: CONFIRMED_ETH_TX,
     sellAmountBaseUnit: '1000000000000000000',
     expectedBuyAmountBaseUnit: '2500000000',
-    sellPrecision: '1.0',
-    buyPrecision: '2500.0',
     receiveAddress: RECEIVE_ADDRESSES.ETH,
     metadata: {},
     expectResolution: true,
@@ -291,8 +283,6 @@ const testCases = [
     sellTxHash: CONFIRMED_ETH_TX,
     sellAmountBaseUnit: '500000000000000000',
     expectedBuyAmountBaseUnit: '1250000000',
-    sellPrecision: '0.5',
-    buyPrecision: '1250.0',
     receiveAddress: RECEIVE_ADDRESSES.ETH,
     metadata: {},
     expectResolution: true,
@@ -310,8 +300,6 @@ const testCases = [
     sellTxHash: CONFIRMED_ETH_TX,
     sellAmountBaseUnit: '200000000000000000',
     expectedBuyAmountBaseUnit: '500000000',
-    sellPrecision: '0.2',
-    buyPrecision: '500.0',
     receiveAddress: RECEIVE_ADDRESSES.ETH,
     metadata: {},
     expectResolution: true,
@@ -329,8 +317,6 @@ const testCases = [
     sellTxHash: '0x7ce366ad1caf16cf73b347bd934802badba4be802db56d249347be6b52a0769',
     sellAmountBaseUnit: '10000000000000000000',
     expectedBuyAmountBaseUnit: '5000000',
-    sellPrecision: '10.0',
-    buyPrecision: '5.0',
     receiveAddress: RECEIVE_ADDRESSES.STRK,
     metadata: {},
     expectResolution: true,
@@ -348,8 +334,6 @@ const testCases = [
     sellTxHash: '611bcea1373817f762cc704eb183eb12319ef2b99c02baf392755bf58d2bbc26',
     sellAmountBaseUnit: '100000000',
     expectedBuyAmountBaseUnit: '25000000',
-    sellPrecision: '100.0',
-    buyPrecision: '25.0',
     receiveAddress: RECEIVE_ADDRESSES.TRX,
     metadata: {},
     expectResolution: true,
@@ -367,8 +351,6 @@ const testCases = [
     sellTxHash: 'fe23a32504db377ad8c40a41cf1d4bba072303fe2e645e80efbc7ea166e17728',
     sellAmountBaseUnit: '3899999000',
     expectedBuyAmountBaseUnit: '38768000',
-    sellPrecision: '3.899999',
-    buyPrecision: '38.768',
     receiveAddress: RECEIVE_ADDRESSES.TON,
     metadata: {}, // no quoteId → falls back to checkTxStatusViaChainAdapter
     expectResolution: false, // TON adapter parseTx needs sender address, which is not available in test
@@ -386,8 +368,6 @@ const testCases = [
     sellTxHash: 'D53Mcc8adGYVawgtQUEktRW4fv4dfUHbPQcEC3p1qALp',
     sellAmountBaseUnit: '1000000000',
     expectedBuyAmountBaseUnit: '1500000',
-    sellPrecision: '1.0',
-    buyPrecision: '1.5',
     receiveAddress: RECEIVE_ADDRESSES.SUI,
     metadata: {},
     expectResolution: true,
@@ -405,8 +385,6 @@ const testCases = [
     sellTxHash: CONFIRMED_ETH_TX,
     sellAmountBaseUnit: '100000000000000000',
     expectedBuyAmountBaseUnit: '99500000000000000',
-    sellPrecision: '0.1',
-    buyPrecision: '0.0995',
     receiveAddress: RECEIVE_ADDRESSES.ARB,
     metadata: {
       relayTransactionMetadata: {
@@ -428,8 +406,6 @@ const testCases = [
     sellTxHash: CONFIRMED_ETH_TX,
     sellAmountBaseUnit: '1000000000',
     expectedBuyAmountBaseUnit: '999000000',
-    sellPrecision: '1000.0',
-    buyPrecision: '999.0',
     receiveAddress: RECEIVE_ADDRESSES.ARB,
     metadata: {},
     expectResolution: false, // EVM part confirms, but Across deposit API won't recognize this tx
@@ -450,8 +426,6 @@ const testCases = [
     sellTxHash: CONFIRMED_ETH_TX, // Needs a sellTxHash for polling to pick it up
     sellAmountBaseUnit: '1000000000000000000',
     expectedBuyAmountBaseUnit: '4000000',
-    sellPrecision: '1.0',
-    buyPrecision: '0.04',
     receiveAddress: RECEIVE_ADDRESSES.BTC,
     metadata: { chainflipSwapId: 999999 }, // Fake ID — broker will return 404 → Unknown → PENDING
     expectResolution: false,
@@ -468,8 +442,6 @@ const testCases = [
     sellTxHash: '0x9a58d12a751803824d16e326d770aca4c715997d7894cf6a85ee766e576d114c', // Confirmed Arbitrum tx
     sellAmountBaseUnit: '100000000000000000',
     expectedBuyAmountBaseUnit: '100000000000000000',
-    sellPrecision: '0.1',
-    buyPrecision: '0.1',
     receiveAddress: RECEIVE_ADDRESSES.ETH,
     metadata: {},
     expectResolution: true,
@@ -486,8 +458,6 @@ const testCases = [
     sellTxHash: CONFIRMED_ETH_TX,
     sellAmountBaseUnit: '100000000000000000',
     expectedBuyAmountBaseUnit: '250000000',
-    sellPrecision: '0.1',
-    buyPrecision: '250.0',
     receiveAddress: RECEIVE_ADDRESSES.ETH,
     metadata: {},
     expectResolution: true,
@@ -504,8 +474,6 @@ const testCases = [
     sellTxHash: 'd8522069088bc9c4c4566250f43dad0734b995b5ab7570c18c493bba38a359b9', // Origin chain tx hash from 1Click API
     sellAmountBaseUnit: '800000000',
     expectedBuyAmountBaseUnit: '211248545378',
-    sellPrecision: '8.0',
-    buyPrecision: '2112.48545378',
     receiveAddress: RECEIVE_ADDRESSES.ZEC,
     metadata: {
       nearIntentsSpecific: {
@@ -535,16 +503,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Cleanup old test swaps so polling queue is clean
-  try {
-    const cleanRes = await fetch(`${SWAP_SERVICE_URL}/swaps/test-cleanup`, { method: 'DELETE' });
-    if (cleanRes.ok) {
-      const { cleaned } = await cleanRes.json();
-      if (cleaned > 0) console.log(`✓ Cleaned ${cleaned} old test swap(s) from polling queue`);
-    }
-  } catch {
-    // Non-fatal — just means old swaps may slow polling
-  }
   console.log('');
 
   const results = [];
@@ -580,8 +538,6 @@ async function main() {
         sellTxHash: tc.sellTxHash,
         sellAmountCryptoBaseUnit: tc.sellAmountBaseUnit,
         expectedBuyAmountCryptoBaseUnit: tc.expectedBuyAmountBaseUnit,
-        sellAmountCryptoPrecision: tc.sellPrecision,
-        expectedBuyAmountCryptoPrecision: tc.buyPrecision,
         source: 'test-script',
         swapperName: tc.swapperName,
         sellAccountId: `${tc.sellAsset.chainId}:0xTestAccount:0x0000000000000000000000000000000000000000`,

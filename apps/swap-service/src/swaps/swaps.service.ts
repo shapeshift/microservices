@@ -761,18 +761,4 @@ export class SwapsService {
       where: { swapId },
     })
   }
-
-  async cleanupTestSwaps() {
-    const result = await this.prisma.swap.updateMany({
-      where: {
-        swapId: { startsWith: 'test-' },
-        status: { in: ['IDLE', 'PENDING'] },
-      },
-      data: {
-        status: 'FAILED',
-        statusMessage: 'Cleaned up by test runner',
-      },
-    })
-    return { cleaned: result.count }
-  }
 }

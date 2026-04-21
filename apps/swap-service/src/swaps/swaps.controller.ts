@@ -2,8 +2,6 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
-  Delete,
-  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -86,12 +84,6 @@ export class SwapsController {
     const swap = await this.swapsService.findSwapBySwapId(swapId)
     if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
     return swap
-  }
-
-  @Delete('test-cleanup')
-  async cleanupTestSwaps() {
-    if (process.env.NODE_ENV === 'production') throw new ForbiddenException('test-cleanup is disabled in production')
-    return this.swapsService.cleanupTestSwaps()
   }
 
   @Post(':swapId/verify-affiliate')
