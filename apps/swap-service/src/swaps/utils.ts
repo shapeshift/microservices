@@ -10,7 +10,7 @@ import type { Asset } from '@shapeshiftoss/types'
 import { getSwapperFeeStrategy } from '../utils/affiliateFeeAsset'
 import { getAssetPriceUsd } from '../utils/pricing'
 
-import type { Swap, UsdPrices } from './types'
+import type { StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
 
@@ -93,9 +93,7 @@ export const resolveSwapSellAmountUsd = (swap: { swapId: string; sellAmountUsd: 
   return parseFloat(swap.sellAmountUsd)
 }
 
-export const buildStatusNotification = (
-  swap: Swap,
-): { title: string; body: string; type: 'SWAP_COMPLETED' | 'SWAP_FAILED' } | null => {
+export const buildStatusNotification = (swap: Swap): StatusNotification | null => {
   const { sellAsset, buyAsset } = swap
   switch (swap.status) {
     case 'SUCCESS': {

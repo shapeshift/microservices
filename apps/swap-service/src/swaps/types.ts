@@ -26,3 +26,9 @@ export type PaginationOptions = {
   limit?: number
   cursor?: string
 }
+
+export type StatusNotification = {
+  title: string
+  body: string
+  type: 'SWAP_COMPLETED' | 'SWAP_FAILED'
+}
