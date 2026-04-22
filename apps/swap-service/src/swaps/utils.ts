@@ -95,25 +95,26 @@ export const resolveSwapSellAmountUsd = (swap: { swapId: string; sellAmountUsd: 
 
 export const buildStatusNotification = (swap: Swap): StatusNotification | null => {
   const { sellAsset, buyAsset } = swap
+
+  const sellAmountCryptoPrecision = baseUnitToPrecision(swap.sellAmountCryptoBaseUnit, sellAsset.precision)
+  const sellAmount = formatAmount(sellAmountCryptoPrecision)
+
   switch (swap.status) {
     case 'SUCCESS': {
-      const sellAmount = formatAmount(baseUnitToPrecision(swap.sellAmountCryptoBaseUnit, sellAsset.precision))
-      const buyAmount = formatAmount(
-        baseUnitToPrecision(
-          swap.actualBuyAmountCryptoBaseUnit ?? swap.expectedBuyAmountCryptoBaseUnit,
-          buyAsset.precision,
-        ),
-      )
+      const buyAmountCryptoBaseUnit = swap.actualBuyAmountCryptoBaseUnit ?? swap.expectedBuyAmountCryptoBaseUnit
+      const buyAmoutCryptoPrecision = baseUnitToPrecision(buyAmountCryptoBaseUnit, buyAsset.precision)
+      const buyAmount = formatAmount(buyAmoutCryptoPrecision)
+
       return {
         title: 'Swap Completed!',
-        body: `Your swap of ${sellAmount} ${sellAsset.symbol} to ${buyAmount} ${buyAsset.symbol} is complete.`,
+        body: `Your swap of ${sellAmount} ${sellAsset.symbol} for ${buyAmount} ${buyAsset.symbol} is complete.`,
         type: 'SWAP_COMPLETED',
       }
     }
     case 'FAILED':
       return {
         title: 'Swap Failed',
-        body: `Your ${sellAsset.symbol} to ${buyAsset.symbol} swap has failed`,
+        body: `Your swap of ${sellAmount} ${sellAsset.symbol} for ${buyAsset.symbol} failed.`,
         type: 'SWAP_FAILED',
       }
     default:
