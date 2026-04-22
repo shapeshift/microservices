@@ -1,4 +1,6 @@
 import type { Swap as PrismaSwap } from '@prisma/client'
+import { Type } from 'class-transformer'
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
 
 import type { SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
@@ -22,8 +24,21 @@ export type UsdPrices = {
   affiliateAssetUsd: string | null
 }
 
-export type PaginationOptions = {
-  limit?: number
+export type PaginatedSwaps = {
+  items: Swap[]
+  nextCursor: string | null
+}
+
+export class PaginationQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit: number = 50
+
+  @IsOptional()
+  @IsString()
   cursor?: string
 }
 

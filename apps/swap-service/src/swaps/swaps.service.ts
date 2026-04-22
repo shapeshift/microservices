@@ -24,7 +24,8 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import type { AffiliateVerificationDetails, PaginationOptions, Swap } from './types'
+import type { AffiliateVerificationDetails, PaginatedSwaps, Swap } from './types'
+import { PaginationQueryDto } from './types'
 import {
   buildStatusNotification,
   estimateAffiliateFeeAmount,
@@ -185,25 +186,27 @@ export class SwapsService {
     })
   }
 
-  async getSwapsByUser(userId: string, options: PaginationOptions = {}) {
+  async getSwapById(swapId: string): Promise<Swap | null> {
+    const prismaSwap = await this.prisma.swap.findUnique({ where: { swapId } })
+    return prismaSwap ? toSwap(prismaSwap) : null
+  }
+
+  async getSwapsByUser(userId: string, options: PaginationQueryDto): Promise<PaginatedSwaps> {
     return this.paginateSwaps({ userId }, options)
   }
 
-  async getSwapsByAccountId(accountId: string, options: PaginationOptions = {}) {
+  async getSwapsByAccountId(accountId: string, options: PaginationQueryDto): Promise<PaginatedSwaps> {
     const hashedAccountId = hashAccountId(accountId)
 
-    return this.paginateSwaps(
-      {
-        OR: [{ sellAccountId: hashedAccountId }, { buyAccountId: hashedAccountId }],
-      },
-      options,
-    )
+    return this.paginateSwaps({ OR: [{ sellAccountId: hashedAccountId }, { buyAccountId: hashedAccountId }] }, options)
   }
 
-  private async paginateSwaps(where: Prisma.SwapWhereInput, { limit = 50, cursor }: PaginationOptions) {
-    const items = await this.prisma.swap.findMany({ where, ...swapCursorArgs(limit, cursor) })
+  private async paginateSwaps(where: Prisma.SwapWhereInput, options: PaginationQueryDto): Promise<PaginatedSwaps> {
+    const { limit, cursor } = options
 
-    return { items, nextCursor: getNextCursor(items, limit) }
+    const rows = await this.prisma.swap.findMany({ where, ...swapCursorArgs(limit, cursor) })
+
+    return { items: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
   async getPendingSwaps(): Promise<Swap[]> {
@@ -627,9 +630,4 @@ export class SwapsService {
     }
   }
 
-  async findSwapBySwapId(swapId: string) {
-    return this.prisma.swap.findUnique({
-      where: { swapId },
-    })
-  }
 }
