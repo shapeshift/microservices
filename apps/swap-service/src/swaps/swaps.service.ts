@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { Prisma, Swap } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
 import {
@@ -10,7 +10,7 @@ import {
 } from '@shapeshift/shared-utils'
 import { ChainId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
-import type { Swap as SwapperSwap, SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
+import type { Swap as SwapperSwap } from '@shapeshiftoss/swapper'
 import { SwapperName, swappers } from '@shapeshiftoss/swapper'
 import { Asset } from '@shapeshiftoss/types'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
@@ -30,7 +30,8 @@ import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { getAssetPriceUsd } from '../utils/pricing'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import type { AffiliateVerificationDetails, PaginationOptions, SwapWithAssets, UsdPrices } from './types'
+import { toSwap } from './types'
+import type { AffiliateVerificationDetails, PaginationOptions, Swap, UsdPrices } from './types'
 
 @Injectable()
 export class SwapsService {
@@ -108,7 +109,7 @@ export class SwapsService {
           .join(' | '),
       )
 
-      return swap
+      return toSwap(swap)
     } catch (error) {
       this.logger.error('Failed to create swap', error)
       throw error
@@ -161,32 +162,31 @@ export class SwapsService {
     }
   }
 
-  async updateSwapStatus(data: UpdateSwapStatusDto): Promise<SwapWithAssets> {
+  async updateSwapStatus(data: UpdateSwapStatusDto): Promise<Swap> {
     try {
-      const swap = await this.prisma.swap.update({
-        where: { swapId: data.swapId },
-        data: {
-          status: data.status,
-          sellTxHash: data.sellTxHash,
-          buyTxHash: data.buyTxHash,
-          txLink: data.txLink,
-          statusMessage: data.statusMessage,
-          actualBuyAmountCryptoBaseUnit: data.actualBuyAmountCryptoBaseUnit,
-        },
-      })
+      const swap = toSwap(
+        await this.prisma.swap.update({
+          where: { swapId: data.swapId },
+          data: {
+            status: data.status,
+            sellTxHash: data.sellTxHash,
+            buyTxHash: data.buyTxHash,
+            txLink: data.txLink,
+            statusMessage: data.statusMessage,
+            actualBuyAmountCryptoBaseUnit: data.actualBuyAmountCryptoBaseUnit,
+          },
+        }),
+      )
 
       try {
         await this.sendStatusUpdateNotification(swap)
       } catch (notifError) {
-        this.logger.error(`Failed to send notification for swap ${data.swapId}:`, notifError)
+        this.logger.error(`Failed to send notification for swap ${swap.swapId}:`, notifError)
       }
 
-      this.logger.log(`Swap status updated: ${swap.swapId} -> ${data.status}`)
-      return {
-        ...swap,
-        sellAsset: swap.sellAsset as Asset,
-        buyAsset: swap.buyAsset as Asset,
-      }
+      this.logger.log(`Swap status updated: ${swap.swapId} -> ${swap.status}`)
+
+      return swap
     } catch (error) {
       this.logger.error('Failed to update swap status', error)
       throw error
@@ -216,8 +216,7 @@ export class SwapsService {
     let body: string
     let type: 'SWAP_STATUS_UPDATE' | 'SWAP_COMPLETED' | 'SWAP_FAILED'
 
-    const sellAsset = swap.sellAsset as Asset
-    const buyAsset = swap.buyAsset as Asset
+    const { sellAsset, buyAsset } = swap
 
     switch (swap.status) {
       case 'SUCCESS': {
@@ -274,7 +273,7 @@ export class SwapsService {
     return { items, nextCursor: getNextCursor(items, limit) }
   }
 
-  async getPendingSwaps() {
+  async getPendingSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
         status: {
@@ -284,11 +283,7 @@ export class SwapsService {
       },
     })
 
-    return swaps.map((swap) => ({
-      ...swap,
-      sellAsset: swap.sellAsset,
-      buyAsset: swap.buyAsset,
-    }))
+    return swaps.map(toSwap)
   }
 
   async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
@@ -585,15 +580,15 @@ export class SwapsService {
     try {
       this.logger.log(`Polling status for swap: ${swapId}`)
 
-      const swap = await this.prisma.swap.findUnique({
+      const rawSwap = await this.prisma.swap.findUnique({
         where: { swapId },
       })
 
-      if (!swap) {
+      if (!rawSwap) {
         throw new Error(`Swap not found: ${swapId}`)
       }
 
-      const sellAsset = swap.sellAsset as Asset
+      const swap = toSwap(rawSwap)
 
       const swapper = swappers[swap.swapperName as SwapperName]
 
@@ -607,7 +602,7 @@ export class SwapsService {
 
       const status = await swapper.checkTradeStatus({
         txHash: swap.sellTxHash ?? '',
-        chainId: sellAsset.chainId,
+        chainId: swap.sellAsset.chainId,
         address: swap.sellAccountId,
         swap: {
           ...swap,
@@ -615,7 +610,7 @@ export class SwapsService {
           createdAt: swap.createdAt.getTime(),
           updatedAt: swap.updatedAt.getTime(),
         } as unknown as SwapperSwap,
-        stepIndex: (swap.metadata as SwapperSpecificMetadata).stepIndex,
+        stepIndex: swap.metadata.stepIndex,
         config: {
           VITE_UNCHAINED_THORCHAIN_HTTP_URL: process.env.VITE_UNCHAINED_THORCHAIN_HTTP_URL || '',
           VITE_UNCHAINED_MAYACHAIN_HTTP_URL: process.env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL || '',
@@ -699,7 +694,7 @@ export class SwapsService {
           receiveAddress: swap.receiveAddress,
           expectedBuyAmountCryptoBaseUnit: swap.expectedBuyAmountCryptoBaseUnit,
           createdAt: swap.createdAt.getTime(),
-          sellAssetPrecision: sellAsset.precision,
+          sellAssetPrecision: swap.sellAsset.precision,
           affiliateBps: swap.affiliateBps,
           affiliateAddress: swap.affiliateAddress,
           integratorFeeRecipient: swap.affiliateAddress,
@@ -709,7 +704,7 @@ export class SwapsService {
         const verificationResult = await this.swapVerificationService.verifySwapAffiliate(
           swapId,
           swap.swapperName,
-          sellAsset.chainId,
+          swap.sellAsset.chainId,
           swap.sellTxHash || undefined,
           enrichedMetadata,
         )

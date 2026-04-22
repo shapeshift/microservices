@@ -11,7 +11,7 @@ import {
 import { Server, Socket } from 'socket.io'
 
 import { SwapsService } from '../swaps/swaps.service'
-import type { SwapWithAssets } from '../swaps/types'
+import type { Swap } from '../swaps/types'
 
 interface AuthenticatedSocket extends Socket {
   userId?: string
@@ -61,7 +61,7 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
-  sendSwapUpdateToUser(userId: string, swap: SwapWithAssets) {
+  sendSwapUpdateToUser(userId: string, swap: Swap) {
     const client = this.connectedClients.get(userId)
     if (client) client.emit('swapUpdate', swap)
     this.server.to(`user:${userId}`).emit('swapUpdate', swap)
