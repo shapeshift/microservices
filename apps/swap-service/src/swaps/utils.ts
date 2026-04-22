@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common'
 import type { Swap as PrismaSwap } from '@prisma/client'
 
-import { CreateSwapDto } from '@shapeshift/shared-types'
+import type { CreateSwapDto } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
@@ -12,7 +12,7 @@ import { getAssetPriceUsd } from '../utils/pricing'
 
 import type { Swap, UsdPrices } from './types'
 
-const logger = new Logger('SwapsUtils')
+const logger = new Logger('SwapsService')
 
 export const toSwap = (swap: PrismaSwap): Swap => ({
   ...swap,
@@ -59,10 +59,7 @@ export const estimateAffiliateFeeAmount = (
   }
 }
 
-export const fetchUsdPrices = async (
-  data: CreateSwapDto,
-  affiliateFeeAssetId: string | null,
-): Promise<UsdPrices> => {
+export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: string | null): Promise<UsdPrices> => {
   try {
     const [sellAssetUsd, buyAssetUsd, affiliateAssetUsd] = await Promise.all([
       getAssetPriceUsd(data.sellAsset.assetId),
@@ -92,7 +89,38 @@ export const resolveSwapSellAmountUsd = (swap: { swapId: string; sellAmountUsd: 
     logger.warn(`Missing sellAmountUsd for swap ${swap.swapId}, skipping`)
     return null
   }
+
   return parseFloat(swap.sellAmountUsd)
+}
+
+export const buildStatusNotification = (
+  swap: Swap,
+): { title: string; body: string; type: 'SWAP_COMPLETED' | 'SWAP_FAILED' } | null => {
+  const { sellAsset, buyAsset } = swap
+  switch (swap.status) {
+    case 'SUCCESS': {
+      const sellAmount = formatAmount(baseUnitToPrecision(swap.sellAmountCryptoBaseUnit, sellAsset.precision))
+      const buyAmount = formatAmount(
+        baseUnitToPrecision(
+          swap.actualBuyAmountCryptoBaseUnit ?? swap.expectedBuyAmountCryptoBaseUnit,
+          buyAsset.precision,
+        ),
+      )
+      return {
+        title: 'Swap Completed!',
+        body: `Your swap of ${sellAmount} ${sellAsset.symbol} to ${buyAmount} ${buyAsset.symbol} is complete.`,
+        type: 'SWAP_COMPLETED',
+      }
+    }
+    case 'FAILED':
+      return {
+        title: 'Swap Failed',
+        body: `Your ${sellAsset.symbol} to ${buyAsset.symbol} swap has failed`,
+        type: 'SWAP_FAILED',
+      }
+    default:
+      return null
+  }
 }
 
 export const resolveFeeAssetPrice = (swap: {

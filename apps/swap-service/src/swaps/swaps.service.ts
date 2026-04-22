@@ -2,12 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
-import {
-  baseUnitToPrecision,
-  hashAccountId,
-  NotificationsServiceClient,
-  UserServiceClient,
-} from '@shapeshift/shared-utils'
+import { hashAccountId, NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { ChainId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap } from '@shapeshiftoss/swapper'
@@ -31,18 +26,19 @@ import { SwapVerificationService } from '../verification/swap-verification.servi
 
 import type { AffiliateVerificationDetails, PaginationOptions, Swap } from './types'
 import {
+  buildStatusNotification,
   estimateAffiliateFeeAmount,
   fetchUsdPrices,
-  formatAmount,
   getAffiliateCommissionRate,
   resolveFeeAssetPrice,
   resolveSwapSellAmountUsd,
   toSwap,
 } from './utils'
 
+const logger = new Logger('SwapsService')
+
 @Injectable()
 export class SwapsService {
-  private readonly logger = new Logger(SwapsService.name)
   private readonly notificationsClient: NotificationsServiceClient
   private readonly userServiceClient: UserServiceClient
 
@@ -75,7 +71,7 @@ export class SwapsService {
         this.resolveAffiliateAddress(data),
       ])
 
-      if (referralCode) this.logger.debug(`Found referral code ${referralCode} for user ${data.userId}`)
+      if (referralCode) logger.debug(`Found referral code ${referralCode} for user ${data.userId}`)
 
       const swap = toSwap(
         await this.prisma.swap.create({
@@ -107,7 +103,7 @@ export class SwapsService {
         }),
       )
 
-      this.logger.log(
+      logger.log(
         [
           `Swap created: ${swap.swapId}`,
           referralCode && `referral ${referralCode}`,
@@ -120,7 +116,7 @@ export class SwapsService {
 
       return swap
     } catch (error) {
-      this.logger.error('Failed to create swap', error)
+      logger.error('Failed to create swap', error)
       throw error
     }
   }
@@ -139,9 +135,10 @@ export class SwapsService {
         where: { partnerCode: data.partnerCode },
         select: { receiveAddress: true, walletAddress: true },
       })
+
       return affiliate?.receiveAddress ?? affiliate?.walletAddress ?? null
     } catch (error) {
-      this.logger.warn(`Failed to resolve affiliate address for partner code ${data.partnerCode}:`, error)
+      logger.warn(`Failed to resolve affiliate address for partner code ${data.partnerCode}:`, error)
       return null
     }
   }
@@ -165,69 +162,27 @@ export class SwapsService {
       try {
         await this.sendStatusUpdateNotification(swap)
       } catch (notifError) {
-        this.logger.error(`Failed to send notification for swap ${swap.swapId}:`, notifError)
+        logger.error(`Failed to send notification for swap ${swap.swapId}:`, notifError)
       }
 
-      this.logger.log(`Swap status updated: ${swap.swapId} -> ${swap.status}`)
+      logger.log(`Swap status updated: ${swap.swapId} -> ${swap.status}`)
 
       return swap
     } catch (error) {
-      this.logger.error('Failed to update swap status', error)
+      logger.error('Failed to update swap status', error)
       throw error
     }
   }
 
-  private async sendStatusUpdateNotification(
-    swap: Pick<
-      Swap,
-      | 'swapId'
-      | 'userId'
-      | 'status'
-      | 'sellAsset'
-      | 'buyAsset'
-      | 'sellAmountCryptoBaseUnit'
-      | 'actualBuyAmountCryptoBaseUnit'
-      | 'expectedBuyAmountCryptoBaseUnit'
-    >,
-  ) {
-    let title: string
-    let body: string
-    let type: 'SWAP_STATUS_UPDATE' | 'SWAP_COMPLETED' | 'SWAP_FAILED'
+  private async sendStatusUpdateNotification(swap: Swap) {
+    const notification = buildStatusNotification(swap)
+    if (!notification) return
 
-    const { sellAsset, buyAsset } = swap
-
-    switch (swap.status) {
-      case 'SUCCESS': {
-        title = 'Swap Completed!'
-        const sellAmount = formatAmount(baseUnitToPrecision(swap.sellAmountCryptoBaseUnit, sellAsset.precision))
-        const buyAmount = formatAmount(
-          baseUnitToPrecision(
-            swap.actualBuyAmountCryptoBaseUnit || swap.expectedBuyAmountCryptoBaseUnit,
-            buyAsset.precision,
-          ),
-        )
-        body = `Your swap of ${sellAmount} ${sellAsset.symbol} to ${buyAmount} ${buyAsset.symbol} is complete.`
-        type = 'SWAP_COMPLETED'
-        break
-      }
-      case 'FAILED':
-        title = 'Swap Failed'
-        body = `Your ${sellAsset.symbol} to ${buyAsset.symbol} swap has failed`
-        type = 'SWAP_FAILED'
-        break
-      default:
-        return
-    }
-
-    if (swap.status === 'FAILED' || swap.status === 'SUCCESS') {
-      await this.notificationsClient.createNotification({
-        userId: swap.userId,
-        title,
-        body,
-        type,
-        swapId: swap.swapId,
-      })
-    }
+    await this.notificationsClient.createNotification({
+      ...notification,
+      swapId: swap.swapId,
+      userId: swap.userId,
+    })
   }
 
   async getSwapsByUser(userId: string, options: PaginationOptions = {}) {
@@ -265,7 +220,7 @@ export class SwapsService {
   }
 
   async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
-    this.logger.log(
+    logger.log(
       `Calculating referral fees for code: ${referralCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
 
@@ -300,7 +255,7 @@ export class SwapsService {
       select: referralSwapSelect,
     })
 
-    this.logger.log(
+    logger.log(
       `Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for referral code ${referralCode}`,
     )
 
@@ -327,7 +282,7 @@ export class SwapsService {
     const periodReferrerCommissionUsd = period.totalFeesUsd * 0.1
     const allTimeReferrerCommissionUsd = allTime.totalFeesUsd * 0.1
 
-    this.logger.log(
+    logger.log(
       `Referral fee calculation for ${referralCode}: ` +
         `Period: ${periodSwaps.length} swaps, $${period.totalVolumeUsd.toFixed(2)} volume, $${periodReferrerCommissionUsd.toFixed(2)} commission | ` +
         `All-time: ${allTimeSwaps.length} swaps, $${allTimeReferrerCommissionUsd.toFixed(2)} total commission`,
@@ -347,7 +302,7 @@ export class SwapsService {
   async calculateAffiliateFees(affiliateAddress: string, startDate?: Date, endDate?: Date) {
     const normalizedAddress = affiliateAddress.toLowerCase()
 
-    this.logger.log(
+    logger.log(
       `Calculating affiliate fees for address: ${normalizedAddress}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
 
@@ -394,7 +349,7 @@ export class SwapsService {
       select: swapSelect,
     })
 
-    this.logger.log(
+    logger.log(
       `Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for affiliate ${normalizedAddress}`,
     )
 
@@ -412,7 +367,7 @@ export class SwapsService {
       allTimeCommissionUsd += feeUsd
     }
 
-    this.logger.log(
+    logger.log(
       `Affiliate fee calculation for ${normalizedAddress}: ` +
         `Period: ${periodSwaps.length} swaps, $${totalSwapVolumeUsd.toFixed(2)} volume, $${periodCommissionUsd.toFixed(2)} commission | ` +
         `All-time: ${allTimeSwaps.length} swaps, $${allTimeCommissionUsd.toFixed(2)} total commission`,
@@ -496,7 +451,7 @@ export class SwapsService {
 
   async pollSwapStatus(swapId: string): Promise<SwapStatusResponse> {
     try {
-      this.logger.log(`Polling status for swap: ${swapId}`)
+      logger.log(`Polling status for swap: ${swapId}`)
 
       const rawSwap = await this.prisma.swap.findUnique({
         where: { swapId },
@@ -638,7 +593,7 @@ export class SwapsService {
           }
         }
 
-        this.logger.log(
+        logger.log(
           `Affiliate verification for swap ${swapId}: verified=${verificationResult.isVerified}, hasAffiliate=${verificationResult.hasAffiliate}`,
         )
 
@@ -650,7 +605,7 @@ export class SwapsService {
           },
         })
       } catch (verificationError) {
-        this.logger.warn(`Failed to verify affiliate for swap ${swapId}:`, verificationError)
+        logger.warn(`Failed to verify affiliate for swap ${swapId}:`, verificationError)
       }
 
       return {
@@ -664,7 +619,7 @@ export class SwapsService {
         affiliateVerificationDetails,
       }
     } catch (error) {
-      this.logger.error(`Failed to poll swap status for ${swapId}:`, error)
+      logger.error(`Failed to poll swap status for ${swapId}:`, error)
       return {
         status: 'PENDING',
         statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
