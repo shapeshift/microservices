@@ -27,15 +27,16 @@ import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
-import { getAssetPriceUsd } from '../utils/pricing'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import type { AffiliateVerificationDetails, PaginationOptions, Swap, UsdPrices } from './types'
+import type { AffiliateVerificationDetails, PaginationOptions, Swap } from './types'
 import {
   estimateAffiliateFeeAmount,
+  fetchUsdPrices,
   formatAmount,
   getAffiliateCommissionRate,
   resolveFeeAssetPrice,
+  resolveSwapSellAmountUsd,
   toSwap,
 } from './utils'
 
@@ -70,39 +71,41 @@ export class SwapsService {
 
       const [referralCode, prices, affiliateAddress] = await Promise.all([
         this.getReferralCode(data.userId),
-        this.fetchUsdPrices(data, affiliateFeeAssetId),
+        fetchUsdPrices(data, affiliateFeeAssetId),
         this.resolveAffiliateAddress(data),
       ])
 
       if (referralCode) this.logger.debug(`Found referral code ${referralCode} for user ${data.userId}`)
 
-      const swap = await this.prisma.swap.create({
-        data: {
-          swapId: data.swapId,
-          sellAsset: data.sellAsset,
-          buyAsset: data.buyAsset,
-          sellTxHash: data.sellTxHash ?? null,
-          sellAmountCryptoBaseUnit: data.sellAmountCryptoBaseUnit,
-          expectedBuyAmountCryptoBaseUnit: data.expectedBuyAmountCryptoBaseUnit,
-          source: data.source,
-          swapperName: data.swapperName,
-          sellAccountId: data.sellAccountId ? hashAccountId(data.sellAccountId) : 'api',
-          buyAccountId: data.buyAccountId ? hashAccountId(data.buyAccountId) : null,
-          receiveAddress: data.receiveAddress,
-          isStreaming: data.isStreaming ?? false,
-          metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
-          userId: data.userId ?? 'api',
-          referralCode,
-          sellAmountUsd: prices.sellAmountUsd,
-          buyAssetUsd: prices.buyAssetUsd,
-          affiliateAssetUsd: prices.affiliateAssetUsd,
-          affiliateAddress,
-          affiliateBps: data.affiliateBps ?? null,
-          origin: data.origin ?? null,
-          shapeshiftBps: SwapsService.API_BASE_BPS,
-          affiliateFeeAssetId,
-        },
-      })
+      const swap = toSwap(
+        await this.prisma.swap.create({
+          data: {
+            swapId: data.swapId,
+            sellAsset: data.sellAsset,
+            buyAsset: data.buyAsset,
+            sellTxHash: data.sellTxHash ?? null,
+            sellAmountCryptoBaseUnit: data.sellAmountCryptoBaseUnit,
+            expectedBuyAmountCryptoBaseUnit: data.expectedBuyAmountCryptoBaseUnit,
+            source: data.source,
+            swapperName: data.swapperName,
+            sellAccountId: data.sellAccountId ? hashAccountId(data.sellAccountId) : 'api',
+            buyAccountId: data.buyAccountId ? hashAccountId(data.buyAccountId) : null,
+            receiveAddress: data.receiveAddress,
+            isStreaming: data.isStreaming ?? false,
+            metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
+            userId: data.userId ?? 'api',
+            referralCode,
+            sellAmountUsd: prices.sellAmountUsd,
+            buyAssetUsd: prices.buyAssetUsd,
+            affiliateAssetUsd: prices.affiliateAssetUsd,
+            affiliateAddress,
+            affiliateBps: data.affiliateBps ?? null,
+            origin: data.origin ?? null,
+            shapeshiftBps: SwapsService.API_BASE_BPS,
+            affiliateFeeAssetId,
+          },
+        }),
+      )
 
       this.logger.log(
         [
@@ -115,7 +118,7 @@ export class SwapsService {
           .join(' | '),
       )
 
-      return toSwap(swap)
+      return swap
     } catch (error) {
       this.logger.error('Failed to create swap', error)
       throw error
@@ -125,31 +128,6 @@ export class SwapsService {
   private async getReferralCode(userId: string | undefined): Promise<string | null> {
     if (!userId) return null
     return this.userServiceClient.getUserReferralCode(userId)
-  }
-
-  private async fetchUsdPrices(data: CreateSwapDto, affiliateFeeAssetId: string | null): Promise<UsdPrices> {
-    try {
-      const [sellAssetUsd, buyAssetUsd, affiliateAssetUsd] = await Promise.all([
-        getAssetPriceUsd(data.sellAsset.assetId),
-        getAssetPriceUsd(data.buyAsset.assetId),
-        affiliateFeeAssetId ? getAssetPriceUsd(affiliateFeeAssetId) : Promise.resolve<number | null>(null),
-      ])
-
-      const sellAmountUsd = sellAssetUsd
-        ? bnOrZero(baseUnitToPrecision(data.sellAmountCryptoBaseUnit, data.sellAsset.precision))
-            .times(sellAssetUsd)
-            .toFixed(2)
-        : null
-
-      return {
-        sellAmountUsd,
-        buyAssetUsd: buyAssetUsd?.toString() ?? null,
-        affiliateAssetUsd: affiliateAssetUsd?.toString() ?? null,
-      }
-    } catch (err) {
-      this.logger.warn(`Failed to fetch USD prices for swap ${data.swapId}:`, err)
-      return { sellAmountUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
-    }
   }
 
   private async resolveAffiliateAddress(data: CreateSwapDto): Promise<string | null> {
@@ -330,7 +308,7 @@ export class SwapsService {
       let totalFeesUsd = 0
       let totalVolumeUsd = 0
       for (const swap of swaps) {
-        const sellAmountUsd = this.resolveSwapSellAmountUsd(swap)
+        const sellAmountUsd = resolveSwapSellAmountUsd(swap)
         if (sellAmountUsd === null) continue
         totalVolumeUsd += sellAmountUsd
         const details = swap.affiliateVerificationDetails as AffiliateVerificationDetails | null
@@ -364,14 +342,6 @@ export class SwapsService {
       periodStart: startDate?.toISOString(),
       periodEnd: endDate?.toISOString(),
     }
-  }
-
-  private resolveSwapSellAmountUsd(swap: { swapId: string; sellAmountUsd: string | null }): number | null {
-    if (!swap.sellAmountUsd) {
-      this.logger.warn(`Missing sellAmountUsd for swap ${swap.swapId}, skipping`)
-      return null
-    }
-    return parseFloat(swap.sellAmountUsd)
   }
 
   async calculateAffiliateFees(affiliateAddress: string, startDate?: Date, endDate?: Date) {
@@ -476,7 +446,7 @@ export class SwapsService {
     affiliateVerificationDetails: unknown
     shapeshiftBps: number
   }): { feeUsd: number; volumeUsd: number } {
-    const sellAmountUsd = this.resolveSwapSellAmountUsd(swap)
+    const sellAmountUsd = resolveSwapSellAmountUsd(swap)
     if (sellAmountUsd === null) return { feeUsd: 0, volumeUsd: 0 }
 
     const verificationDetails = swap.affiliateVerificationDetails as AffiliateVerificationDetails | null
