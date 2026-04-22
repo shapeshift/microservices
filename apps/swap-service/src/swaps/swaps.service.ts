@@ -25,13 +25,19 @@ import { TonChainAdapterService } from '../lib/chain-adapters/ton.service'
 import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { getSwapperFeeStrategy, resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
+import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { getAssetPriceUsd } from '../utils/pricing'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { toSwap } from './types'
 import type { AffiliateVerificationDetails, PaginationOptions, Swap, UsdPrices } from './types'
+import {
+  estimateAffiliateFeeAmount,
+  formatAmount,
+  getAffiliateCommissionRate,
+  resolveFeeAssetPrice,
+  toSwap,
+} from './utils'
 
 @Injectable()
 export class SwapsService {
@@ -193,12 +199,6 @@ export class SwapsService {
     }
   }
 
-  private formatAmount(amount: string | number): string {
-    // Convert to number with up to 8 decimals, then remove trailing zeros
-    const num = bnOrZero(amount).toFixed(8)
-    return num.replace(/\.?0+$/, '')
-  }
-
   private async sendStatusUpdateNotification(
     swap: Pick<
       Swap,
@@ -221,8 +221,8 @@ export class SwapsService {
     switch (swap.status) {
       case 'SUCCESS': {
         title = 'Swap Completed!'
-        const sellAmount = this.formatAmount(baseUnitToPrecision(swap.sellAmountCryptoBaseUnit, sellAsset.precision))
-        const buyAmount = this.formatAmount(
+        const sellAmount = formatAmount(baseUnitToPrecision(swap.sellAmountCryptoBaseUnit, sellAsset.precision))
+        const buyAmount = formatAmount(
           baseUnitToPrecision(
             swap.actualBuyAmountCryptoBaseUnit || swap.expectedBuyAmountCryptoBaseUnit,
             buyAsset.precision,
@@ -459,15 +459,6 @@ export class SwapsService {
     }
   }
 
-  private getAffiliateCommissionRate(origin: string | null, verifiedBps: number, shapeshiftBps: number): number {
-    if (origin === 'web') {
-      // Referrer earns shapeshiftBps of volume (shapeshiftBps / verifiedBps of the fee).
-      return shapeshiftBps / verifiedBps
-    }
-    if (!origin || verifiedBps <= shapeshiftBps) return 0
-    return (verifiedBps - shapeshiftBps) / verifiedBps
-  }
-
   private calculateFeeForSwap(swap: {
     swapId: string
     swapperName: string
@@ -495,7 +486,7 @@ export class SwapsService {
       return { feeUsd: 0, volumeUsd: sellAmountUsd }
     }
 
-    const commissionRate = this.getAffiliateCommissionRate(swap.origin, verifiedBps, swap.shapeshiftBps)
+    const commissionRate = getAffiliateCommissionRate(swap.origin, verifiedBps, swap.shapeshiftBps)
 
     const verifiedSell = verificationDetails?.verifiedSellAmountCryptoBaseUnit
     const effectiveSellAmount = verifiedSell
@@ -506,14 +497,14 @@ export class SwapsService {
 
     let totalFeeUsd: number
     const feeAssetId = swap.affiliateFeeAssetId
-    const feeAssetPrice = this.resolveFeeAssetPrice(swap)
+    const feeAssetPrice = resolveFeeAssetPrice(swap)
 
     if (feeAssetId && feeAssetPrice) {
       const sellAssetObj = swap.sellAsset as Asset
       const buyAssetObj = swap.buyAsset as Asset
       const feeAmountBaseUnit =
         swap.actualAffiliateFeeAmountCryptoBaseUnit ??
-        this.estimateAffiliateFeeAmount(
+        estimateAffiliateFeeAmount(
           verifiedBps,
           swap.swapperName,
           effectiveSellAmount,
@@ -531,49 +522,6 @@ export class SwapsService {
     }
 
     return { feeUsd: totalFeeUsd * commissionRate, volumeUsd: sellAmountUsd }
-  }
-
-  private resolveFeeAssetPrice(swap: {
-    sellAsset: unknown
-    buyAsset: unknown
-    sellAmountCryptoBaseUnit: string
-    sellAmountUsd: string | null
-    buyAssetUsd: string | null
-    affiliateAssetUsd: string | null
-    affiliateFeeAssetId: string | null
-  }): string | null {
-    if (!swap.affiliateFeeAssetId) return null
-    const sellAssetObj = swap.sellAsset as Asset
-    const buyAssetObj = swap.buyAsset as Asset
-    if (swap.affiliateFeeAssetId === sellAssetObj.assetId && swap.sellAmountUsd) {
-      // Back-derive sell price from stored USD value.
-      const sellAmountPrecision = bnOrZero(swap.sellAmountCryptoBaseUnit).div(bnOrZero(10).pow(sellAssetObj.precision))
-      return sellAmountPrecision.isZero() ? null : bnOrZero(swap.sellAmountUsd).div(sellAmountPrecision).toFixed()
-    }
-    if (swap.affiliateFeeAssetId === buyAssetObj.assetId) {
-      return swap.buyAssetUsd
-    }
-    return swap.affiliateAssetUsd
-  }
-
-  private estimateAffiliateFeeAmount(
-    affiliateBps: number,
-    swapperName: string,
-    sellAmountCryptoBaseUnit: string,
-    expectedBuyAmountCryptoBaseUnit: string,
-  ): string {
-    const strategy = getSwapperFeeStrategy(swapperName)
-    const bpsMultiplier = affiliateBps / 10000
-
-    switch (strategy) {
-      case 'sell_asset':
-        return bnOrZero(sellAmountCryptoBaseUnit).times(bpsMultiplier).toFixed(0)
-      case 'buy_asset':
-        return bnOrZero(expectedBuyAmountCryptoBaseUnit).times(bpsMultiplier).toFixed(0)
-      case 'fixed_base':
-      default:
-        return bnOrZero(sellAmountCryptoBaseUnit).times(bpsMultiplier).toFixed(0)
-    }
   }
 
   async pollSwapStatus(swapId: string): Promise<SwapStatusResponse> {

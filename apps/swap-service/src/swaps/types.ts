@@ -9,13 +9,6 @@ export type Swap = Omit<PrismaSwap, 'sellAsset' | 'buyAsset' | 'metadata'> & {
   metadata: SwapperSpecificMetadata
 }
 
-export const toSwap = (swap: PrismaSwap): Swap => ({
-  ...swap,
-  sellAsset: swap.sellAsset as Asset,
-  buyAsset: swap.buyAsset as Asset,
-  metadata: swap.metadata as SwapperSpecificMetadata,
-})
-
 export type AffiliateVerificationDetails = {
   affiliateBps?: number
   affiliateAddress?: string
