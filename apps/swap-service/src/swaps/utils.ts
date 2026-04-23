@@ -4,7 +4,7 @@ import type { Swap as PrismaSwap } from '@prisma/client'
 import type { CreateSwapDto } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
-import type { SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
+import type { Swap as SwapperSwap, SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
 import { getAssetPriceUsd } from '../utils/pricing'
@@ -22,6 +22,14 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   metadata: swap.metadata as SwapperSpecificMetadata,
   affiliateVerificationDetails: swap.affiliateVerificationDetails as AffiliateVerificationDetails | null,
 })
+
+export const toSwapperSwap = (swap: Swap): SwapperSwap =>
+  ({
+    ...swap,
+    id: swap.swapId,
+    createdAt: swap.createdAt.getTime(),
+    updatedAt: swap.updatedAt.getTime(),
+  }) as unknown as SwapperSwap
 
 // formatAmount up to 8 decimals, no trailing zeros
 export const formatAmount = (amount: string | number): string => {

@@ -16,7 +16,12 @@ export type AffiliateVerificationDetails = {
   affiliateBps?: number
   affiliateAddress?: string
   verifiedSellAmountCryptoBaseUnit?: string
-  hasAffiliate?: boolean
+  hasAffiliate: boolean
+}
+
+export type SwapReconciliation = {
+  isAffiliateVerified?: boolean
+  affiliateVerificationDetails?: AffiliateVerificationDetails
 }
 
 export type UsdPrices = {
