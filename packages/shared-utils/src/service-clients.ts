@@ -1,7 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
 
-import type { CreateNotificationDto, Device, User } from '@shapeshift/shared-types'
+import type { CreateNotificationDto, Device, Fees, User } from '@shapeshift/shared-types'
 
 import { getRequiredEnvVar } from './index'
 
@@ -100,13 +100,6 @@ export class NotificationsServiceClient {
   }
 }
 
-interface ReferralFeeData {
-  swapCount: number
-  totalSwapVolumeUsd: string
-  totalFeesCollectedUsd: string
-  referrerCommissionUsd: string
-}
-
 export class SwapServiceClient {
   private readonly axios: AxiosInstance
 
@@ -120,13 +113,13 @@ export class SwapServiceClient {
     })
   }
 
-  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date): Promise<ReferralFeeData> {
+  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
     const params = new URLSearchParams()
     if (startDate) params.append('startDate', startDate.toISOString())
     if (endDate) params.append('endDate', endDate.toISOString())
 
     const url = `/swaps/referral-fees/${referralCode}${params.toString() ? `?${params.toString()}` : ''}`
-    const response = await this.axios.get<ReferralFeeData>(url)
+    const response = await this.axios.get<Fees>(url)
     return response.data
   }
 }

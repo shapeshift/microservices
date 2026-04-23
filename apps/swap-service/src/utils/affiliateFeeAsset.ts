@@ -35,7 +35,3 @@ export function resolveAffiliateFeeAssetId(swapperName: string, sellAsset: Asset
       return null
   }
 }
-
-export function getSwapperFeeStrategy(swapperName: string): FeeAssetStrategy | null {
-  return SWAPPER_FEE_STRATEGY[swapperName] ?? null
-}

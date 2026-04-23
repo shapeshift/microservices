@@ -230,19 +230,14 @@ export class ReferralService {
     const activeCodesCount = referralCodes.filter((code) => code.isActive).length
 
     // Fetch fee data from swap service for all codes
-    let totalFeesCollectedUsd = 0
-    let totalReferrerCommissionUsd = 0
+    let totalReferrerFeeUsd = 0
 
     const referralCodesWithFees = await Promise.all(
       referralCodes.map(async (code) => {
         try {
           const feeData = await this.swapServiceClient.calculateReferralFees(code.code, startDate, endDate)
 
-          const feesCollected = parseFloat(feeData.totalFeesCollectedUsd || '0')
-          const referrerCommission = parseFloat(feeData.referrerCommissionUsd || '0')
-
-          totalFeesCollectedUsd += feesCollected
-          totalReferrerCommissionUsd += referrerCommission
+          totalReferrerFeeUsd += parseFloat(feeData.periodFeeUsd || '0')
 
           return {
             code: code.code,
@@ -252,9 +247,8 @@ export class ReferralService {
             maxUses: code.maxUses,
             expiresAt: code.expiresAt,
             swapCount: feeData.swapCount || 0,
-            swapVolumeUsd: feeData.totalSwapVolumeUsd || '0',
-            feesCollectedUsd: feeData.totalFeesCollectedUsd || '0',
-            referrerCommissionUsd: feeData.referrerCommissionUsd || '0',
+            swapVolumeUsd: feeData.periodVolumeUsd || '0',
+            referrerFeeUsd: feeData.periodFeeUsd || '0',
           }
         } catch (error) {
           this.logger.warn(`Failed to fetch fees for code ${code.code}:`, error)
@@ -267,8 +261,7 @@ export class ReferralService {
             expiresAt: code.expiresAt,
             swapCount: 0,
             swapVolumeUsd: '0',
-            feesCollectedUsd: '0',
-            referrerCommissionUsd: '0',
+            referrerFeeUsd: '0',
           }
         }
       }),
@@ -278,8 +271,7 @@ export class ReferralService {
       totalReferrals,
       activeCodesCount,
       totalCodesCount: referralCodes.length,
-      totalFeesCollectedUsd: totalFeesCollectedUsd.toFixed(2),
-      totalReferrerCommissionUsd: totalReferrerCommissionUsd.toFixed(2),
+      totalReferrerFeeUsd: totalReferrerFeeUsd.toFixed(2),
       referralCodes: referralCodesWithFees,
     }
   }

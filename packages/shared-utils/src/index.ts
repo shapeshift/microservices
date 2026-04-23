@@ -1,6 +1,7 @@
 import * as crypto from 'crypto'
 
 import { fromAccountId } from '@shapeshiftoss/caip'
+import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
 // Hash utilities
 export const hashAccountId = (accountId: string, salt?: string): string => {
@@ -33,6 +34,10 @@ export const isValidAccountId = (accountId: string): boolean => {
     return caip10Regex.test(accountId)
   }
 }
+
+// Amount utilities
+export const baseUnitToPrecision = (baseUnit: string, precision: number): string =>
+  bnOrZero(baseUnit).div(bnOrZero(10).pow(precision)).toFixed()
 
 // Date utilities
 export const formatDate = (date: Date): string => {

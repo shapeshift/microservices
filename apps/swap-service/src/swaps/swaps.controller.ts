@@ -1,25 +1,25 @@
 import {
   Body,
   Controller,
-  DefaultValuePipe,
   Get,
   NotFoundException,
   Param,
   ParseDatePipe,
-  ParseIntPipe,
   Post,
   Put,
   Query,
+  ValidationPipe,
 } from '@nestjs/common'
 
 import type { CreateSwapDto, UpdateSwapStatusDto, VerifySwapAffiliateDto } from '@shapeshift/shared-types'
-import type { Asset } from '@shapeshiftoss/types'
 
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import { SwapsService } from './swaps.service'
+import { PaginationQueryDto } from './types'
 
 const OptionalDatePipe = new ParseDatePipe({ optional: true })
+const PaginationPipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })
 
 @Controller('swaps')
 export class SwapsController {
@@ -38,27 +38,26 @@ export class SwapsController {
     return this.swapsService.updateSwapStatus({ swapId, ...data })
   }
 
-  @Get('user/:userId')
-  async getSwapsByUser(
-    @Param('userId') userId: string,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('cursor') cursor?: string,
-  ) {
-    return this.swapsService.getSwapsByUser(userId, { limit, cursor })
-  }
-
-  @Get('account/:accountId')
-  async getSwapsByAccountId(
-    @Param('accountId') accountId: string,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('cursor') cursor?: string,
-  ) {
-    return this.swapsService.getSwapsByAccountId(accountId, { limit, cursor })
-  }
-
   @Get('pending')
   async getPendingSwaps() {
     return this.swapsService.getPendingSwaps()
+  }
+
+  @Get(':swapId')
+  async getSwapById(@Param('swapId') swapId: string) {
+    const swap = await this.swapsService.getSwapById(swapId)
+    if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
+    return swap
+  }
+
+  @Get('user/:userId')
+  async getSwapsByUser(@Param('userId') userId: string, @Query(PaginationPipe) query: PaginationQueryDto) {
+    return this.swapsService.getSwapsByUser(userId, query)
+  }
+
+  @Get('account/:accountId')
+  async getSwapsByAccountId(@Param('accountId') accountId: string, @Query(PaginationPipe) query: PaginationQueryDto) {
+    return this.swapsService.getSwapsByAccountId(accountId, query)
   }
 
   @Get('referral-fees/:referralCode')
@@ -79,22 +78,15 @@ export class SwapsController {
     return this.swapsService.calculateAffiliateFees(affiliateAddress, startDate, endDate)
   }
 
-  @Get(':swapId')
-  async getSwap(@Param('swapId') swapId: string) {
-    const swap = await this.swapsService.findSwapBySwapId(swapId)
-    if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
-    return swap
-  }
-
   @Post(':swapId/verify-affiliate')
   async verifySwapAffiliate(@Param('swapId') swapId: string, @Body() data: Omit<VerifySwapAffiliateDto, 'swapId'>) {
-    const swap = await this.swapsService.findSwapBySwapId(swapId)
+    const swap = await this.swapsService.getSwapById(swapId)
     if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
 
     return this.swapVerificationService.verifySwapAffiliate(
       swapId,
       data.protocol || swap.swapperName,
-      (swap.sellAsset as Asset).chainId,
+      swap.sellAsset.chainId,
       data.txHash || swap.sellTxHash || undefined,
       swap.metadata as Record<string, any>,
     )
