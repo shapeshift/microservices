@@ -5260,9 +5260,6 @@ __metadata:
     "@shapeshift/shared-types": "workspace:*"
     "@shapeshift/shared-utils": "workspace:*"
     "@types/jsonwebtoken": "npm:^9.0.10"
-    axios: "npm:^1.6.2"
-    class-transformer: "npm:^0.5.1"
-    class-validator: "npm:^0.14.3"
     jsonwebtoken: "npm:^9.0.3"
     siwe: "npm:^3.0.0"
   languageName: unknown
@@ -8368,7 +8365,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"axios@npm:1.13.2, axios@npm:^1.13.0, axios@npm:^1.6.2, axios@npm:^1.6.8, axios@npm:^1.7.4":
+"axios@npm:1.13.2, axios@npm:^1.13.0, axios@npm:^1.6.8, axios@npm:^1.7.4":
   version: 1.13.2
   resolution: "axios@npm:1.13.2"
   dependencies:
@@ -16998,6 +16995,8 @@ __metadata:
     "@types/jest": "npm:^30.0.0"
     "@types/node": "npm:^22.10.7"
     axios: "npm:^1.7.4"
+    class-transformer: "npm:^0.5.1"
+    class-validator: "npm:^0.14.3"
     dotenv: "npm:^17.2.2"
     eslint: "npm:^9.18.0"
     eslint-config-prettier: "npm:^10.0.1"
