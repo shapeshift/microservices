@@ -137,3 +137,12 @@ export interface VerifySwapAffiliateDto {
   protocol: string
   txHash?: string
 }
+
+export interface Fees {
+  swapCount: number
+  periodVolumeUsd: string
+  periodFeeUsd: string
+  allTimeFeeUsd: string
+  periodStart?: string
+  periodEnd?: string
+}

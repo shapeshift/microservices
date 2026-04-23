@@ -1,13 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 
-import { CreateSwapDto, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
+import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
 import { hashAccountId, NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { ChainId } from '@shapeshiftoss/caip'
-import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap } from '@shapeshiftoss/swapper'
 import { SwapperName, swappers } from '@shapeshiftoss/swapper'
-import { Asset } from '@shapeshiftoss/types'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service'
@@ -24,17 +22,9 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import type { AffiliateVerificationDetails, PaginatedSwaps, Swap } from './types'
+import type { AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
-import {
-  buildStatusNotification,
-  estimateAffiliateFeeAmount,
-  fetchUsdPrices,
-  getAffiliateCommissionRate,
-  resolveFeeAssetPrice,
-  resolveSwapSellAmountUsd,
-  toSwap,
-} from './utils'
+import { buildStatusNotification, calculateFeeForSwap, fetchUsdPrices, getAffiliateFeeRate, toSwap } from './utils'
 
 const logger = new Logger('SwapsService')
 
@@ -44,6 +34,7 @@ export class SwapsService {
   private readonly userServiceClient: UserServiceClient
 
   private static readonly API_BASE_BPS = 10
+  private static readonly REFERRER_FEE_RATE = 0.1
 
   constructor(
     private prisma: PrismaService,
@@ -211,245 +202,117 @@ export class SwapsService {
 
   async getPendingSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      where: {
-        status: {
-          in: ['IDLE', 'PENDING'],
-        },
-        sellTxHash: { not: null },
-      },
+      where: { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
     })
 
     return swaps.map(toSwap)
   }
 
-  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date) {
+  async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
     logger.log(
       `Calculating referral fees for code: ${referralCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
 
-    const periodWhereClause: Prisma.SwapWhereInput = {
-      referralCode,
-      isAffiliateVerified: true,
-      status: 'SUCCESS',
-    }
-
-    if (startDate && endDate) {
-      periodWhereClause.createdAt = { gte: startDate, lte: endDate }
-    }
-
-    const referralSwapSelect = {
-      swapId: true,
-      sellAmountUsd: true,
-      affiliateVerificationDetails: true,
-      createdAt: true,
-    } as const
-
-    const periodSwaps = await this.prisma.swap.findMany({
-      where: periodWhereClause,
-      select: referralSwapSelect,
-    })
-
-    const allTimeSwaps = await this.prisma.swap.findMany({
-      where: {
-        referralCode,
-        isAffiliateVerified: true,
-        status: 'SUCCESS',
+    const fees = await this.aggregateFees({
+      baseWhere: { referralCode, isAffiliateVerified: true, status: 'SUCCESS', origin: 'web' },
+      startDate,
+      endDate,
+      calcFee: (swap) => {
+        const fee = calculateFeeForSwap(swap)
+        if (!fee) return null
+        return { feeUsd: fee.feeUsd * SwapsService.REFERRER_FEE_RATE, volumeUsd: fee.volumeUsd }
       },
-      select: referralSwapSelect,
     })
 
     logger.log(
-      `Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for referral code ${referralCode}`,
+      `Referral fees for ${referralCode}\n` +
+        `  period:   ${fees.periodCount} swaps, $${fees.periodVolumeUsd.toFixed(2)} volume, $${fees.periodFeesUsd.toFixed(2)} fee\n` +
+        `  all-time: ${fees.allTimeCount} swaps, $${fees.allTimeFeesUsd.toFixed(2)} fee`,
     )
 
-    const sumFees = (swaps: typeof periodSwaps) => {
-      let totalFeesUsd = 0
-      let totalVolumeUsd = 0
-      for (const swap of swaps) {
-        const sellAmountUsd = resolveSwapSellAmountUsd(swap)
-        if (sellAmountUsd === null) continue
-        totalVolumeUsd += sellAmountUsd
-        const details = swap.affiliateVerificationDetails as AffiliateVerificationDetails | null
-        const bps = details?.affiliateBps
-        if (bps && sellAmountUsd > 0) {
-          totalFeesUsd += (sellAmountUsd * bps) / 10000
-        }
+    return {
+      swapCount: fees.periodCount,
+      periodVolumeUsd: fees.periodVolumeUsd.toFixed(2),
+      periodFeeUsd: fees.periodFeesUsd.toFixed(2),
+      allTimeFeeUsd: fees.allTimeFeesUsd.toFixed(2),
+      periodStart: startDate?.toISOString(),
+      periodEnd: endDate?.toISOString(),
+    }
+  }
+
+  async calculateAffiliateFees(affiliateAddress: string, startDate?: Date, endDate?: Date): Promise<Fees> {
+    logger.log(
+      `Calculating affiliate fees for address: ${affiliateAddress}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
+    )
+
+    const fees = await this.aggregateFees({
+      baseWhere: { affiliateAddress, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
+      startDate,
+      endDate,
+      calcFee: (swap) => {
+        const fee = calculateFeeForSwap(swap)
+        if (!fee) return null
+        const rate = getAffiliateFeeRate(fee.verifiedBps, swap.shapeshiftBps)
+        return { feeUsd: fee.feeUsd * rate, volumeUsd: fee.volumeUsd }
+      },
+    })
+
+    logger.log(
+      `Affiliate fees for ${affiliateAddress}\n` +
+        `  period:   ${fees.periodCount} swaps, $${fees.periodVolumeUsd.toFixed(2)} volume, $${fees.periodFeesUsd.toFixed(2)} fee\n` +
+        `  all-time: ${fees.allTimeCount} swaps, $${fees.allTimeFeesUsd.toFixed(2)} fee`,
+    )
+
+    return {
+      swapCount: fees.periodCount,
+      periodVolumeUsd: fees.periodVolumeUsd.toFixed(2),
+      periodFeeUsd: fees.periodFeesUsd.toFixed(2),
+      allTimeFeeUsd: fees.allTimeFeesUsd.toFixed(2),
+      periodStart: startDate?.toISOString(),
+      periodEnd: endDate?.toISOString(),
+    }
+  }
+
+  private async aggregateFees(params: AggregateFeesParams): Promise<FeeTotals> {
+    const { baseWhere, startDate, endDate, calcFee } = params
+
+    const rows = await this.prisma.swap.findMany({ where: baseWhere })
+
+    const isInPeriod = (createdAt: Date): boolean => {
+      if (startDate && createdAt < startDate) return false
+      if (endDate && createdAt > endDate) return false
+      return true
+    }
+
+    let periodCount = 0
+    let periodVolumeUsd = 0
+    let periodFeesUsd = 0
+    let allTimeCount = 0
+    let allTimeFeesUsd = 0
+
+    for (const row of rows) {
+      const swap = toSwap(row)
+
+      const result = calcFee(swap)
+      if (!result) continue
+
+      allTimeCount += 1
+      allTimeFeesUsd += result.feeUsd
+
+      if (isInPeriod(swap.createdAt)) {
+        periodCount += 1
+        periodVolumeUsd += result.volumeUsd
+        periodFeesUsd += result.feeUsd
       }
-      return { totalFeesUsd, totalVolumeUsd }
     }
-
-    const period = sumFees(periodSwaps)
-    const allTime = sumFees(allTimeSwaps)
-
-    // Referrer receives 10% of affiliate fees collected.
-    const periodReferrerCommissionUsd = period.totalFeesUsd * 0.1
-    const allTimeReferrerCommissionUsd = allTime.totalFeesUsd * 0.1
-
-    logger.log(
-      `Referral fee calculation for ${referralCode}: ` +
-        `Period: ${periodSwaps.length} swaps, $${period.totalVolumeUsd.toFixed(2)} volume, $${periodReferrerCommissionUsd.toFixed(2)} commission | ` +
-        `All-time: ${allTimeSwaps.length} swaps, $${allTimeReferrerCommissionUsd.toFixed(2)} total commission`,
-    )
 
     return {
-      referralCode,
-      swapCount: periodSwaps.length,
-      totalSwapVolumeUsd: period.totalVolumeUsd.toFixed(2),
-      totalFeesCollectedUsd: allTimeReferrerCommissionUsd.toFixed(2),
-      referrerCommissionUsd: periodReferrerCommissionUsd.toFixed(2),
-      periodStart: startDate?.toISOString(),
-      periodEnd: endDate?.toISOString(),
+      periodCount,
+      periodVolumeUsd,
+      periodFeesUsd,
+      allTimeCount,
+      allTimeFeesUsd,
     }
-  }
-
-  async calculateAffiliateFees(affiliateAddress: string, startDate?: Date, endDate?: Date) {
-    const normalizedAddress = affiliateAddress.toLowerCase()
-
-    logger.log(
-      `Calculating affiliate fees for address: ${normalizedAddress}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
-    )
-
-    const periodWhereClause: Prisma.SwapWhereInput = {
-      affiliateAddress: normalizedAddress,
-      isAffiliateVerified: true,
-      status: 'SUCCESS',
-    }
-
-    if (startDate && endDate) {
-      periodWhereClause.createdAt = { gte: startDate, lte: endDate }
-    }
-
-    const swapSelect = {
-      swapId: true,
-      swapperName: true,
-      sellAsset: true,
-      buyAsset: true,
-      sellAmountCryptoBaseUnit: true,
-      expectedBuyAmountCryptoBaseUnit: true,
-      sellAmountUsd: true,
-      buyAssetUsd: true,
-      affiliateAssetUsd: true,
-      affiliateBps: true,
-      origin: true,
-      affiliateFeeAssetId: true,
-      actualAffiliateFeeAmountCryptoBaseUnit: true,
-      affiliateVerificationDetails: true,
-      createdAt: true,
-      shapeshiftBps: true,
-    } as const
-
-    const periodSwaps = await this.prisma.swap.findMany({
-      where: periodWhereClause,
-      select: swapSelect,
-    })
-
-    const allTimeSwaps = await this.prisma.swap.findMany({
-      where: {
-        affiliateAddress: normalizedAddress,
-        isAffiliateVerified: true,
-        status: 'SUCCESS',
-      },
-      select: swapSelect,
-    })
-
-    logger.log(
-      `Found ${periodSwaps.length} swaps for period, ${allTimeSwaps.length} swaps all-time for affiliate ${normalizedAddress}`,
-    )
-
-    let periodCommissionUsd = 0
-    let totalSwapVolumeUsd = 0
-    for (const swap of periodSwaps) {
-      const { feeUsd, volumeUsd } = this.calculateFeeForSwap(swap)
-      totalSwapVolumeUsd += volumeUsd
-      periodCommissionUsd += feeUsd
-    }
-
-    let allTimeCommissionUsd = 0
-    for (const swap of allTimeSwaps) {
-      const { feeUsd } = this.calculateFeeForSwap(swap)
-      allTimeCommissionUsd += feeUsd
-    }
-
-    logger.log(
-      `Affiliate fee calculation for ${normalizedAddress}: ` +
-        `Period: ${periodSwaps.length} swaps, $${totalSwapVolumeUsd.toFixed(2)} volume, $${periodCommissionUsd.toFixed(2)} commission | ` +
-        `All-time: ${allTimeSwaps.length} swaps, $${allTimeCommissionUsd.toFixed(2)} total commission`,
-    )
-
-    return {
-      affiliateAddress: normalizedAddress,
-      swapCount: periodSwaps.length,
-      totalSwapVolumeUsd: totalSwapVolumeUsd.toFixed(2),
-      totalFeesCollectedUsd: allTimeCommissionUsd.toFixed(2),
-      referrerCommissionUsd: periodCommissionUsd.toFixed(2),
-      periodStart: startDate?.toISOString(),
-      periodEnd: endDate?.toISOString(),
-    }
-  }
-
-  private calculateFeeForSwap(swap: {
-    swapId: string
-    swapperName: string
-    sellAsset: unknown
-    buyAsset: unknown
-    sellAmountCryptoBaseUnit: string
-    expectedBuyAmountCryptoBaseUnit: string
-    sellAmountUsd: string | null
-    buyAssetUsd: string | null
-    affiliateAssetUsd: string | null
-    affiliateBps: number | null
-    origin: string | null
-    affiliateFeeAssetId: string | null
-    actualAffiliateFeeAmountCryptoBaseUnit: string | null
-    affiliateVerificationDetails: unknown
-    shapeshiftBps: number
-  }): { feeUsd: number; volumeUsd: number } {
-    const sellAmountUsd = resolveSwapSellAmountUsd(swap)
-    if (sellAmountUsd === null) return { feeUsd: 0, volumeUsd: 0 }
-
-    const verificationDetails = swap.affiliateVerificationDetails as AffiliateVerificationDetails | null
-    const verifiedBps = verificationDetails?.affiliateBps ?? swap.affiliateBps ?? undefined
-
-    if (!verifiedBps || sellAmountUsd <= 0) {
-      return { feeUsd: 0, volumeUsd: sellAmountUsd }
-    }
-
-    const commissionRate = getAffiliateCommissionRate(swap.origin, verifiedBps, swap.shapeshiftBps)
-
-    const verifiedSell = verificationDetails?.verifiedSellAmountCryptoBaseUnit
-    const effectiveSellAmount = verifiedSell
-      ? bnOrZero(verifiedSell).lt(bnOrZero(swap.sellAmountCryptoBaseUnit))
-        ? verifiedSell
-        : swap.sellAmountCryptoBaseUnit
-      : swap.sellAmountCryptoBaseUnit
-
-    let totalFeeUsd: number
-    const feeAssetId = swap.affiliateFeeAssetId
-    const feeAssetPrice = resolveFeeAssetPrice(swap)
-
-    if (feeAssetId && feeAssetPrice) {
-      const sellAssetObj = swap.sellAsset as Asset
-      const buyAssetObj = swap.buyAsset as Asset
-      const feeAmountBaseUnit =
-        swap.actualAffiliateFeeAmountCryptoBaseUnit ??
-        estimateAffiliateFeeAmount(
-          verifiedBps,
-          swap.swapperName,
-          effectiveSellAmount,
-          swap.expectedBuyAmountCryptoBaseUnit,
-        )
-      const feeAssetPrecision =
-        feeAssetId === sellAssetObj.assetId
-          ? sellAssetObj.precision
-          : feeAssetId === buyAssetObj.assetId
-            ? buyAssetObj.precision
-            : sellAssetObj.precision
-      totalFeeUsd = bnOrZero(feeAmountBaseUnit).div(bnOrZero(10).pow(feeAssetPrecision)).times(feeAssetPrice).toNumber()
-    } else {
-      totalFeeUsd = (sellAmountUsd * verifiedBps) / 10000
-    }
-
-    return { feeUsd: totalFeeUsd * commissionRate, volumeUsd: sellAmountUsd }
   }
 
   async pollSwapStatus(swapId: string): Promise<SwapStatusResponse> {
@@ -629,5 +492,4 @@ export class SwapsService {
       }
     }
   }
-
 }

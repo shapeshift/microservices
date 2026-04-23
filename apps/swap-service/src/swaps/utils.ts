@@ -7,18 +7,20 @@ import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
-import { getSwapperFeeStrategy } from '../utils/affiliateFeeAsset'
 import { getAssetPriceUsd } from '../utils/pricing'
 
-import type { StatusNotification, Swap, UsdPrices } from './types'
+import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
+
+const BPS_DENOMINATOR = 10000
 
 export const toSwap = (swap: PrismaSwap): Swap => ({
   ...swap,
   sellAsset: swap.sellAsset as Asset,
   buyAsset: swap.buyAsset as Asset,
   metadata: swap.metadata as SwapperSpecificMetadata,
+  affiliateVerificationDetails: swap.affiliateVerificationDetails as AffiliateVerificationDetails | null,
 })
 
 // formatAmount up to 8 decimals, no trailing zeros
@@ -28,35 +30,11 @@ export const formatAmount = (amount: string | number): string => {
     .replace(/\.?0+$/, '')
 }
 
-export const getAffiliateCommissionRate = (
-  origin: string | null,
-  verifiedBps: number,
-  shapeshiftBps: number,
-): number => {
-  // Referrer earns shapeshiftBps of volume (shapeshiftBps / verifiedBps of the fee).
-  if (origin === 'web') return shapeshiftBps / verifiedBps
-  if (!origin || verifiedBps <= shapeshiftBps) return 0
+export const getAffiliateFeeRate = (verifiedBps: number, shapeshiftBps: number): number => {
+  // Partner configured at or below the platform floor — partner keeps the whole fee.
+  if (verifiedBps <= shapeshiftBps) return 1
+  // Platform takes shapeshiftBps; partner gets the remainder.
   return (verifiedBps - shapeshiftBps) / verifiedBps
-}
-
-export const estimateAffiliateFeeAmount = (
-  affiliateBps: number,
-  swapperName: string,
-  sellAmountCryptoBaseUnit: string,
-  expectedBuyAmountCryptoBaseUnit: string,
-): string => {
-  const strategy = getSwapperFeeStrategy(swapperName)
-  const bpsMultiplier = affiliateBps / 10000
-
-  switch (strategy) {
-    case 'sell_asset':
-      return bnOrZero(sellAmountCryptoBaseUnit).times(bpsMultiplier).toFixed(0)
-    case 'buy_asset':
-      return bnOrZero(expectedBuyAmountCryptoBaseUnit).times(bpsMultiplier).toFixed(0)
-    case 'fixed_base':
-    default:
-      return bnOrZero(sellAmountCryptoBaseUnit).times(bpsMultiplier).toFixed(0)
-  }
 }
 
 export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: string | null): Promise<UsdPrices> => {
@@ -82,15 +60,6 @@ export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: s
     logger.warn(`Failed to fetch USD prices for swap ${data.swapId}:`, err)
     return { sellAmountUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
   }
-}
-
-export const resolveSwapSellAmountUsd = (swap: { swapId: string; sellAmountUsd: string | null }): number | null => {
-  if (!swap.sellAmountUsd) {
-    logger.warn(`Missing sellAmountUsd for swap ${swap.swapId}, skipping`)
-    return null
-  }
-
-  return parseFloat(swap.sellAmountUsd)
 }
 
 export const buildStatusNotification = (swap: Swap): StatusNotification | null => {
@@ -122,27 +91,51 @@ export const buildStatusNotification = (swap: Swap): StatusNotification | null =
   }
 }
 
-export const resolveFeeAssetPrice = (swap: {
-  sellAsset: unknown
-  buyAsset: unknown
-  sellAmountCryptoBaseUnit: string
-  sellAmountUsd: string | null
-  buyAssetUsd: string | null
-  affiliateAssetUsd: string | null
-  affiliateFeeAssetId: string | null
-}): string | null => {
-  if (!swap.affiliateFeeAssetId) return null
+const resolveActualFeeUsd = (swap: Swap): number | null => {
+  const amount = swap.actualAffiliateFeeAmountCryptoBaseUnit
+  if (!amount || !swap.affiliateFeeAssetId) return null
 
-  const sellAssetObj = swap.sellAsset as Asset
-  const buyAssetObj = swap.buyAsset as Asset
+  let priceUsd: string | null
+  let precision: number | null
 
-  if (swap.affiliateFeeAssetId === sellAssetObj.assetId && swap.sellAmountUsd) {
-    // Back-derive sell price from stored USD value.
-    const sellAmountPrecision = bnOrZero(swap.sellAmountCryptoBaseUnit).div(bnOrZero(10).pow(sellAssetObj.precision))
-    return sellAmountPrecision.isZero() ? null : bnOrZero(swap.sellAmountUsd).div(sellAmountPrecision).toFixed()
+  if (swap.affiliateFeeAssetId === swap.sellAsset.assetId) {
+    // Back-derive sell asset price from stored USD value.
+    if (!swap.sellAmountUsd) return null
+    const sellAmount = bnOrZero(swap.sellAmountCryptoBaseUnit).div(bnOrZero(10).pow(swap.sellAsset.precision))
+    if (sellAmount.isZero()) return null
+    priceUsd = bnOrZero(swap.sellAmountUsd).div(sellAmount).toFixed()
+    precision = swap.sellAsset.precision
+  } else if (swap.affiliateFeeAssetId === swap.buyAsset.assetId) {
+    priceUsd = swap.buyAssetUsd
+    precision = swap.buyAsset.precision
+  } else {
+    priceUsd = swap.affiliateAssetUsd
+    // Fee asset is neither sell nor buy — precision unknown
+    precision = null
   }
 
-  if (swap.affiliateFeeAssetId === buyAssetObj.assetId) return swap.buyAssetUsd
+  if (!priceUsd || precision === null) return null
 
-  return swap.affiliateAssetUsd
+  return bnOrZero(amount).div(bnOrZero(10).pow(precision)).times(priceUsd).toNumber()
+}
+
+export const calculateFeeForSwap = (swap: Swap): { feeUsd: number; volumeUsd: number; verifiedBps: number } | null => {
+  const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps
+  if (!verifiedBps) {
+    logger.warn(`Verified swap ${swap.swapId} missing affiliateBps in verification details, skipping`)
+    return null
+  }
+
+  const sellAmountUsd = swap.sellAmountUsd ? parseFloat(swap.sellAmountUsd) : null
+  const actualFeeUsd = resolveActualFeeUsd(swap)
+
+  if (actualFeeUsd === null && sellAmountUsd === null) {
+    logger.warn(`Unable to calculate fee for swap ${swap.swapId}, skipping`)
+    return null
+  }
+
+  const feeUsd = actualFeeUsd ?? bnOrZero(sellAmountUsd).times(verifiedBps).div(BPS_DENOMINATOR).toNumber()
+  const volumeUsd = sellAmountUsd ?? bnOrZero(actualFeeUsd).times(BPS_DENOMINATOR).div(verifiedBps).toNumber()
+
+  return { feeUsd, volumeUsd, verifiedBps }
 }
