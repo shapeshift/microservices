@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
@@ -178,8 +184,8 @@ export class SwapsService {
 
       try {
         await this.sendStatusUpdateNotification(swap)
-      } catch (notifError) {
-        logger.error(`Failed to send notification for swap ${swap.swapId}:`, notifError)
+      } catch {
+        logger.error(`Failed to send notification for swap ${swap.swapId}`)
       }
 
       logger.log(`Swap status updated: ${swap.swapId} -> ${swap.status}`)
@@ -192,6 +198,8 @@ export class SwapsService {
   }
 
   private async sendStatusUpdateNotification(swap: Swap) {
+    if (swap.userId === 'api') return
+
     const notification = buildStatusNotification(swap)
     if (!notification) return
 
