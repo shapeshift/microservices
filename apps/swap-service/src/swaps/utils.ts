@@ -15,12 +15,23 @@ const logger = new Logger('SwapsService')
 
 const BPS_DENOMINATOR = 10000
 
+// Historical rows may persist `{}` for affiliateVerificationDetails; coerce anything
+// that doesn't satisfy the tightened shape (requires `hasAffiliate`) to null.
+const toAffiliateVerificationDetails = (
+  raw: PrismaSwap['affiliateVerificationDetails'],
+): AffiliateVerificationDetails | null => {
+  if (!raw || typeof raw !== 'object') return null
+  const details = raw as Partial<AffiliateVerificationDetails>
+  if (typeof details.hasAffiliate !== 'boolean') return null
+  return details as AffiliateVerificationDetails
+}
+
 export const toSwap = (swap: PrismaSwap): Swap => ({
   ...swap,
   sellAsset: swap.sellAsset as Asset,
   buyAsset: swap.buyAsset as Asset,
   metadata: swap.metadata as SwapperSpecificMetadata,
-  affiliateVerificationDetails: swap.affiliateVerificationDetails as AffiliateVerificationDetails | null,
+  affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
 
 export const toSwapperSwap = (swap: Swap): SwapperSwap =>

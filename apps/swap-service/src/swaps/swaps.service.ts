@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
@@ -349,7 +349,7 @@ export class SwapsService {
     const swap = toSwap(prismaSwap)
 
     const swapper = swappers[swap.swapperName as SwapperName]
-    if (!swapper) throw new NotFoundException(`Swapper not found: ${swap.swapperName}`)
+    if (!swapper) throw new InternalServerErrorException(`Swapper not registered: ${swap.swapperName}`)
 
     if (!swap.sellTxHash) throw new BadRequestException('Sell tx hash is required')
 

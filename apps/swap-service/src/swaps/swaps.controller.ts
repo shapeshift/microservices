@@ -38,6 +38,11 @@ export class SwapsController {
     return this.swapsService.updateSwapStatus({ swapId, ...data })
   }
 
+  @Get('pending')
+  async getPendingSwaps() {
+    return this.swapsService.getPendingSwaps()
+  }
+
   @Get(':swapId')
   async getSwapById(@Param('swapId') swapId: string) {
     const swap = await this.swapsService.getSwapById(swapId)
@@ -53,11 +58,6 @@ export class SwapsController {
   @Get('account/:accountId')
   async getSwapsByAccountId(@Param('accountId') accountId: string, @Query(PaginationPipe) query: PaginationQueryDto) {
     return this.swapsService.getSwapsByAccountId(accountId, query)
-  }
-
-  @Get('pending')
-  async getPendingSwaps() {
-    return this.swapsService.getPendingSwaps()
   }
 
   @Get('referral-fees/:referralCode')
