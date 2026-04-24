@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs'
 import { SwapVerificationResult } from '@shapeshift/shared-types'
 import { assertGetCowNetwork, getTreasuryAddressFromChainId, SwapperName } from '@shapeshiftoss/swapper'
 
+import { env } from '../env'
 import type { Swap } from '../swaps/types'
 
 import {
@@ -30,18 +31,33 @@ import { THORCHAIN_PRECISION, thorchainToNativePrecision } from './utils'
 export class SwapVerificationService {
   private readonly logger = new Logger(SwapVerificationService.name)
 
-  private oneClickServiceInitialized = false
+  private readonly shapeshift0xIntegrator = 'ShapeShift'
+  private readonly shapeshiftBebopSource = 'shapeshift'
+  private readonly shapeshiftButterswapEntrance = 'shapeshift'
+  private readonly shapeshiftChainflipAffiliate = 'shapeshift'
+  private readonly shapeshiftCowswapAppCode = 'shapeshift'
+  private readonly shapeshiftMayaAffiliate = 'ssmaya'
+  private readonly shapeshiftNearReferral = 'shapeshift'
+  private readonly shapeshiftRelayReferrer = 'shapeshift'
+  private readonly shapeshiftThorchainAffiliate = 'ss'
 
-  constructor(private readonly httpService: HttpService) {}
+  private readonly bebopApiKey = env.VITE_BEBOP_API_KEY
+  private readonly chainflipApiKey = env.VITE_CHAINFLIP_API_KEY
 
-  private initializeOneClickService(apiKey: string) {
-    if (this.oneClickServiceInitialized) return
+  private readonly thorchainNodeUrl = env.VITE_THORCHAIN_NODE_URL
+  private readonly mayachainNodeUrl = env.VITE_MAYACHAIN_NODE_URL
 
+  private readonly acrossApiUrl = env.VITE_ACROSS_API_URL
+  private readonly bebopApiUrl = env.VITE_BEBOP_API_URL
+  private readonly chainflipApiUrl = env.VITE_CHAINFLIP_API_URL
+  private readonly cowswapApiUrl = env.VITE_COWSWAP_BASE_URL
+  private readonly portalsApiUrl = env.VITE_PORTALS_BASE_URL
+  private readonly relayApiUrl = env.VITE_RELAY_API_URL
+  private readonly zrxApiUrl = env.VITE_ZRX_BASE_URL
+
+  constructor(private readonly httpService: HttpService) {
     OpenAPI.BASE = 'https://1click.chaindefuser.com'
-    OpenAPI.TOKEN = apiKey
-
-    this.oneClickServiceInitialized = true
-    this.logger.log('OneClickService initialized')
+    OpenAPI.TOKEN = env.VITE_NEAR_INTENTS_API_KEY
   }
 
   async verifySwap(swap: Swap): Promise<SwapVerificationResult> {
@@ -97,7 +113,7 @@ export class SwapVerificationService {
         default: {
           const _exhaustive: never = swapperName
           void _exhaustive
-          return unverified(`Verification not implemented for ${swapperName}`)
+          throw new Error('unreachable')
         }
       }
     } catch (error) {
@@ -124,21 +140,6 @@ export class SwapVerificationService {
     }
 
     try {
-      // Initialize OneClickService with API key (same approach as web)
-      const apiKey = process.env.VITE_NEAR_INTENTS_API_KEY
-      if (!apiKey) {
-        this.logger.error('Missing VITE_NEAR_INTENTS_API_KEY for NEAR Intents verification')
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          swapperName: SwapperName.NearIntents,
-          swapId,
-          error: 'Missing VITE_NEAR_INTENTS_API_KEY',
-        }
-      }
-
-      this.initializeOneClickService(apiKey)
-
       const statusResponse = await OneClickService.getExecutionStatus(depositAddress)
 
       if (!statusResponse) {
@@ -158,8 +159,7 @@ export class SwapVerificationService {
       // Verify it's ShapeShift's affiliate
       // The referral field should be 'shapeshift' from the quote request
       const referral = quoteRequest?.referral
-      const shapeshiftReferral = process.env.SHAPESHIFT_NEAR_REFERRAL || 'shapeshift'
-      const hasShapeshiftReferral = referral?.toLowerCase() === shapeshiftReferral.toLowerCase()
+      const hasShapeshiftReferral = referral?.toLowerCase() === this.shapeshiftNearReferral.toLowerCase()
 
       // Check if there are app fees
       const appFees = quoteRequest?.appFees || []
@@ -197,7 +197,7 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftReferral : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftNearReferral : undefined,
         verifiedSellAmountCryptoBaseUnit,
         swapperName: SwapperName.NearIntents,
         swapId,
@@ -237,8 +237,7 @@ export class SwapVerificationService {
     }
 
     try {
-      const relayApiUrl = process.env.VITE_RELAY_API_URL || 'https://api.relay.link'
-      const requestUrl = `${relayApiUrl}/requests/v2?id=${relayId}`
+      const requestUrl = `${this.relayApiUrl}/requests/v2?id=${relayId}`
 
       const response = await firstValueFrom(this.httpService.get<RelayRequestsResponse>(requestUrl))
 
@@ -258,8 +257,7 @@ export class SwapVerificationService {
 
       // Check for referrer field at top level
       const referrer = request.referrer
-      const shapeshiftReferrer = process.env.SHAPESHIFT_RELAY_REFERRER || 'shapeshift'
-      const hasShapeshiftReferrer = referrer?.toLowerCase() === shapeshiftReferrer.toLowerCase()
+      const hasShapeshiftReferrer = referrer?.toLowerCase() === this.shapeshiftRelayReferrer.toLowerCase()
 
       // Check for appFees or paidAppFees in the data object
       const appFees = request.data?.appFees || request.data?.paidAppFees || []
@@ -335,18 +333,18 @@ export class SwapVerificationService {
     try {
       // ALWAYS fetch appData from CowSwap API to verify it's legitimate
       this.logger.log(`CowSwap - Fetching appData from API using hash ${appDataHash} for swap ${swapId}`)
-      const cowswapApiUrl = process.env.VITE_COWSWAP_BASE_URL || 'https://api.cow.fi'
       const cowNetwork = assertGetCowNetwork(sellChainId)
       const response = await firstValueFrom(
-        this.httpService.get<CowSwapAppDataResponse>(`${cowswapApiUrl}/${cowNetwork}/api/v1/app_data/${appDataHash}`),
+        this.httpService.get<CowSwapAppDataResponse>(
+          `${this.cowswapApiUrl}/${cowNetwork}/api/v1/app_data/${appDataHash}`,
+        ),
       )
 
       const decodedAppData = JSON.parse(response.data.fullAppData) as CowSwapDecodedAppData
 
       // Check if appCode is "shapeshift"
       const appCode = decodedAppData?.appCode
-      const shapeshiftAppCode = process.env.SHAPESHIFT_COWSWAP_APPCODE || 'shapeshift'
-      const hasShapeshiftAppCode = appCode?.toLowerCase() === shapeshiftAppCode.toLowerCase()
+      const hasShapeshiftAppCode = appCode?.toLowerCase() === this.shapeshiftCowswapAppCode.toLowerCase()
 
       // Extract partner fee information from metadata.partnerFee
       const partnerFee = decodedAppData?.metadata?.partnerFee
@@ -361,7 +359,7 @@ export class SwapVerificationService {
       if (orderUid) {
         try {
           const orderResponse = await firstValueFrom(
-            this.httpService.get<CowSwapOrderResponse>(`${cowswapApiUrl}/${cowNetwork}/api/v1/orders/${orderUid}`),
+            this.httpService.get<CowSwapOrderResponse>(`${this.cowswapApiUrl}/${cowNetwork}/api/v1/orders/${orderUid}`),
           )
           verifiedSellAmountCryptoBaseUnit =
             orderResponse.data?.executedSellAmountBeforeFees?.toString() ??
@@ -441,9 +439,8 @@ export class SwapVerificationService {
     try {
       // ALWAYS fetch order status from Portals API to verify it's legitimate
       this.logger.log(`Portals - Fetching order status from API using orderId ${orderId} for swap ${swapId}`)
-      const portalsProxyUrl = process.env.PORTALS_PROXY_URL || 'https://api.proxy.shapeshift.com/api/v1/portals'
       const response = await firstValueFrom(
-        this.httpService.get<PortalsOrderResponse>(`${portalsProxyUrl}/v2/portal/status?orderId=${orderId}`),
+        this.httpService.get<PortalsOrderResponse>(`${this.portalsApiUrl}/v2/portal/status?orderId=${orderId}`),
       )
 
       const orderData = response.data
@@ -523,8 +520,7 @@ export class SwapVerificationService {
 
     try {
       // SECURITY: Query Thorchain node API to verify memo contains affiliate info
-      const nodeUrl = process.env.VITE_THORCHAIN_NODE_URL || 'https://thornode.ninerealms.com'
-      const txUrl = `${nodeUrl}/thorchain/tx/${txHash}`
+      const txUrl = `${this.thorchainNodeUrl}/thorchain/tx/${txHash}`
 
       this.logger.log(`Thorchain - Fetching tx from node API: ${txUrl}`)
 
@@ -555,8 +551,7 @@ export class SwapVerificationService {
 
       // Parse memo format: =:r:thor1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
       // The affiliate code is after the 4th colon, followed by fee in bps
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_THORCHAIN_AFFILIATE || 'ss'
-      const memoPattern = new RegExp(`:${shapeshiftAffiliate}:(\\d+)`, 'i')
+      const memoPattern = new RegExp(`:${this.shapeshiftThorchainAffiliate}:(\\d+)`, 'i')
       const memoMatch = memo.match(memoPattern)
 
       const hasShapeshiftAffiliate = !!memoMatch
@@ -570,14 +565,14 @@ export class SwapVerificationService {
         : undefined
 
       this.logger.log(
-        `Thorchain verification for swap ${swapId}: memo=${memo}, affiliate=${shapeshiftAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
+        `Thorchain verification for swap ${swapId}: memo=${memo}, affiliate=${this.shapeshiftThorchainAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
       )
 
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftThorchainAffiliate : undefined,
         verifiedSellAmountCryptoBaseUnit,
         swapperName: SwapperName.Thorchain,
         swapId,
@@ -615,8 +610,7 @@ export class SwapVerificationService {
 
     try {
       // SECURITY: Query Maya node API to verify memo contains affiliate info
-      const nodeUrl = process.env.VITE_MAYACHAIN_NODE_URL || 'https://mayanode.mayachain.info'
-      const txUrl = `${nodeUrl}/mayachain/tx/${txHash}`
+      const txUrl = `${this.mayachainNodeUrl}/mayachain/tx/${txHash}`
 
       this.logger.log(`Maya - Fetching tx from node API: ${txUrl}`)
 
@@ -647,8 +641,7 @@ export class SwapVerificationService {
 
       // Parse memo format: =:r:maya1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
       // The affiliate code is after the 4th colon, followed by fee in bps
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_MAYA_AFFILIATE || 'ssmaya'
-      const memoPattern = new RegExp(`:${shapeshiftAffiliate}:(\\d+)`, 'i')
+      const memoPattern = new RegExp(`:${this.shapeshiftMayaAffiliate}:(\\d+)`, 'i')
       const memoMatch = memo.match(memoPattern)
 
       const hasShapeshiftAffiliate = !!memoMatch
@@ -662,14 +655,14 @@ export class SwapVerificationService {
         : undefined
 
       this.logger.log(
-        `Maya verification for swap ${swapId}: memo=${memo}, affiliate=${shapeshiftAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
+        `Maya verification for swap ${swapId}: memo=${memo}, affiliate=${this.shapeshiftMayaAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
       )
 
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftMayaAffiliate : undefined,
         verifiedSellAmountCryptoBaseUnit,
         swapperName: SwapperName.Mayachain,
         swapId,
@@ -707,13 +700,11 @@ export class SwapVerificationService {
     }
 
     try {
-      const chainflipApiUrl = process.env.VITE_CHAINFLIP_API_URL || 'https://api.chainflip.io'
-      const statusUrl = `${chainflipApiUrl}/swaps/${chainflipSwapId}`
+      const statusUrl = `${this.chainflipApiUrl}/swaps/${chainflipSwapId}`
 
       const headers: Record<string, string> = {}
-      const apiKey = process.env.VITE_CHAINFLIP_API_KEY
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`
+      if (this.chainflipApiKey) {
+        headers['Authorization'] = `Bearer ${this.chainflipApiKey}`
       }
 
       const response = await firstValueFrom(this.httpService.get<ChainflipSwapResponse>(statusUrl, { headers }))
@@ -734,8 +725,7 @@ export class SwapVerificationService {
       const affiliate = swapData.affiliate || swapData.affiliateName
       const affiliateBps = swapData.affiliateBps || swapData.affiliateFee
 
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_CHAINFLIP_AFFILIATE || 'shapeshift'
-      const hasShapeshiftAffiliate = affiliate?.toLowerCase() === shapeshiftAffiliate.toLowerCase()
+      const hasShapeshiftAffiliate = affiliate?.toLowerCase() === this.shapeshiftChainflipAffiliate.toLowerCase()
 
       const verifiedSellAmountCryptoBaseUnit = (
         swapData.depositAmount ??
@@ -747,7 +737,7 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? parseInt(String(affiliateBps)) : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftChainflipAffiliate : undefined,
         verifiedSellAmountCryptoBaseUnit,
         swapperName: SwapperName.Chainflip,
         swapId,
@@ -787,8 +777,7 @@ export class SwapVerificationService {
 
     try {
       // Use 0x Trade Analytics API via ShapeShift proxy to verify the trade
-      const zrxProxyUrl = process.env.ZRX_PROXY_URL || 'https://api.proxy.shapeshift.com/api/v1/zrx'
-      const requestUrl = `${zrxProxyUrl}/trade-analytics/swap?txHash=${tradeHash}`
+      const requestUrl = `${this.zrxApiUrl}/trade-analytics/swap?txHash=${tradeHash}`
 
       const response = await firstValueFrom(this.httpService.get<ZrxTrade[] | ZrxApiResponse>(requestUrl))
 
@@ -815,8 +804,7 @@ export class SwapVerificationService {
       // Check for ShapeShift's partner/integrator name
       // The field could be integratorId, integratorName, or affiliateName
       const integratorId = trade.integratorId || trade.integratorName || trade.affiliateName
-      const shapeshiftIntegrator = process.env.SHAPESHIFT_0X_INTEGRATOR || 'ShapeShift'
-      const hasShapeshiftAffiliate = integratorId?.toLowerCase() === shapeshiftIntegrator.toLowerCase()
+      const hasShapeshiftAffiliate = integratorId?.toLowerCase() === this.shapeshift0xIntegrator.toLowerCase()
 
       // Extract fee information
       // The fee could be in integratorFee, affiliateFee, or partnerFee fields
@@ -835,7 +823,7 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftIntegrator : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshift0xIntegrator : undefined,
         verifiedSellAmountCryptoBaseUnit,
         swapperName: SwapperName.Zrx,
         swapId,
@@ -873,10 +861,6 @@ export class SwapVerificationService {
     }
 
     try {
-      // Use trade history API to find the trade by source filter
-      const bebopApiUrl = process.env.VITE_BEBOP_API_URL || 'https://api.bebop.xyz'
-      const shapeshiftSource = process.env.SHAPESHIFT_BEBOP_SOURCE || 'shapeshift'
-
       // Get swap timestamp to create time range (swap createdAt +/- 1 hour)
       const swapTimestamp = swap.createdAt.getTime()
       const oneHour = 60 * 60 * 1000
@@ -887,27 +871,14 @@ export class SwapVerificationService {
       const queryParams = new URLSearchParams({
         start: startNano.toString(),
         end: endNano.toString(),
-        source: shapeshiftSource,
+        source: this.shapeshiftBebopSource,
       })
 
-      // Need source-auth header with API key to query by source
-      const apiKey = process.env.VITE_BEBOP_API_KEY
-      if (!apiKey) {
-        this.logger.error('Missing VITE_BEBOP_API_KEY for Bebop verification')
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          swapperName: SwapperName.Bebop,
-          swapId,
-          error: 'Missing VITE_BEBOP_API_KEY for source authentication',
-        }
-      }
-
       const headers = {
-        'source-auth': apiKey,
+        'source-auth': this.bebopApiKey,
       }
 
-      const requestUrl = `${bebopApiUrl}/history/v2/trades?${queryParams.toString()}`
+      const requestUrl = `${this.bebopApiUrl}/history/v2/trades?${queryParams.toString()}`
 
       // Log request details
       this.logger.log(`Bebop API Request - URL: ${requestUrl}`)
@@ -915,7 +886,7 @@ export class SwapVerificationService {
         `Bebop API Request - Params: ${JSON.stringify({
           start: startNano.toString(),
           end: endNano.toString(),
-          source: shapeshiftSource,
+          source: this.shapeshiftBebopSource,
           swapTimestamp: new Date(swapTimestamp).toISOString(),
         })}`,
       )
@@ -958,7 +929,7 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: shapeshiftSource,
+        affiliateAddress: this.shapeshiftBebopSource,
         verifiedSellAmountCryptoBaseUnit,
         swapperName: SwapperName.Bebop,
         swapId,
@@ -1031,8 +1002,7 @@ export class SwapVerificationService {
       }
 
       const entrance = bridgeInfo.entrance
-      const shapeshiftEntrance = process.env.SHAPESHIFT_BUTTERSWAP_ENTRANCE || 'shapeshift'
-      const hasShapeshiftAffiliate = entrance?.toLowerCase() === shapeshiftEntrance.toLowerCase()
+      const hasShapeshiftAffiliate = entrance?.toLowerCase() === this.shapeshiftButterswapEntrance.toLowerCase()
 
       const affiliateBps = swap.affiliateBps ?? undefined
 
@@ -1309,8 +1279,7 @@ export class SwapVerificationService {
     }
 
     try {
-      const acrossApiUrl = process.env.VITE_ACROSS_API_URL || 'https://app.across.to/api'
-      const statusUrl = `${acrossApiUrl}/deposit/status?depositTxnRef=${txHash}`
+      const statusUrl = `${this.acrossApiUrl}/deposit/status?depositTxnRef=${txHash}`
 
       this.logger.log(`Across - Fetching deposit status from API: ${statusUrl}`)
 
