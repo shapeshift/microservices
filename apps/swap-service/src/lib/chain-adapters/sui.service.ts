@@ -4,6 +4,7 @@ import type { ChainId } from '@shapeshiftoss/caip'
 import { suiChainId } from '@shapeshiftoss/caip'
 import { sui } from '@shapeshiftoss/chain-adapters'
 
+import { env } from '../../env'
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service'
 
 @Injectable()
@@ -26,9 +27,7 @@ export class SuiChainAdapterService {
   }
 
   private initializeSuiAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_SUI_NODE_URL) throw new Error('VITE_SUI_NODE_URL required')
-
-    const suiAdapter = new sui.ChainAdapter({ rpcUrl: process.env.VITE_SUI_NODE_URL })
+    const suiAdapter = new sui.ChainAdapter({ rpcUrl: env.VITE_SUI_NODE_URL })
 
     chainAdapterManager.set(suiChainId, suiAdapter)
     this.logger.log('Sui chain adapter initialized')

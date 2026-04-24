@@ -4,6 +4,7 @@ import type { ChainId } from '@shapeshiftoss/caip'
 import { nearChainId } from '@shapeshiftoss/caip'
 import { near } from '@shapeshiftoss/chain-adapters'
 
+import { env } from '../../env'
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service'
 
 @Injectable()
@@ -26,12 +27,9 @@ export class NearChainAdapterService {
   }
 
   private initializeNearAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_NEAR_NODE_URLS) throw new Error('VITE_NEAR_NODE_URLS required')
-    if (!process.env.VITE_NEAR_FAST_API_URL) throw new Error('VITE_NEAR_FAST_API_URL required')
-
     const nearAdapter = new near.ChainAdapter({
-      rpcUrls: process.env.VITE_NEAR_NODE_URLS.split(',').filter(Boolean),
-      fastNearApiUrl: process.env.VITE_NEAR_FAST_API_URL,
+      rpcUrls: env.VITE_NEAR_NODE_URLS.split(',').filter(Boolean),
+      fastNearApiUrl: env.VITE_NEAR_FAST_API_URL,
     })
 
     chainAdapterManager.set(nearChainId, nearAdapter)

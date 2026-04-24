@@ -5,6 +5,7 @@ import { solanaChainId } from '@shapeshiftoss/caip'
 import { solana } from '@shapeshiftoss/chain-adapters'
 import * as unchained from '@shapeshiftoss/unchained-client'
 
+import { env } from '../../env'
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service'
 
 @Injectable()
@@ -27,19 +28,15 @@ export class SolanaChainAdapterService {
   }
 
   private initializeSolanaAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_SOLANA_HTTP_URL) throw new Error('VITE_UNCHAINED_SOLANA_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_SOLANA_WS_URL) throw new Error('VITE_UNCHAINED_SOLANA_WS_URL required')
-    if (!process.env.VITE_SOLANA_NODE_URL) throw new Error('VITE_SOLANA_NODE_URL required')
-
     const solanaHttp = new unchained.solana.V1Api(
-      new unchained.solana.Configuration({ basePath: process.env.VITE_UNCHAINED_SOLANA_HTTP_URL }),
+      new unchained.solana.Configuration({ basePath: env.VITE_UNCHAINED_SOLANA_HTTP_URL }),
     )
 
-    const solanaWs = new unchained.ws.Client<unchained.solana.Tx>(process.env.VITE_UNCHAINED_SOLANA_WS_URL)
+    const solanaWs = new unchained.ws.Client<unchained.solana.Tx>(env.VITE_UNCHAINED_SOLANA_WS_URL)
 
     const solanaAdapter = new solana.ChainAdapter({
       providers: { http: solanaHttp, ws: solanaWs },
-      rpcUrl: process.env.VITE_SOLANA_NODE_URL,
+      rpcUrl: env.VITE_SOLANA_NODE_URL,
     })
 
     chainAdapterManager.set(solanaChainId, solanaAdapter)

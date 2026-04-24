@@ -2,6 +2,8 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import type { Request } from 'express'
 import * as jwt from 'jsonwebtoken'
 
+import { env } from '../env'
+
 interface SiweJwtPayload {
   address: string
   iat: number
@@ -14,13 +16,7 @@ export interface SiweRequest extends Request {
 
 @Injectable()
 export class SiweAuthGuard implements CanActivate {
-  private readonly jwtSecret: string
-
-  constructor() {
-    const secret = process.env.SIWE_JWT_SECRET
-    if (!secret) throw new Error('SIWE_JWT_SECRET is required')
-    this.jwtSecret = secret
-  }
+  private readonly jwtSecret = env.SIWE_JWT_SECRET
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<SiweRequest>()

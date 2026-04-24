@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets'
 import { Server, Socket } from 'socket.io'
 
+import { env } from '../env'
 import { SwapsService } from '../swaps/swaps.service'
 import type { Swap } from '../swaps/types'
 
@@ -19,7 +20,7 @@ interface AuthenticatedSocket extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || [/^http:\/\/(\w+\.)?localhost(:\d+)?$/, /\.shapeshift\.com$/],
+    origin: env.ALLOWED_ORIGINS?.split(',') || [/^http:\/\/(\w+\.)?localhost(:\d+)?$/, /\.shapeshift\.com$/],
     credentials: true,
   },
 })

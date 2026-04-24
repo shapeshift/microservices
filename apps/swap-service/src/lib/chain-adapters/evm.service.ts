@@ -7,6 +7,7 @@ import * as adapters from '@shapeshiftoss/chain-adapters'
 import { EvmChainId, KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
 
+import { env } from '../../env'
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service'
 
 @Injectable()
@@ -62,23 +63,17 @@ export class EvmChainAdapterService {
   }
 
   private initializeEthereumAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_ETHEREUM_HTTP_URL) throw new Error('VITE_UNCHAINED_ETHEREUM_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_ETHEREUM_WS_URL) throw new Error('VITE_UNCHAINED_ETHEREUM_WS_URL required')
-    if (!process.env.VITE_ETHEREUM_NODE_URL) throw new Error('VITE_ETHEREUM_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const ethereumHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_ETHEREUM_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_ETHEREUM_HTTP_URL }),
     )
 
-    const ethereumWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_ETHEREUM_WS_URL)
+    const ethereumWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_ETHEREUM_WS_URL)
 
     const ethereumAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: ethereumHttp, ws: ethereumWs },
-      rpcUrl: process.env.VITE_ETHEREUM_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_ETHEREUM_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.ethChainId, ethereumAdapter)
@@ -86,23 +81,17 @@ export class EvmChainAdapterService {
   }
 
   private initializeAvalancheAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL) throw new Error('VITE_UNCHAINED_AVALANCHE_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_AVALANCHE_WS_URL) throw new Error('VITE_UNCHAINED_AVALANCHE_WS_URL required')
-    if (!process.env.VITE_AVALANCHE_NODE_URL) throw new Error('VITE_AVALANCHE_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const avalancheHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_AVALANCHE_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_AVALANCHE_HTTP_URL }),
     )
 
-    const avalancheWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_AVALANCHE_WS_URL)
+    const avalancheWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_AVALANCHE_WS_URL)
 
     const avalancheAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: avalancheHttp, ws: avalancheWs },
-      rpcUrl: process.env.VITE_AVALANCHE_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_AVALANCHE_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.avalancheChainId, avalancheAdapter)
@@ -110,23 +99,17 @@ export class EvmChainAdapterService {
   }
 
   private initializeOptimismAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_OPTIMISM_HTTP_URL) throw new Error('VITE_UNCHAINED_OPTIMISM_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_OPTIMISM_WS_URL) throw new Error('VITE_UNCHAINED_OPTIMISM_WS_URL required')
-    if (!process.env.VITE_OPTIMISM_NODE_URL) throw new Error('VITE_OPTIMISM_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const optimismHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_OPTIMISM_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_OPTIMISM_HTTP_URL }),
     )
 
-    const optimismWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_OPTIMISM_WS_URL)
+    const optimismWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_OPTIMISM_WS_URL)
 
     const optimismAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: optimismHttp, ws: optimismWs },
-      rpcUrl: process.env.VITE_OPTIMISM_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_OPTIMISM_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.optimismChainId, optimismAdapter)
@@ -134,27 +117,17 @@ export class EvmChainAdapterService {
   }
 
   private initializeBscAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL) {
-      throw new Error('VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL required')
-    }
-    if (!process.env.VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL) {
-      throw new Error('VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL required')
-    }
-    if (!process.env.VITE_BNBSMARTCHAIN_NODE_URL) throw new Error('VITE_BNBSMARTCHAIN_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const bscHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL }),
     )
 
-    const bscWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL)
+    const bscWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL)
 
     const bscAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: bscHttp, ws: bscWs },
-      rpcUrl: process.env.VITE_BNBSMARTCHAIN_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_BNBSMARTCHAIN_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.bscChainId, bscAdapter)
@@ -162,23 +135,17 @@ export class EvmChainAdapterService {
   }
 
   private initializePolygonAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_POLYGON_HTTP_URL) throw new Error('VITE_UNCHAINED_POLYGON_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_POLYGON_WS_URL) throw new Error('VITE_UNCHAINED_POLYGON_WS_URL required')
-    if (!process.env.VITE_POLYGON_NODE_URL) throw new Error('VITE_POLYGON_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const polygonHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_POLYGON_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_POLYGON_HTTP_URL }),
     )
 
-    const polygonWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_POLYGON_WS_URL)
+    const polygonWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_POLYGON_WS_URL)
 
     const polygonAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: polygonHttp, ws: polygonWs },
-      rpcUrl: process.env.VITE_POLYGON_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_POLYGON_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.polygonChainId, polygonAdapter)
@@ -186,23 +153,17 @@ export class EvmChainAdapterService {
   }
 
   private initializeGnosisAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_GNOSIS_HTTP_URL) throw new Error('VITE_UNCHAINED_GNOSIS_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_GNOSIS_WS_URL) throw new Error('VITE_UNCHAINED_GNOSIS_WS_URL required')
-    if (!process.env.VITE_GNOSIS_NODE_URL) throw new Error('VITE_GNOSIS_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const gnosisHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_GNOSIS_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_GNOSIS_HTTP_URL }),
     )
 
-    const gnosisWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_GNOSIS_WS_URL)
+    const gnosisWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_GNOSIS_WS_URL)
 
     const gnosisAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: gnosisHttp, ws: gnosisWs },
-      rpcUrl: process.env.VITE_GNOSIS_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_GNOSIS_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.gnosisChainId, gnosisAdapter)
@@ -210,23 +171,17 @@ export class EvmChainAdapterService {
   }
 
   private initializeArbitrumAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_ARBITRUM_HTTP_URL) throw new Error('VITE_UNCHAINED_ARBITRUM_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_ARBITRUM_WS_URL) throw new Error('VITE_UNCHAINED_ARBITRUM_WS_URL required')
-    if (!process.env.VITE_ARBITRUM_NODE_URL) throw new Error('VITE_ARBITRUM_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const arbitrumHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_ARBITRUM_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_ARBITRUM_HTTP_URL }),
     )
 
-    const arbitrumWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_ARBITRUM_WS_URL)
+    const arbitrumWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_ARBITRUM_WS_URL)
 
     const arbitrumAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: arbitrumHttp, ws: arbitrumWs },
-      rpcUrl: process.env.VITE_ARBITRUM_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_ARBITRUM_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.arbitrumChainId, arbitrumAdapter)
@@ -234,23 +189,17 @@ export class EvmChainAdapterService {
   }
 
   private initializeBaseAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNCHAINED_BASE_HTTP_URL) throw new Error('VITE_UNCHAINED_BASE_HTTP_URL required')
-    if (!process.env.VITE_UNCHAINED_BASE_WS_URL) throw new Error('VITE_UNCHAINED_BASE_WS_URL required')
-    if (!process.env.VITE_BASE_NODE_URL) throw new Error('VITE_BASE_NODE_URL required')
-    if (!process.env.VITE_THORCHAIN_MIDGARD_URL) throw new Error('VITE_THORCHAIN_MIDGARD_URL required')
-    if (!process.env.VITE_MAYACHAIN_MIDGARD_URL) throw new Error('VITE_MAYACHAIN_MIDGARD_URL required')
-
     const baseHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: process.env.VITE_UNCHAINED_BASE_HTTP_URL }),
+      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_BASE_HTTP_URL }),
     )
 
-    const baseWs = new unchained.ws.Client<unchained.ethereum.Tx>(process.env.VITE_UNCHAINED_BASE_WS_URL)
+    const baseWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_BASE_WS_URL)
 
     const baseAdapter = new adapters.ethereum.ChainAdapter({
       providers: { http: baseHttp, ws: baseWs },
-      rpcUrl: process.env.VITE_BASE_NODE_URL,
-      thorMidgardUrl: process.env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: process.env.VITE_MAYACHAIN_MIDGARD_URL,
+      rpcUrl: env.VITE_BASE_NODE_URL,
+      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.baseChainId, baseAdapter)
@@ -258,10 +207,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeMonadAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_MONAD_NODE_URL) throw new Error('VITE_MONAD_NODE_URL required')
-
     const monadAdapter = new adapters.monad.ChainAdapter({
-      rpcUrl: process.env.VITE_MONAD_NODE_URL,
+      rpcUrl: env.VITE_MONAD_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -270,10 +217,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeHyperEvmAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_HYPEREVM_NODE_URL) throw new Error('VITE_HYPEREVM_NODE_URL required')
-
     const hyperEvmAdapter = new adapters.hyperevm.ChainAdapter({
-      rpcUrl: process.env.VITE_HYPEREVM_NODE_URL,
+      rpcUrl: env.VITE_HYPEREVM_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -282,10 +227,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeInkAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_INK_NODE_URL) throw new Error('VITE_INK_NODE_URL required')
-
     const inkAdapter = new adapters.ink.ChainAdapter({
-      rpcUrl: process.env.VITE_INK_NODE_URL,
+      rpcUrl: env.VITE_INK_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -294,10 +237,8 @@ export class EvmChainAdapterService {
   }
 
   private initializePlasmaAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_PLASMA_NODE_URL) throw new Error('VITE_PLASMA_NODE_URL required')
-
     const plasmaAdapter = new adapters.plasma.ChainAdapter({
-      rpcUrl: process.env.VITE_PLASMA_NODE_URL,
+      rpcUrl: env.VITE_PLASMA_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -306,10 +247,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeMantleAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_MANTLE_NODE_URL) throw new Error('VITE_MANTLE_NODE_URL required')
-
     const mantleAdapter = new adapters.mantle.ChainAdapter({
-      rpcUrl: process.env.VITE_MANTLE_NODE_URL,
+      rpcUrl: env.VITE_MANTLE_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -318,10 +257,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeMegaEthAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_MEGAETH_NODE_URL) throw new Error('VITE_MEGAETH_NODE_URL required')
-
     const megaEthAdapter = new adapters.megaeth.ChainAdapter({
-      rpcUrl: process.env.VITE_MEGAETH_NODE_URL,
+      rpcUrl: env.VITE_MEGAETH_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -330,10 +267,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeBerachainAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_BERACHAIN_NODE_URL) throw new Error('VITE_BERACHAIN_NODE_URL required')
-
     const berachainAdapter = new adapters.berachain.ChainAdapter({
-      rpcUrl: process.env.VITE_BERACHAIN_NODE_URL,
+      rpcUrl: env.VITE_BERACHAIN_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -342,10 +277,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeCronosAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_CRONOS_NODE_URL) throw new Error('VITE_CRONOS_NODE_URL required')
-
     const cronosAdapter = new adapters.cronos.ChainAdapter({
-      rpcUrl: process.env.VITE_CRONOS_NODE_URL,
+      rpcUrl: env.VITE_CRONOS_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -354,10 +287,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeKatanaAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_KATANA_NODE_URL) throw new Error('VITE_KATANA_NODE_URL required')
-
     const katanaAdapter = new adapters.katana.ChainAdapter({
-      rpcUrl: process.env.VITE_KATANA_NODE_URL,
+      rpcUrl: env.VITE_KATANA_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -366,10 +297,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeFlowEvmAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_FLOWEVM_NODE_URL) throw new Error('VITE_FLOWEVM_NODE_URL required')
-
     const flowEvmAdapter = new adapters.flowEvm.ChainAdapter({
-      rpcUrl: process.env.VITE_FLOWEVM_NODE_URL,
+      rpcUrl: env.VITE_FLOWEVM_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -378,10 +307,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeCeloAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_CELO_NODE_URL) throw new Error('VITE_CELO_NODE_URL required')
-
     const celoAdapter = new adapters.celo.ChainAdapter({
-      rpcUrl: process.env.VITE_CELO_NODE_URL,
+      rpcUrl: env.VITE_CELO_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -390,10 +317,8 @@ export class EvmChainAdapterService {
   }
 
   private initializePlumeAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_PLUME_NODE_URL) throw new Error('VITE_PLUME_NODE_URL required')
-
     const plumeAdapter = new adapters.plume.ChainAdapter({
-      rpcUrl: process.env.VITE_PLUME_NODE_URL,
+      rpcUrl: env.VITE_PLUME_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -402,10 +327,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeStoryAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_STORY_NODE_URL) throw new Error('VITE_STORY_NODE_URL required')
-
     const storyAdapter = new adapters.story.ChainAdapter({
-      rpcUrl: process.env.VITE_STORY_NODE_URL,
+      rpcUrl: env.VITE_STORY_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -414,10 +337,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeZkSyncEraAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_ZKSYNCERA_NODE_URL) throw new Error('VITE_ZKSYNCERA_NODE_URL required')
-
     const zkSyncEraAdapter = new adapters.zksyncera.ChainAdapter({
-      rpcUrl: process.env.VITE_ZKSYNCERA_NODE_URL,
+      rpcUrl: env.VITE_ZKSYNCERA_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -426,10 +347,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeBlastAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_BLAST_NODE_URL) throw new Error('VITE_BLAST_NODE_URL required')
-
     const blastAdapter = new adapters.blast.ChainAdapter({
-      rpcUrl: process.env.VITE_BLAST_NODE_URL,
+      rpcUrl: env.VITE_BLAST_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -438,10 +357,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeWorldChainAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_WORLDCHAIN_NODE_URL) throw new Error('VITE_WORLDCHAIN_NODE_URL required')
-
     const worldChainAdapter = new adapters.worldchain.ChainAdapter({
-      rpcUrl: process.env.VITE_WORLDCHAIN_NODE_URL,
+      rpcUrl: env.VITE_WORLDCHAIN_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -450,10 +367,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeHemiAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_HEMI_NODE_URL) throw new Error('VITE_HEMI_NODE_URL required')
-
     const hemiAdapter = new adapters.hemi.ChainAdapter({
-      rpcUrl: process.env.VITE_HEMI_NODE_URL,
+      rpcUrl: env.VITE_HEMI_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -462,10 +377,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeLineaAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_LINEA_NODE_URL) throw new Error('VITE_LINEA_NODE_URL required')
-
     const lineaAdapter = new adapters.linea.ChainAdapter({
-      rpcUrl: process.env.VITE_LINEA_NODE_URL,
+      rpcUrl: env.VITE_LINEA_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -474,10 +387,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeScrollAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_SCROLL_NODE_URL) throw new Error('VITE_SCROLL_NODE_URL required')
-
     const scrollAdapter = new adapters.scroll.ChainAdapter({
-      rpcUrl: process.env.VITE_SCROLL_NODE_URL,
+      rpcUrl: env.VITE_SCROLL_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -486,10 +397,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeSonicAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_SONIC_NODE_URL) throw new Error('VITE_SONIC_NODE_URL required')
-
     const sonicAdapter = new adapters.sonic.ChainAdapter({
-      rpcUrl: process.env.VITE_SONIC_NODE_URL,
+      rpcUrl: env.VITE_SONIC_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -498,10 +407,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeUnichainAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_UNICHAIN_NODE_URL) throw new Error('VITE_UNICHAIN_NODE_URL required')
-
     const unichainAdapter = new adapters.unichain.ChainAdapter({
-      rpcUrl: process.env.VITE_UNICHAIN_NODE_URL,
+      rpcUrl: env.VITE_UNICHAIN_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -510,10 +417,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeBobAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_BOB_NODE_URL) throw new Error('VITE_BOB_NODE_URL required')
-
     const bobAdapter = new adapters.bob.ChainAdapter({
-      rpcUrl: process.env.VITE_BOB_NODE_URL,
+      rpcUrl: env.VITE_BOB_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -522,10 +427,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeModeAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_MODE_NODE_URL) throw new Error('VITE_MODE_NODE_URL required')
-
     const modeAdapter = new adapters.mode.ChainAdapter({
-      rpcUrl: process.env.VITE_MODE_NODE_URL,
+      rpcUrl: env.VITE_MODE_NODE_URL,
       getKnownTokens: () => [],
     })
 
@@ -534,10 +437,8 @@ export class EvmChainAdapterService {
   }
 
   private initializeSoneiumAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_SONEIUM_NODE_URL) throw new Error('VITE_SONEIUM_NODE_URL required')
-
     const soneiumAdapter = new adapters.soneium.ChainAdapter({
-      rpcUrl: process.env.VITE_SONEIUM_NODE_URL,
+      rpcUrl: env.VITE_SONEIUM_NODE_URL,
       getKnownTokens: () => [],
     })
 

@@ -4,6 +4,7 @@ import type { ChainId } from '@shapeshiftoss/caip'
 import { starknetChainId } from '@shapeshiftoss/caip'
 import { starknet } from '@shapeshiftoss/chain-adapters'
 
+import { env } from '../../env'
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service'
 
 @Injectable()
@@ -26,9 +27,7 @@ export class StarknetChainAdapterService {
   }
 
   private initializeStarknetAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_STARKNET_NODE_URL) throw new Error('VITE_STARKNET_NODE_URL required')
-
-    const starknetAdapter = new starknet.ChainAdapter({ rpcUrl: process.env.VITE_STARKNET_NODE_URL })
+    const starknetAdapter = new starknet.ChainAdapter({ rpcUrl: env.VITE_STARKNET_NODE_URL })
 
     chainAdapterManager.set(starknetChainId, starknetAdapter)
     this.logger.log('Starknet chain adapter initialized')

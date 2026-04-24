@@ -3,6 +3,8 @@ import * as crypto from 'crypto'
 import * as jwt from 'jsonwebtoken'
 import { SiweMessage } from 'siwe'
 
+import { env } from '../env'
+
 const NONCE_EXPIRY_MS = 5 * 60 * 1000
 
 const nonceStore = new Map<string, { createdAt: number }>()
@@ -18,13 +20,7 @@ setInterval(() => {
 
 @Controller('v1/auth/siwe')
 export class SiweAuthController {
-  private readonly jwtSecret: string
-
-  constructor() {
-    const secret = process.env.SIWE_JWT_SECRET
-    if (!secret) throw new Error('SIWE_JWT_SECRET is required')
-    this.jwtSecret = secret
-  }
+  private readonly jwtSecret = env.SIWE_JWT_SECRET
 
   @Post('nonce')
   generateNonce(): { nonce: string } {

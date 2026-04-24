@@ -4,6 +4,7 @@ import type { ChainId } from '@shapeshiftoss/caip'
 import { tonChainId } from '@shapeshiftoss/caip'
 import { ton } from '@shapeshiftoss/chain-adapters'
 
+import { env } from '../../env'
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service'
 
 @Injectable()
@@ -26,9 +27,7 @@ export class TonChainAdapterService {
   }
 
   private initializeTonAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_TON_NODE_URL) throw new Error('VITE_TON_NODE_URL required')
-
-    const tonAdapter = new ton.ChainAdapter({ rpcUrl: process.env.VITE_TON_NODE_URL })
+    const tonAdapter = new ton.ChainAdapter({ rpcUrl: env.VITE_TON_NODE_URL })
 
     chainAdapterManager.set(tonChainId, tonAdapter)
     this.logger.log('Ton chain adapter initialized')

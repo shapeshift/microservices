@@ -63,7 +63,8 @@
     "protobufjs": "^7.5.4",
     "socket.io": "^4.8.1",
     "starknet": "9.2.1",
-    "tronweb": "^6.0.0"
+    "tronweb": "^6.0.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

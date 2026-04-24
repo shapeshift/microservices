@@ -5,6 +5,7 @@ import { tronChainId } from '@shapeshiftoss/caip'
 import { tron } from '@shapeshiftoss/chain-adapters'
 import * as unchained from '@shapeshiftoss/unchained-client'
 
+import { env } from '../../env'
 import { ChainAdapterManagerService } from '../chain-adapter-manager.service'
 
 @Injectable()
@@ -27,13 +28,11 @@ export class TronChainAdapterService {
   }
 
   private initializeTronAdapter(chainAdapterManager: Map<string, any>) {
-    if (!process.env.VITE_TRON_NODE_URL) throw new Error('VITE_TRON_NODE_URL required')
-
-    const tronHttp = new unchained.tron.TronApi({ rpcUrl: process.env.VITE_TRON_NODE_URL })
+    const tronHttp = new unchained.tron.TronApi({ rpcUrl: env.VITE_TRON_NODE_URL })
 
     const tronAdapter = new tron.ChainAdapter({
       providers: { http: tronHttp },
-      rpcUrl: process.env.VITE_TRON_NODE_URL,
+      rpcUrl: env.VITE_TRON_NODE_URL,
     })
 
     chainAdapterManager.set(tronChainId, tronAdapter)
