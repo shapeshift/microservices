@@ -83,12 +83,10 @@ export class SwapsController {
     const swap = await this.swapsService.getSwapById(swapId)
     if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
 
-    return this.swapVerificationService.verifySwapAffiliate(
-      swapId,
-      data.protocol || swap.swapperName,
-      swap.sellAsset.chainId,
-      data.txHash || swap.sellTxHash || undefined,
-      swap.metadata as Record<string, any>,
-    )
+    return this.swapVerificationService.verifySwap({
+      ...swap,
+      swapperName: data.swapperName || swap.swapperName,
+      sellTxHash: data.txHash || swap.sellTxHash,
+    })
   }
 }
