@@ -135,7 +135,7 @@ export interface SwapVerificationResult {
 
 export interface VerifySwapAffiliateDto {
   swapId: string
-  swapperName: SwapperName
+  swapperName?: SwapperName
   txHash?: string
 }
 
