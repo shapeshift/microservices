@@ -6,14 +6,11 @@ import {
   Param,
   ParseDatePipe,
   Post,
-  Put,
   Query,
   ValidationPipe,
 } from '@nestjs/common'
 
-import type { CreateSwapDto, UpdateSwapStatusDto, VerifySwapAffiliateDto } from '@shapeshift/shared-types'
-
-import { SwapVerificationService } from '../verification/swap-verification.service'
+import type { CreateSwapDto } from '@shapeshift/shared-types'
 
 import { SwapsService } from './swaps.service'
 import { PaginationQueryDto } from './types'
@@ -23,19 +20,11 @@ const PaginationPipe = new ValidationPipe({ transform: true, whitelist: true, fo
 
 @Controller('swaps')
 export class SwapsController {
-  constructor(
-    private swapsService: SwapsService,
-    private swapVerificationService: SwapVerificationService,
-  ) {}
+  constructor(private swapsService: SwapsService) {}
 
   @Post()
   async createSwap(@Body() data: CreateSwapDto) {
     return this.swapsService.createSwap(data)
-  }
-
-  @Put(':swapId/status')
-  async updateSwapStatus(@Param('swapId') swapId: string, @Body() data: Omit<UpdateSwapStatusDto, 'swapId'>) {
-    return this.swapsService.updateSwapStatus({ swapId, ...data })
   }
 
   @Get('pending')
@@ -76,17 +65,5 @@ export class SwapsController {
     @Query('endDate', OptionalDatePipe) endDate?: Date,
   ) {
     return this.swapsService.calculateAffiliateFees(affiliateAddress, startDate, endDate)
-  }
-
-  @Post(':swapId/verify-affiliate')
-  async verifySwapAffiliate(@Param('swapId') swapId: string, @Body() data: Omit<VerifySwapAffiliateDto, 'swapId'>) {
-    const swap = await this.swapsService.getSwapById(swapId)
-    if (!swap) throw new NotFoundException(`Swap ${swapId} not found`)
-
-    return this.swapVerificationService.verifySwap({
-      ...swap,
-      swapperName: data.swapperName || swap.swapperName,
-      sellTxHash: data.txHash || swap.sellTxHash,
-    })
   }
 }

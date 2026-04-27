@@ -133,12 +133,6 @@ export interface SwapVerificationResult {
   error?: string
 }
 
-export interface VerifySwapAffiliateDto {
-  swapId: string
-  swapperName?: SwapperName
-  txHash?: string
-}
-
 export interface Fees {
   swapCount: number
   periodVolumeUsd: string
