@@ -13,6 +13,18 @@ export const thorchainToNativePrecision = (thorchainAmount: string, nativePrecis
   return trimmed || '0'
 }
 
+const BPS_DENOMINATOR = 10000n
+
+export const applyBps = (amount: string | undefined, bps: number | undefined): string | undefined => {
+  if (!amount || bps === undefined) return undefined
+
+  try {
+    return ((BigInt(amount) * BigInt(bps)) / BPS_DENOMINATOR).toString()
+  } catch {
+    return undefined
+  }
+}
+
 export const logVerification = (
   logger: Logger,
   swapperName: SwapperName,
