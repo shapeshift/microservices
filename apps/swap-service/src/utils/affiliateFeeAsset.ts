@@ -1,26 +1,30 @@
+import { SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
-type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | 'fixed_base'
+type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | 'fixed_base' | 'none'
 
-const SWAPPER_FEE_STRATEGY: Record<string, FeeAssetStrategy> = {
-  Across: 'buy_asset',
-  AVNU: 'sell_asset',
-  Bebop: 'buy_asset',
-  ButterSwap: 'buy_asset',
-  Cetus: 'buy_asset',
-  Chainflip: 'buy_asset',
-  'CoW Swap': 'sell_asset',
-  MAYAChain: 'sell_asset',
-  'NEAR Intents': 'sell_asset',
-  Portals: 'sell_asset',
-  Relay: 'fixed_base',
-  'STON.fi': 'sell_asset',
-  'Sun.io': 'buy_asset',
-  THORChain: 'sell_asset',
-  '0x': 'buy_asset',
+const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
+  [SwapperName.Across]: 'buy_asset',
+  [SwapperName.ArbitrumBridge]: 'none',
+  [SwapperName.Avnu]: 'sell_asset',
+  [SwapperName.Bebop]: 'buy_asset',
+  [SwapperName.ButterSwap]: 'buy_asset',
+  [SwapperName.Cetus]: 'buy_asset',
+  [SwapperName.Chainflip]: 'buy_asset',
+  [SwapperName.CowSwap]: 'sell_asset',
+  [SwapperName.Debridge]: 'sell_asset',
+  [SwapperName.Mayachain]: 'sell_asset',
+  [SwapperName.NearIntents]: 'sell_asset',
+  [SwapperName.Portals]: 'sell_asset',
+  [SwapperName.Relay]: 'fixed_base',
+  [SwapperName.Stonfi]: 'sell_asset',
+  [SwapperName.Sunio]: 'buy_asset',
+  [SwapperName.Thorchain]: 'sell_asset',
+  [SwapperName.Zrx]: 'buy_asset',
+  [SwapperName.Test]: 'none',
 }
 
-export function resolveAffiliateFeeAssetId(swapperName: string, sellAsset: Asset, buyAsset: Asset): string | null {
+export function resolveAffiliateFeeAssetId(swapperName: SwapperName, sellAsset: Asset, buyAsset: Asset): string | null {
   const strategy = SWAPPER_FEE_STRATEGY[swapperName]
   if (!strategy) return null
 
