@@ -27,14 +27,7 @@ import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
-import type {
-  AffiliateVerificationDetails,
-  AggregateFeesParams,
-  FeeTotals,
-  PaginatedSwaps,
-  Swap,
-  SwapReconciliation,
-} from './types'
+import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
 import {
   buildStatusNotification,
@@ -177,7 +170,6 @@ export class SwapsService {
             buyTxHash: data.buyTxHash,
             txLink: data.txLink,
             statusMessage: data.statusMessage,
-            actualBuyAmountCryptoBaseUnit: data.actualBuyAmountCryptoBaseUnit,
           },
         }),
       )
@@ -375,15 +367,13 @@ export class SwapsService {
 
       const statusMessage = Array.isArray(message) ? message[0] : message
 
-      const { isAffiliateVerified, affiliateVerificationDetails } = await this.reconcileSwap(swap)
+      await this.reconcileSwap(swap)
 
       return {
         status: status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING',
         sellTxHash: swap.sellTxHash,
         buyTxHash,
         statusMessage: typeof statusMessage === 'string' ? statusMessage : '',
-        isAffiliateVerified,
-        affiliateVerificationDetails,
       }
     } catch (error) {
       logger.error(`Failed to poll swap status for ${swapId}:`, error)
@@ -394,7 +384,7 @@ export class SwapsService {
     }
   }
 
-  private async reconcileSwap(swap: Swap): Promise<SwapReconciliation> {
+  private async reconcileSwap(swap: Swap): Promise<void> {
     try {
       const verificationResult = await this.swapVerificationService.verifySwap(swap)
 
@@ -424,16 +414,12 @@ export class SwapsService {
         data: {
           isAffiliateVerified,
           affiliateVerificationDetails: isAffiliateVerified ? affiliateVerificationDetails : Prisma.DbNull,
+          actualBuyAmountCryptoBaseUnit: verificationResult.actualBuyAmountCryptoBaseUnit,
+          actualAffiliateFeeAmountCryptoBaseUnit: verificationResult.actualAffiliateFeeAmountCryptoBaseUnit,
         },
       })
-
-      return {
-        isAffiliateVerified,
-        affiliateVerificationDetails: isAffiliateVerified ? affiliateVerificationDetails : undefined,
-      }
     } catch (error) {
       logger.warn(`Failed to verify affiliate for swap ${swap.swapId}:`, error)
-      return {}
     }
   }
 }

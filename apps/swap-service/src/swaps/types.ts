@@ -23,11 +23,6 @@ export type AffiliateVerificationDetails = {
   hasAffiliate: boolean
 }
 
-export type SwapReconciliation = {
-  isAffiliateVerified?: boolean
-  affiliateVerificationDetails?: AffiliateVerificationDetails
-}
-
 export type UsdPrices = {
   sellAmountUsd: string | null
   buyAssetUsd: string | null

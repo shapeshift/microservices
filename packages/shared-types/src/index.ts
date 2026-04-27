@@ -70,7 +70,7 @@ export interface CreateSwapDto {
   sellAmountCryptoBaseUnit: string
   expectedBuyAmountCryptoBaseUnit: string
   source: string
-  swapperName: string
+  swapperName: SwapperName
   sellAccountId: string
   buyAccountId?: string
   receiveAddress?: string
@@ -89,7 +89,6 @@ export interface UpdateSwapStatusDto {
   buyTxHash?: string
   txLink?: string
   statusMessage?: string
-  actualBuyAmountCryptoBaseUnit?: string
 }
 
 // API Response types
@@ -112,24 +111,16 @@ export interface SwapStatusResponse {
   sellTxHash?: string
   buyTxHash?: string
   statusMessage: string
-  isAffiliateVerified?: boolean
-  affiliateVerificationDetails?: {
-    hasAffiliate: boolean
-    affiliateBps?: number
-    affiliateAddress?: string
-  }
 }
 
-// Swap verification types
 export interface SwapVerificationResult {
-  swapId: string
   isVerified: boolean
   hasAffiliate: boolean
   affiliateBps?: number
   affiliateAddress?: string
   verifiedSellAmountCryptoBaseUnit?: string
-  swapperName: SwapperName
-  details?: Record<string, any>
+  actualBuyAmountCryptoBaseUnit: string | undefined
+  actualAffiliateFeeAmountCryptoBaseUnit: string | undefined
   error?: string
 }
 
