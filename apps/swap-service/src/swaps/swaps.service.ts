@@ -9,7 +9,7 @@ import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
 import { hashAccountId, NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
-import { SwapperName, swappers } from '@shapeshiftoss/swapper'
+import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service'
@@ -356,7 +356,7 @@ export class SwapsService {
 
     const swap = toSwap(prismaSwap)
 
-    const swapper = swappers[swap.swapperName as SwapperName]
+    const swapper = swappers[swap.swapperName]
     if (!swapper) throw new InternalServerErrorException(`Swapper not registered: ${swap.swapperName}`)
 
     if (!swap.sellTxHash) throw new BadRequestException('Sell tx hash is required')
@@ -396,37 +396,7 @@ export class SwapsService {
 
   private async reconcileSwap(swap: Swap): Promise<SwapReconciliation> {
     try {
-      const enrichedMetadata = {
-        ...(swap.metadata as Record<string, any>),
-        receiveAddress: swap.receiveAddress,
-        expectedBuyAmountCryptoBaseUnit: swap.expectedBuyAmountCryptoBaseUnit,
-        createdAt: swap.createdAt.getTime(),
-        sellAssetPrecision: swap.sellAsset.precision,
-        affiliateBps: swap.affiliateBps,
-        affiliateAddress: swap.affiliateAddress,
-        // Some verifiers look for the recipient under `integratorFeeRecipient` rather than `affiliateAddress`.
-        integratorFeeRecipient: swap.affiliateAddress,
-        sellAmountCryptoBaseUnit: swap.sellAmountCryptoBaseUnit,
-      }
-
-      const verificationResult = await this.swapVerificationService.verifySwapAffiliate(
-        swap.swapId,
-        swap.swapperName,
-        swap.sellAsset.chainId,
-        swap.sellTxHash || undefined,
-        enrichedMetadata,
-      )
-
-      const isAffiliateVerified = verificationResult.isVerified && verificationResult.hasAffiliate
-
-      const affiliateVerificationDetails: AffiliateVerificationDetails | undefined = verificationResult.isVerified
-        ? {
-            hasAffiliate: verificationResult.hasAffiliate,
-            affiliateBps: verificationResult.affiliateBps,
-            affiliateAddress: verificationResult.affiliateAddress,
-            verifiedSellAmountCryptoBaseUnit: verificationResult.verifiedSellAmountCryptoBaseUnit,
-          }
-        : undefined
+      const verificationResult = await this.swapVerificationService.verifySwap(swap)
 
       logger.log(
         [
@@ -440,15 +410,27 @@ export class SwapsService {
           .join(' | '),
       )
 
+      const isAffiliateVerified = verificationResult.isVerified && verificationResult.hasAffiliate
+
+      const affiliateVerificationDetails: AffiliateVerificationDetails = {
+        hasAffiliate: verificationResult.hasAffiliate,
+        affiliateBps: verificationResult.affiliateBps,
+        affiliateAddress: verificationResult.affiliateAddress,
+        verifiedSellAmountCryptoBaseUnit: verificationResult.verifiedSellAmountCryptoBaseUnit,
+      }
+
       await this.prisma.swap.update({
         where: { swapId: swap.swapId },
         data: {
           isAffiliateVerified,
-          affiliateVerificationDetails: affiliateVerificationDetails ?? Prisma.DbNull,
+          affiliateVerificationDetails: isAffiliateVerified ? affiliateVerificationDetails : Prisma.DbNull,
         },
       })
 
-      return { isAffiliateVerified, affiliateVerificationDetails }
+      return {
+        isAffiliateVerified,
+        affiliateVerificationDetails: isAffiliateVerified ? affiliateVerificationDetails : undefined,
+      }
     } catch (error) {
       logger.warn(`Failed to verify affiliate for swap ${swap.swapId}:`, error)
       return {}

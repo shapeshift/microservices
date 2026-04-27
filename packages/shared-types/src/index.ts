@@ -1,3 +1,4 @@
+import type { SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
 export type DeviceType = 'MOBILE' | 'WEB'
@@ -121,20 +122,20 @@ export interface SwapStatusResponse {
 
 // Swap verification types
 export interface SwapVerificationResult {
+  swapId: string
   isVerified: boolean
   hasAffiliate: boolean
   affiliateBps?: number
   affiliateAddress?: string
   verifiedSellAmountCryptoBaseUnit?: string
-  protocol: string
-  swapId: string
+  swapperName: SwapperName
   details?: Record<string, any>
   error?: string
 }
 
 export interface VerifySwapAffiliateDto {
   swapId: string
-  protocol: string
+  swapperName?: SwapperName
   txHash?: string
 }
 

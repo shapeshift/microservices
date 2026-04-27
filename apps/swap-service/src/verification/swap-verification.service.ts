@@ -6,6 +6,9 @@ import { firstValueFrom } from 'rxjs'
 import { SwapVerificationResult } from '@shapeshift/shared-types'
 import { assertGetCowNetwork, getTreasuryAddressFromChainId, SwapperName } from '@shapeshiftoss/swapper'
 
+import { env } from '../env'
+import type { Swap } from '../swaps/types'
+
 import {
   AcrossDepositStatusResponse,
   BebopTrade,
@@ -28,148 +31,122 @@ import { THORCHAIN_PRECISION, thorchainToNativePrecision } from './utils'
 export class SwapVerificationService {
   private readonly logger = new Logger(SwapVerificationService.name)
 
-  private oneClickServiceInitialized = false
+  private readonly shapeshift0xIntegrator = 'ShapeShift'
+  private readonly shapeshiftBebopSource = 'shapeshift'
+  private readonly shapeshiftButterswapEntrance = 'shapeshift'
+  private readonly shapeshiftChainflipAffiliate = 'shapeshift'
+  private readonly shapeshiftCowswapAppCode = 'shapeshift'
+  private readonly shapeshiftMayaAffiliate = 'ssmaya'
+  private readonly shapeshiftNearReferral = 'shapeshift'
+  private readonly shapeshiftRelayReferrer = 'shapeshift'
+  private readonly shapeshiftThorchainAffiliate = 'ss'
 
-  constructor(private readonly httpService: HttpService) {}
+  private readonly bebopApiKey = env.VITE_BEBOP_API_KEY
+  private readonly chainflipApiKey = env.VITE_CHAINFLIP_API_KEY
 
-  private initializeOneClickService(apiKey: string) {
-    if (this.oneClickServiceInitialized) return
+  private readonly thorchainNodeUrl = env.VITE_THORCHAIN_NODE_URL
+  private readonly mayachainNodeUrl = env.VITE_MAYACHAIN_NODE_URL
 
+  private readonly acrossApiUrl = env.VITE_ACROSS_API_URL
+  private readonly bebopApiUrl = env.VITE_BEBOP_API_URL
+  private readonly chainflipApiUrl = env.VITE_CHAINFLIP_API_URL
+  private readonly cowswapApiUrl = env.VITE_COWSWAP_BASE_URL
+  private readonly portalsApiUrl = env.VITE_PORTALS_BASE_URL
+  private readonly relayApiUrl = env.VITE_RELAY_API_URL
+  private readonly zrxApiUrl = env.VITE_ZRX_BASE_URL
+
+  constructor(private readonly httpService: HttpService) {
     OpenAPI.BASE = 'https://1click.chaindefuser.com'
-    OpenAPI.TOKEN = apiKey
-
-    this.oneClickServiceInitialized = true
-    this.logger.log('OneClickService initialized')
+    OpenAPI.TOKEN = env.VITE_NEAR_INTENTS_API_KEY
   }
 
-  async verifySwapAffiliate(
-    swapId: string,
-    protocol: string,
-    sellChainId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
-    try {
-      this.logger.log(`Verifying affiliate for swap ${swapId} on protocol ${protocol}`)
+  async verifySwap(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId, swapperName } = swap
 
-      const swapperName = protocol as SwapperName
+    const unverified = (error: string): SwapVerificationResult => ({
+      isVerified: false,
+      hasAffiliate: false,
+      swapperName,
+      swapId,
+      error,
+    })
+
+    try {
+      this.logger.log(`Verifying affiliate for swap ${swapId} on ${swapperName}`)
+
       switch (swapperName) {
         case SwapperName.NearIntents:
-          return await this.verifyNearIntents(swapId, metadata)
-        case SwapperName.Relay: {
-          const relayId = (metadata?.relayTransactionMetadata as { relayId?: string } | undefined)?.relayId
-          if (!relayId) {
-            return {
-              isVerified: false,
-              hasAffiliate: false,
-              protocol: SwapperName.Relay,
-              swapId,
-              error: 'Missing relay transaction metadata',
-            }
-          }
-          return await this.verifyRelay(swapId, relayId)
-        }
+          return await this.verifyNearIntents(swap)
+        case SwapperName.Relay:
+          return await this.verifyRelay(swap)
         case SwapperName.CowSwap:
-          return await this.verifyCowSwap(swapId, sellChainId, txHash, metadata)
+          return await this.verifyCowSwap(swap)
         case SwapperName.Portals:
-          return await this.verifyPortals(swapId, sellChainId, metadata)
+          return await this.verifyPortals(swap)
         case SwapperName.Thorchain:
-          return await this.verifyThorchain(swapId, txHash, metadata)
+          return await this.verifyThorchain(swap)
         case SwapperName.Mayachain:
-          return await this.verifyMaya(swapId, txHash, metadata)
+          return await this.verifyMaya(swap)
         case SwapperName.Chainflip:
-          return await this.verifyChainflip(swapId, metadata)
+          return await this.verifyChainflip(swap)
         case SwapperName.Zrx:
-          return await this.verifyZrx(swapId, txHash, metadata)
+          return await this.verifyZrx(swap)
         case SwapperName.Bebop:
-          return await this.verifyBebop(swapId, txHash, metadata)
+          return await this.verifyBebop(swap)
         case SwapperName.ArbitrumBridge:
-          return await this.verifyArbitrumBridge(swapId)
+          return await this.verifyArbitrumBridge(swap)
         case SwapperName.ButterSwap:
-          return await this.verifyButterSwap(swapId, txHash, metadata)
+          return await this.verifyButterSwap(swap)
         case SwapperName.Cetus:
-          return await this.verifyCetus(swapId, txHash, metadata)
+          return await this.verifyCetus(swap)
         case SwapperName.Sunio:
-          return await this.verifySunio(swapId, txHash, metadata)
+          return await this.verifySunio(swap)
         case SwapperName.Avnu:
-          return await this.verifyAvnu(swapId, txHash, metadata)
+          return await this.verifyAvnu(swap)
         case SwapperName.Stonfi:
-          return await this.verifyStonfi(swapId, txHash, metadata)
+          return await this.verifyStonfi(swap)
         case SwapperName.Across:
-          return await this.verifyAcross(swapId, txHash, metadata)
-        case SwapperName.Test:
+          return await this.verifyAcross(swap)
         case SwapperName.Debridge:
-          return {
-            isVerified: false,
-            hasAffiliate: false,
-            protocol,
-            swapId,
-            error: `Verification not implemented for protocol: ${protocol}`,
-          }
+        case SwapperName.Test:
+          return unverified(`Verification not implemented for ${swapperName}`)
         default: {
           const _exhaustive: never = swapperName
           void _exhaustive
-
-          return {
-            isVerified: false,
-            hasAffiliate: false,
-            protocol,
-            swapId,
-            error: `Verification not implemented for protocol: ${protocol}`,
-          }
+          throw new Error('unreachable')
         }
       }
     } catch (error) {
-      this.logger.error(`Error verifying swap ${swapId} for protocol ${protocol}:`, error)
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        protocol,
-        swapId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      }
+      this.logger.error(`Error verifying swap ${swapId} for ${swapperName}:`, error)
+
+      return unverified(error instanceof Error ? error.message : 'Unknown error')
     }
   }
 
-  private async verifyNearIntents(swapId: string, metadata?: Record<string, any>): Promise<SwapVerificationResult> {
-    // NEAR intents uses depositAddress to query execution status
-    // The depositAddress is stored in nearIntentsSpecific metadata
+  private async verifyNearIntents(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId, metadata } = swap
 
-    const depositAddress = (metadata?.nearIntentsSpecific as { depositAddress?: string } | undefined)?.depositAddress
+    // NEAR intents uses depositAddress to query execution status
+    const depositAddress = metadata.nearIntentsSpecific?.depositAddress
 
     if (!depositAddress) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'near',
+        swapperName: SwapperName.NearIntents,
         swapId,
         error: 'Missing depositAddress in metadata.nearIntentsSpecific',
       }
     }
 
     try {
-      // Initialize OneClickService with API key (same approach as web)
-      const apiKey = process.env.VITE_NEAR_INTENTS_API_KEY
-      if (!apiKey) {
-        this.logger.error('Missing VITE_NEAR_INTENTS_API_KEY for NEAR Intents verification')
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          protocol: 'near',
-          swapId,
-          error: 'Missing VITE_NEAR_INTENTS_API_KEY',
-        }
-      }
-
-      this.initializeOneClickService(apiKey)
-
       const statusResponse = await OneClickService.getExecutionStatus(depositAddress)
 
       if (!statusResponse) {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'near',
+          swapperName: SwapperName.NearIntents,
           swapId,
           error: 'No execution status found',
         }
@@ -182,8 +159,7 @@ export class SwapVerificationService {
       // Verify it's ShapeShift's affiliate
       // The referral field should be 'shapeshift' from the quote request
       const referral = quoteRequest?.referral
-      const shapeshiftReferral = process.env.SHAPESHIFT_NEAR_REFERRAL || 'shapeshift'
-      const hasShapeshiftReferral = referral?.toLowerCase() === shapeshiftReferral.toLowerCase()
+      const hasShapeshiftReferral = referral?.toLowerCase() === this.shapeshiftNearReferral.toLowerCase()
 
       // Check if there are app fees
       const appFees = quoteRequest?.appFees || []
@@ -208,7 +184,7 @@ export class SwapVerificationService {
       const rawDepositedAmount: string | undefined =
         swapDetails?.depositedAmount ?? swapDetails?.amountIn ?? quoteAmounts?.amountIn
       if (rawDepositedAmount) {
-        const sellAssetPrecision = metadata?.sellAssetPrecision as number | undefined
+        const sellAssetPrecision = swap.sellAsset.precision
         if (sellAssetPrecision && rawDepositedAmount.includes('.')) {
           const [whole, frac = ''] = rawDepositedAmount.split('.')
           verifiedSellAmountCryptoBaseUnit = whole + frac.padEnd(sellAssetPrecision, '0').slice(0, sellAssetPrecision)
@@ -221,9 +197,9 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftReferral : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftNearReferral : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'near',
+        swapperName: SwapperName.NearIntents,
         swapId,
         details: {
           depositAddress,
@@ -238,27 +214,30 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'near',
+        swapperName: SwapperName.NearIntents,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to fetch NEAR intents status',
       }
     }
   }
 
-  private async verifyRelay(swapId: string, txHash?: string): Promise<SwapVerificationResult> {
-    if (!txHash) {
+  private async verifyRelay(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const metadata = swap.metadata as Record<string, any>
+    const relayId = (metadata?.relayTransactionMetadata as { relayId?: string } | undefined)?.relayId
+
+    if (!relayId) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'relay',
+        swapperName: SwapperName.Relay,
         swapId,
-        error: 'Missing txHash for Relay verification',
+        error: 'Missing relay transaction metadata',
       }
     }
 
     try {
-      const relayApiUrl = process.env.VITE_RELAY_API_URL || 'https://api.relay.link'
-      const requestUrl = `${relayApiUrl}/requests/v2?id=${txHash}`
+      const requestUrl = `${this.relayApiUrl}/requests/v2?id=${relayId}`
 
       const response = await firstValueFrom(this.httpService.get<RelayRequestsResponse>(requestUrl))
 
@@ -268,7 +247,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'relay',
+          swapperName: SwapperName.Relay,
           swapId,
           error: 'No request data found from Relay API',
         }
@@ -278,8 +257,7 @@ export class SwapVerificationService {
 
       // Check for referrer field at top level
       const referrer = request.referrer
-      const shapeshiftReferrer = process.env.SHAPESHIFT_RELAY_REFERRER || 'shapeshift'
-      const hasShapeshiftReferrer = referrer?.toLowerCase() === shapeshiftReferrer.toLowerCase()
+      const hasShapeshiftReferrer = referrer?.toLowerCase() === this.shapeshiftRelayReferrer.toLowerCase()
 
       // Check for appFees or paidAppFees in the data object
       const appFees = request.data?.appFees || request.data?.paidAppFees || []
@@ -309,10 +287,10 @@ export class SwapVerificationService {
         affiliateBps,
         affiliateAddress,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'relay',
+        swapperName: SwapperName.Relay,
         swapId,
         details: {
-          txHash,
+          relayId,
           referrer,
           appFees,
           request,
@@ -323,19 +301,19 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'relay',
+        swapperName: SwapperName.Relay,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to fetch Relay request data',
       }
     }
   }
 
-  private async verifyCowSwap(
-    swapId: string,
-    sellChainId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyCowSwap(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const sellChainId = swap.sellAsset.chainId
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
+
     // SECURITY: Always verify appData from CowSwap API using appDataHash
     // to prevent users from pushing fake data to abuse the referral system
     const appDataHash = (metadata?.cowswapQuoteSpecific as { quote?: { appDataHash?: string } } | undefined)?.quote
@@ -346,7 +324,7 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'cowswap',
+        swapperName: SwapperName.CowSwap,
         swapId,
         error: 'Missing appDataHash in metadata',
       }
@@ -355,18 +333,18 @@ export class SwapVerificationService {
     try {
       // ALWAYS fetch appData from CowSwap API to verify it's legitimate
       this.logger.log(`CowSwap - Fetching appData from API using hash ${appDataHash} for swap ${swapId}`)
-      const cowswapApiUrl = process.env.VITE_COWSWAP_BASE_URL || 'https://api.cow.fi'
       const cowNetwork = assertGetCowNetwork(sellChainId)
       const response = await firstValueFrom(
-        this.httpService.get<CowSwapAppDataResponse>(`${cowswapApiUrl}/${cowNetwork}/api/v1/app_data/${appDataHash}`),
+        this.httpService.get<CowSwapAppDataResponse>(
+          `${this.cowswapApiUrl}/${cowNetwork}/api/v1/app_data/${appDataHash}`,
+        ),
       )
 
       const decodedAppData = JSON.parse(response.data.fullAppData) as CowSwapDecodedAppData
 
       // Check if appCode is "shapeshift"
       const appCode = decodedAppData?.appCode
-      const shapeshiftAppCode = process.env.SHAPESHIFT_COWSWAP_APPCODE || 'shapeshift'
-      const hasShapeshiftAppCode = appCode?.toLowerCase() === shapeshiftAppCode.toLowerCase()
+      const hasShapeshiftAppCode = appCode?.toLowerCase() === this.shapeshiftCowswapAppCode.toLowerCase()
 
       // Extract partner fee information from metadata.partnerFee
       const partnerFee = decodedAppData?.metadata?.partnerFee
@@ -381,7 +359,7 @@ export class SwapVerificationService {
       if (orderUid) {
         try {
           const orderResponse = await firstValueFrom(
-            this.httpService.get<CowSwapOrderResponse>(`${cowswapApiUrl}/${cowNetwork}/api/v1/orders/${orderUid}`),
+            this.httpService.get<CowSwapOrderResponse>(`${this.cowswapApiUrl}/${cowNetwork}/api/v1/orders/${orderUid}`),
           )
           verifiedSellAmountCryptoBaseUnit =
             orderResponse.data?.executedSellAmountBeforeFees?.toString() ??
@@ -401,7 +379,7 @@ export class SwapVerificationService {
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
         affiliateAddress: hasShapeshiftAffiliate ? affiliateAddress : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'cowswap',
+        swapperName: SwapperName.CowSwap,
         swapId,
         details: {
           appCode,
@@ -414,18 +392,18 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'cowswap',
+        swapperName: SwapperName.CowSwap,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to decode CowSwap appData',
       }
     }
   }
 
-  private async verifyPortals(
-    swapId: string,
-    sellChainId: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyPortals(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const sellChainId = swap.sellAsset.chainId
+    const metadata = swap.metadata as Record<string, any>
+
     // SECURITY: Always verify partner address from Portals API using orderId
     // to prevent users from pushing fake data to abuse the referral system
 
@@ -437,7 +415,7 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'portals',
+        swapperName: SwapperName.Portals,
         swapId,
         error: 'Missing orderId in metadata',
       }
@@ -452,7 +430,7 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'portals',
+        swapperName: SwapperName.Portals,
         swapId,
         error: `Unsupported chain for treasury address: ${sellChainId}`,
       }
@@ -461,9 +439,8 @@ export class SwapVerificationService {
     try {
       // ALWAYS fetch order status from Portals API to verify it's legitimate
       this.logger.log(`Portals - Fetching order status from API using orderId ${orderId} for swap ${swapId}`)
-      const portalsProxyUrl = process.env.PORTALS_PROXY_URL || 'https://api.proxy.shapeshift.com/api/v1/portals'
       const response = await firstValueFrom(
-        this.httpService.get<PortalsOrderResponse>(`${portalsProxyUrl}/v2/portal/status?orderId=${orderId}`),
+        this.httpService.get<PortalsOrderResponse>(`${this.portalsApiUrl}/v2/portal/status?orderId=${orderId}`),
       )
 
       const orderData = response.data
@@ -477,7 +454,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'portals',
+          swapperName: SwapperName.Portals,
           swapId,
           error: 'No partner found in Portals API response',
         }
@@ -500,10 +477,10 @@ export class SwapVerificationService {
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: metadata?.affiliateBps ? parseInt(metadata.affiliateBps as string) : undefined,
+        affiliateBps: swap.affiliateBps ?? undefined,
         affiliateAddress: hasShapeshiftAffiliate ? expectedTreasuryAddress : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'portals',
+        swapperName: SwapperName.Portals,
         swapId,
         details: {
           orderId,
@@ -520,23 +497,22 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'portals',
+        swapperName: SwapperName.Portals,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify Portals order',
       }
     }
   }
 
-  private async verifyThorchain(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyThorchain(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+
     if (!txHash) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'thorchain',
+        swapperName: SwapperName.Thorchain,
         swapId,
         error: 'Missing txHash for Thorchain verification',
       }
@@ -544,8 +520,7 @@ export class SwapVerificationService {
 
     try {
       // SECURITY: Query Thorchain node API to verify memo contains affiliate info
-      const nodeUrl = process.env.VITE_THORCHAIN_NODE_URL || 'https://thornode.ninerealms.com'
-      const txUrl = `${nodeUrl}/thorchain/tx/${txHash}`
+      const txUrl = `${this.thorchainNodeUrl}/thorchain/tx/${txHash}`
 
       this.logger.log(`Thorchain - Fetching tx from node API: ${txUrl}`)
 
@@ -557,7 +532,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'thorchain',
+          swapperName: SwapperName.Thorchain,
           swapId,
           error: 'No observed transaction found',
         }
@@ -568,7 +543,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'thorchain',
+          swapperName: SwapperName.Thorchain,
           swapId,
           error: 'No memo found in transaction',
         }
@@ -576,31 +551,30 @@ export class SwapVerificationService {
 
       // Parse memo format: =:r:thor1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
       // The affiliate code is after the 4th colon, followed by fee in bps
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_THORCHAIN_AFFILIATE || 'ss'
-      const memoPattern = new RegExp(`:${shapeshiftAffiliate}:(\\d+)`, 'i')
+      const memoPattern = new RegExp(`:${this.shapeshiftThorchainAffiliate}:(\\d+)`, 'i')
       const memoMatch = memo.match(memoPattern)
 
       const hasShapeshiftAffiliate = !!memoMatch
       const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined
 
       const coins = observedTx.tx.coins
-      const sellAssetPrecision = (metadata?.sellAssetPrecision as number | undefined) ?? THORCHAIN_PRECISION
+      const sellAssetPrecision = swap.sellAsset.precision ?? THORCHAIN_PRECISION
       const firstCoinAmount = coins?.[0]?.amount
       const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
         ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
         : undefined
 
       this.logger.log(
-        `Thorchain verification for swap ${swapId}: memo=${memo}, affiliate=${shapeshiftAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
+        `Thorchain verification for swap ${swapId}: memo=${memo}, affiliate=${this.shapeshiftThorchainAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
       )
 
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftThorchainAffiliate : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'thorchain',
+        swapperName: SwapperName.Thorchain,
         swapId,
         details: {
           txHash,
@@ -613,23 +587,22 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'thorchain',
+        swapperName: SwapperName.Thorchain,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to fetch Thorchain data from node',
       }
     }
   }
 
-  private async verifyMaya(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+
     if (!txHash) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'maya',
+        swapperName: SwapperName.Mayachain,
         swapId,
         error: 'Missing txHash for Maya verification',
       }
@@ -637,8 +610,7 @@ export class SwapVerificationService {
 
     try {
       // SECURITY: Query Maya node API to verify memo contains affiliate info
-      const nodeUrl = process.env.VITE_MAYACHAIN_NODE_URL || 'https://mayanode.mayachain.info'
-      const txUrl = `${nodeUrl}/mayachain/tx/${txHash}`
+      const txUrl = `${this.mayachainNodeUrl}/mayachain/tx/${txHash}`
 
       this.logger.log(`Maya - Fetching tx from node API: ${txUrl}`)
 
@@ -650,7 +622,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'maya',
+          swapperName: SwapperName.Mayachain,
           swapId,
           error: 'No observed transaction found',
         }
@@ -661,7 +633,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'maya',
+          swapperName: SwapperName.Mayachain,
           swapId,
           error: 'No memo found in transaction',
         }
@@ -669,31 +641,30 @@ export class SwapVerificationService {
 
       // Parse memo format: =:r:maya1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
       // The affiliate code is after the 4th colon, followed by fee in bps
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_MAYA_AFFILIATE || 'ssmaya'
-      const memoPattern = new RegExp(`:${shapeshiftAffiliate}:(\\d+)`, 'i')
+      const memoPattern = new RegExp(`:${this.shapeshiftMayaAffiliate}:(\\d+)`, 'i')
       const memoMatch = memo.match(memoPattern)
 
       const hasShapeshiftAffiliate = !!memoMatch
       const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined
 
       const coins = observedTx.tx.coins
-      const sellAssetPrecision = (metadata?.sellAssetPrecision as number | undefined) ?? THORCHAIN_PRECISION
+      const sellAssetPrecision = swap.sellAsset.precision ?? THORCHAIN_PRECISION
       const firstCoinAmount = coins?.[0]?.amount
       const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
         ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
         : undefined
 
       this.logger.log(
-        `Maya verification for swap ${swapId}: memo=${memo}, affiliate=${shapeshiftAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
+        `Maya verification for swap ${swapId}: memo=${memo}, affiliate=${this.shapeshiftMayaAffiliate}, hasAffiliate=${hasShapeshiftAffiliate}, bps=${affiliateBps}`,
       )
 
       return {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftMayaAffiliate : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'maya',
+        swapperName: SwapperName.Mayachain,
         swapId,
         details: {
           txHash,
@@ -706,34 +677,34 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'maya',
+        swapperName: SwapperName.Mayachain,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to fetch Maya data from node',
       }
     }
   }
 
-  private async verifyChainflip(swapId: string, metadata?: Record<string, any>): Promise<SwapVerificationResult> {
+  private async verifyChainflip(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const metadata = swap.metadata as Record<string, any>
     const chainflipSwapId = metadata?.chainflipSwapId as string | undefined
 
     if (!chainflipSwapId) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'chainflip',
+        swapperName: SwapperName.Chainflip,
         swapId,
         error: 'Missing chainflipSwapId in metadata',
       }
     }
 
     try {
-      const chainflipApiUrl = process.env.VITE_CHAINFLIP_API_URL || 'https://api.chainflip.io'
-      const statusUrl = `${chainflipApiUrl}/swaps/${chainflipSwapId}`
+      const statusUrl = `${this.chainflipApiUrl}/swaps/${chainflipSwapId}`
 
       const headers: Record<string, string> = {}
-      const apiKey = process.env.VITE_CHAINFLIP_API_KEY
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`
+      if (this.chainflipApiKey) {
+        headers['Authorization'] = `Bearer ${this.chainflipApiKey}`
       }
 
       const response = await firstValueFrom(this.httpService.get<ChainflipSwapResponse>(statusUrl, { headers }))
@@ -744,7 +715,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'chainflip',
+          swapperName: SwapperName.Chainflip,
           swapId,
           error: 'No swap data found from Chainflip API',
         }
@@ -754,8 +725,7 @@ export class SwapVerificationService {
       const affiliate = swapData.affiliate || swapData.affiliateName
       const affiliateBps = swapData.affiliateBps || swapData.affiliateFee
 
-      const shapeshiftAffiliate = process.env.SHAPESHIFT_CHAINFLIP_AFFILIATE || 'shapeshift'
-      const hasShapeshiftAffiliate = affiliate?.toLowerCase() === shapeshiftAffiliate.toLowerCase()
+      const hasShapeshiftAffiliate = affiliate?.toLowerCase() === this.shapeshiftChainflipAffiliate.toLowerCase()
 
       const verifiedSellAmountCryptoBaseUnit = (
         swapData.depositAmount ??
@@ -767,9 +737,9 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? parseInt(String(affiliateBps)) : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftAffiliate : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftChainflipAffiliate : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'chainflip',
+        swapperName: SwapperName.Chainflip,
         swapId,
         details: {
           chainflipSwapId,
@@ -782,25 +752,24 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'chainflip',
+        swapperName: SwapperName.Chainflip,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to fetch Chainflip swap data',
       }
     }
   }
 
-  private async verifyZrx(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyZrx(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
     const tradeHash = txHash || (metadata?.tradeHash as string | undefined) || (metadata?.txHash as string | undefined)
 
     if (!tradeHash) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: '0x',
+        swapperName: SwapperName.Zrx,
         swapId,
         error: 'Missing tradeHash in metadata',
       }
@@ -808,8 +777,7 @@ export class SwapVerificationService {
 
     try {
       // Use 0x Trade Analytics API via ShapeShift proxy to verify the trade
-      const zrxProxyUrl = process.env.ZRX_PROXY_URL || 'https://api.proxy.shapeshift.com/api/v1/zrx'
-      const requestUrl = `${zrxProxyUrl}/trade-analytics/swap?txHash=${tradeHash}`
+      const requestUrl = `${this.zrxApiUrl}/trade-analytics/swap?txHash=${tradeHash}`
 
       const response = await firstValueFrom(this.httpService.get<ZrxTrade[] | ZrxApiResponse>(requestUrl))
 
@@ -827,7 +795,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: '0x',
+          swapperName: SwapperName.Zrx,
           swapId,
           error: `Trade not found in 0x analytics (searched ${trades.length} trades)`,
         }
@@ -836,8 +804,7 @@ export class SwapVerificationService {
       // Check for ShapeShift's partner/integrator name
       // The field could be integratorId, integratorName, or affiliateName
       const integratorId = trade.integratorId || trade.integratorName || trade.affiliateName
-      const shapeshiftIntegrator = process.env.SHAPESHIFT_0X_INTEGRATOR || 'ShapeShift'
-      const hasShapeshiftAffiliate = integratorId?.toLowerCase() === shapeshiftIntegrator.toLowerCase()
+      const hasShapeshiftAffiliate = integratorId?.toLowerCase() === this.shapeshift0xIntegrator.toLowerCase()
 
       // Extract fee information
       // The fee could be in integratorFee, affiliateFee, or partnerFee fields
@@ -856,9 +823,9 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: hasShapeshiftAffiliate ? shapeshiftIntegrator : undefined,
+        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshift0xIntegrator : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: '0x',
+        swapperName: SwapperName.Zrx,
         swapId,
         details: {
           tradeHash,
@@ -872,35 +839,30 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: '0x',
+        swapperName: SwapperName.Zrx,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify 0x trade',
       }
     }
   }
 
-  private async verifyBebop(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyBebop(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+
     if (!txHash) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'bebop',
+        swapperName: SwapperName.Bebop,
         swapId,
         error: 'Missing txHash for Bebop verification',
       }
     }
 
     try {
-      // Use trade history API to find the trade by source filter
-      const bebopApiUrl = process.env.VITE_BEBOP_API_URL || 'https://api.bebop.xyz'
-      const shapeshiftSource = process.env.SHAPESHIFT_BEBOP_SOURCE || 'shapeshift'
-
       // Get swap timestamp to create time range (swap createdAt +/- 1 hour)
-      const swapTimestamp = (metadata?.createdAt as number | undefined) || Date.now()
+      const swapTimestamp = swap.createdAt.getTime()
       const oneHour = 60 * 60 * 1000
       const startNano = (swapTimestamp - oneHour) * 1_000_000 // Convert to nanoseconds
       const endNano = (swapTimestamp + oneHour) * 1_000_000
@@ -909,27 +871,14 @@ export class SwapVerificationService {
       const queryParams = new URLSearchParams({
         start: startNano.toString(),
         end: endNano.toString(),
-        source: shapeshiftSource,
+        source: this.shapeshiftBebopSource,
       })
 
-      // Need source-auth header with API key to query by source
-      const apiKey = process.env.VITE_BEBOP_API_KEY
-      if (!apiKey) {
-        this.logger.error('Missing VITE_BEBOP_API_KEY for Bebop verification')
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          protocol: 'bebop',
-          swapId,
-          error: 'Missing VITE_BEBOP_API_KEY for source authentication',
-        }
-      }
-
       const headers = {
-        'source-auth': apiKey,
+        'source-auth': this.bebopApiKey,
       }
 
-      const requestUrl = `${bebopApiUrl}/history/v2/trades?${queryParams.toString()}`
+      const requestUrl = `${this.bebopApiUrl}/history/v2/trades?${queryParams.toString()}`
 
       // Log request details
       this.logger.log(`Bebop API Request - URL: ${requestUrl}`)
@@ -937,7 +886,7 @@ export class SwapVerificationService {
         `Bebop API Request - Params: ${JSON.stringify({
           start: startNano.toString(),
           end: endNano.toString(),
-          source: shapeshiftSource,
+          source: this.shapeshiftBebopSource,
           swapTimestamp: new Date(swapTimestamp).toISOString(),
         })}`,
       )
@@ -958,7 +907,7 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'bebop',
+          swapperName: SwapperName.Bebop,
           swapId,
           error: 'Trade not found in Bebop history',
         }
@@ -980,9 +929,9 @@ export class SwapVerificationService {
         isVerified: true,
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
-        affiliateAddress: shapeshiftSource,
+        affiliateAddress: this.shapeshiftBebopSource,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'bebop',
+        swapperName: SwapperName.Bebop,
         swapId,
         details: {
           txHash,
@@ -996,20 +945,21 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'bebop',
+        swapperName: SwapperName.Bebop,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify Bebop trade',
       }
     }
   }
 
-  private verifyArbitrumBridge(swapId: string): Promise<SwapVerificationResult> {
+  private verifyArbitrumBridge(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
     this.logger.log(`ArbitrumBridge verification for swap ${swapId}: no affiliate fees supported`)
 
     return Promise.resolve({
       isVerified: true,
       hasAffiliate: false,
-      protocol: 'arbitrum bridge',
+      swapperName: SwapperName.ArbitrumBridge,
       swapId,
       details: {
         note: 'ArbitrumBridge does not support affiliate fees',
@@ -1017,16 +967,16 @@ export class SwapVerificationService {
     })
   }
 
-  private async verifyButterSwap(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyButterSwap(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
+
     if (!txHash) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: SwapperName.ButterSwap,
+        swapperName: SwapperName.ButterSwap,
         swapId,
         error: 'Missing txHash for ButterSwap verification',
       }
@@ -1045,21 +995,19 @@ export class SwapVerificationService {
         return {
           isVerified: false,
           hasAffiliate: false,
-          protocol: 'butterswap',
+          swapperName: SwapperName.ButterSwap,
           swapId,
           error: 'No bridge info found',
         }
       }
 
       const entrance = bridgeInfo.entrance
-      const shapeshiftEntrance = process.env.SHAPESHIFT_BUTTERSWAP_ENTRANCE || 'shapeshift'
-      const hasShapeshiftAffiliate = entrance?.toLowerCase() === shapeshiftEntrance.toLowerCase()
+      const hasShapeshiftAffiliate = entrance?.toLowerCase() === this.shapeshiftButterswapEntrance.toLowerCase()
 
-      const affiliateBps = metadata?.affiliateBps ? parseInt(metadata.affiliateBps as string) : undefined
+      const affiliateBps = swap.affiliateBps ?? undefined
 
       const verifiedSellAmountCryptoBaseUnit = (
-        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ??
-        (metadata?.sellAmount as string | undefined)
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
       )?.toString()
 
       this.logger.log(
@@ -1071,7 +1019,7 @@ export class SwapVerificationService {
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'butterswap',
+        swapperName: SwapperName.ButterSwap,
         swapId,
         details: {
           txHash,
@@ -1084,23 +1032,23 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'butterswap',
+        swapperName: SwapperName.ButterSwap,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify ButterSwap trade',
       }
     }
   }
 
-  private verifyCetus(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private verifyCetus(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
+
     if (!txHash) {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'cetus',
+        swapperName: SwapperName.Cetus,
         swapId,
         error: 'Missing txHash for Cetus verification',
       })
@@ -1108,12 +1056,11 @@ export class SwapVerificationService {
 
     try {
       // TODO: Implement on-chain/API verification for Cetus
-      const affiliateBps = metadata?.affiliateBps ? parseInt(metadata.affiliateBps as string) : undefined
+      const affiliateBps = swap.affiliateBps ?? undefined
       const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
 
       const verifiedSellAmountCryptoBaseUnit = (
-        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ??
-        (metadata?.sellAmount as string | undefined)
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
       )?.toString()
 
       this.logger.log(
@@ -1125,11 +1072,11 @@ export class SwapVerificationService {
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'cetus',
+        swapperName: SwapperName.Cetus,
         swapId,
         details: {
           txHash,
-          affiliateBps: metadata?.affiliateBps as string | undefined,
+          affiliateBps,
           verificationMethod: 'client_metadata_only',
         },
       })
@@ -1138,23 +1085,23 @@ export class SwapVerificationService {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'cetus',
+        swapperName: SwapperName.Cetus,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify Cetus trade',
       })
     }
   }
 
-  private verifySunio(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private verifySunio(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
+
     if (!txHash) {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'sun.io',
+        swapperName: SwapperName.Sunio,
         swapId,
         error: 'Missing txHash for Sun.io verification',
       })
@@ -1162,12 +1109,11 @@ export class SwapVerificationService {
 
     try {
       // TODO: Implement on-chain/API verification for Sun.io
-      const affiliateBps = metadata?.affiliateBps ? parseInt(metadata.affiliateBps as string) : undefined
+      const affiliateBps = swap.affiliateBps ?? undefined
       const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
 
       const verifiedSellAmountCryptoBaseUnit = (
-        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ??
-        (metadata?.sellAmount as string | undefined)
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
       )?.toString()
 
       this.logger.log(
@@ -1179,11 +1125,11 @@ export class SwapVerificationService {
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'sun.io',
+        swapperName: SwapperName.Sunio,
         swapId,
         details: {
           txHash,
-          affiliateBps: metadata?.affiliateBps as string | undefined,
+          affiliateBps,
           verificationMethod: 'client_metadata_only',
         },
       })
@@ -1192,19 +1138,23 @@ export class SwapVerificationService {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'sun.io',
+        swapperName: SwapperName.Sunio,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify Sun.io trade',
       })
     }
   }
 
-  private verifyAvnu(swapId: string, txHash?: string, metadata?: Record<string, any>): Promise<SwapVerificationResult> {
+  private verifyAvnu(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
+
     if (!txHash) {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'avnu',
+        swapperName: SwapperName.Avnu,
         swapId,
         error: 'Missing txHash for AVNU verification',
       })
@@ -1212,13 +1162,12 @@ export class SwapVerificationService {
 
     try {
       // TODO: Implement on-chain/API verification for AVNU
-      const affiliateBps = metadata?.affiliateBps ? parseInt(metadata.affiliateBps as string) : undefined
+      const affiliateBps = swap.affiliateBps ?? undefined
       const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
-      const affiliateAddress = metadata?.integratorFeeRecipient as string | undefined
+      const affiliateAddress = swap.affiliateAddress ?? undefined
 
       const verifiedSellAmountCryptoBaseUnit = (
-        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ??
-        (metadata?.sellAmount as string | undefined)
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
       )?.toString()
 
       this.logger.log(
@@ -1231,12 +1180,12 @@ export class SwapVerificationService {
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'avnu',
+        swapperName: SwapperName.Avnu,
         swapId,
         details: {
           txHash,
-          affiliateBps: metadata?.affiliateBps as string | undefined,
-          integratorFeeRecipient: metadata?.integratorFeeRecipient as string | undefined,
+          affiliateBps,
+          integratorFeeRecipient: affiliateAddress,
           verificationMethod: 'client_metadata_only',
         },
       })
@@ -1245,23 +1194,23 @@ export class SwapVerificationService {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'avnu',
+        swapperName: SwapperName.Avnu,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify AVNU trade',
       })
     }
   }
 
-  private verifyStonfi(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private verifyStonfi(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
+
     if (!txHash) {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'ston.fi',
+        swapperName: SwapperName.Stonfi,
         swapId,
         error: 'Missing txHash for STON.fi verification',
       })
@@ -1274,15 +1223,12 @@ export class SwapVerificationService {
       const referrerAddress = stonfiSpecific?.referrerAddress
       const referrerFeeUnits = stonfiSpecific?.referrerFeeUnits
 
-      const affiliateBps = metadata?.affiliateBps
-        ? parseInt(metadata.affiliateBps as string)
-        : (stonfiSpecific?.referrerFeeBps ?? undefined)
+      const affiliateBps = swap.affiliateBps ?? stonfiSpecific?.referrerFeeBps ?? undefined
 
       const hasAffiliate = !!referrerAddress && (affiliateBps !== undefined ? affiliateBps > 0 : false)
 
       const verifiedSellAmountCryptoBaseUnit = (
-        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ??
-        (metadata?.sellAmount as string | undefined)
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
       )?.toString()
 
       this.logger.log(
@@ -1295,7 +1241,7 @@ export class SwapVerificationService {
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress: referrerAddress,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'ston.fi',
+        swapperName: SwapperName.Stonfi,
         swapId,
         details: {
           txHash,
@@ -1310,31 +1256,30 @@ export class SwapVerificationService {
       return Promise.resolve({
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'ston.fi',
+        swapperName: SwapperName.Stonfi,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify STON.fi trade',
       })
     }
   }
 
-  private async verifyAcross(
-    swapId: string,
-    txHash?: string,
-    metadata?: Record<string, any>,
-  ): Promise<SwapVerificationResult> {
+  private async verifyAcross(swap: Swap): Promise<SwapVerificationResult> {
+    const { swapId } = swap
+    const txHash = swap.sellTxHash || undefined
+    const metadata = swap.metadata as Record<string, any>
+
     if (!txHash) {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'across',
+        swapperName: SwapperName.Across,
         swapId,
         error: 'Missing txHash for Across verification',
       }
     }
 
     try {
-      const acrossApiUrl = process.env.VITE_ACROSS_API_URL || 'https://app.across.to/api'
-      const statusUrl = `${acrossApiUrl}/deposit/status?depositTxnRef=${txHash}`
+      const statusUrl = `${this.acrossApiUrl}/deposit/status?depositTxnRef=${txHash}`
 
       this.logger.log(`Across - Fetching deposit status from API: ${statusUrl}`)
 
@@ -1343,7 +1288,7 @@ export class SwapVerificationService {
       // TODO: Implement on-chain/API verification for Across
       const depositStatus = response.data
 
-      const affiliateBps = metadata?.affiliateBps ? parseInt(metadata.affiliateBps as string) : undefined
+      const affiliateBps = swap.affiliateBps ?? undefined
       const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
 
       const affiliateAddress =
@@ -1352,8 +1297,7 @@ export class SwapVerificationService {
       const fillTxnRef = depositStatus?.fillTxnRef
 
       const verifiedSellAmountCryptoBaseUnit = (
-        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ??
-        (metadata?.sellAmount as string | undefined)
+        (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
       )?.toString()
 
       this.logger.log(
@@ -1366,7 +1310,7 @@ export class SwapVerificationService {
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress,
         verifiedSellAmountCryptoBaseUnit,
-        protocol: 'across',
+        swapperName: SwapperName.Across,
         swapId,
         details: {
           txHash,
@@ -1382,7 +1326,7 @@ export class SwapVerificationService {
       return {
         isVerified: false,
         hasAffiliate: false,
-        protocol: 'across',
+        swapperName: SwapperName.Across,
         swapId,
         error: error instanceof Error ? error.message : 'Failed to verify Across deposit',
       }

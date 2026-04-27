@@ -2,12 +2,16 @@ import type { Prisma, Swap as PrismaSwap } from '@prisma/client'
 import { Type } from 'class-transformer'
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
 
-import type { SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
+import type { SwapperName, SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
-export type Swap = Omit<PrismaSwap, 'sellAsset' | 'buyAsset' | 'metadata' | 'affiliateVerificationDetails'> & {
+export type Swap = Omit<
+  PrismaSwap,
+  'sellAsset' | 'buyAsset' | 'metadata' | 'affiliateVerificationDetails' | 'swapperName'
+> & {
   sellAsset: Asset
   buyAsset: Asset
+  swapperName: SwapperName
   metadata: SwapperSpecificMetadata
   affiliateVerificationDetails: AffiliateVerificationDetails | null
 }
