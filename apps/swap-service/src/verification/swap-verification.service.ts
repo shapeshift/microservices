@@ -25,7 +25,7 @@ import {
   ZrxApiResponse,
   ZrxTrade,
 } from './types'
-import { logVerification, THORCHAIN_PRECISION, thorchainToNativePrecision } from './utils'
+import { applyBps, logVerification, THORCHAIN_PRECISION, thorchainToNativePrecision } from './utils'
 
 @Injectable()
 export class SwapVerificationService {
@@ -37,7 +37,6 @@ export class SwapVerificationService {
   private readonly shapeshiftChainflipAffiliate = 'shapeshift'
   private readonly shapeshiftCowswapAppCode = 'shapeshift'
   private readonly shapeshiftMayaAffiliate = 'ssmaya'
-  private readonly shapeshiftNearReferral = 'shapeshift'
   private readonly shapeshiftRelayReferrer = 'shapeshift'
   private readonly shapeshiftThorchainAffiliate = 'ss'
 
@@ -126,96 +125,36 @@ export class SwapVerificationService {
   private async verifyNearIntents(swap: Swap): Promise<SwapVerificationResult> {
     const { swapId, metadata } = swap
 
-    // NEAR intents uses depositAddress to query execution status
     const depositAddress = metadata.nearIntentsSpecific?.depositAddress
+    if (!depositAddress) throw new Error('Missing depositAddress in nearIntentsSpecific metadata')
 
-    if (!depositAddress) {
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: 'Missing depositAddress in metadata.nearIntentsSpecific',
-      }
+    const status = await OneClickService.getExecutionStatus(depositAddress)
+
+    const { quoteResponse, swapDetails } = status
+    const { quoteRequest, quote } = quoteResponse
+    const { referral, appFees = [] } = quoteRequest
+
+    const shapeshiftFee =
+      referral?.toLowerCase() === 'shapeshift'
+        ? appFees.find(({ recipient }) => ['shapeshifttokenomics.sputnik-dao.near'].includes(recipient))
+        : undefined
+
+    const verifiedSellAmountCryptoBaseUnit = swapDetails.depositedAmount || swapDetails.amountIn || quote.amountIn
+
+    const result: SwapVerificationResult = {
+      isVerified: true,
+      hasAffiliate: Boolean(shapeshiftFee),
+      affiliateBps: shapeshiftFee?.fee,
+      affiliateAddress: shapeshiftFee?.recipient,
+      verifiedSellAmountCryptoBaseUnit,
+      actualBuyAmountCryptoBaseUnit: swapDetails.amountOut || quote.amountOut,
+      // 1Click applies the appFee bps to the input amount, so realized fee = input × bps / 10000.
+      actualAffiliateFeeAmountCryptoBaseUnit: applyBps(verifiedSellAmountCryptoBaseUnit, shapeshiftFee?.fee),
     }
 
-    try {
-      const statusResponse = await OneClickService.getExecutionStatus(depositAddress)
+    logVerification(this.logger, SwapperName.NearIntents, swapId, result, { status: status.status })
 
-      if (!statusResponse) {
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          actualBuyAmountCryptoBaseUnit: undefined,
-          actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-          error: 'No execution status found',
-        }
-      }
-
-      // Check if the quote request contains affiliate fees
-      // SDK structure: statusResponse.quoteResponse.quoteRequest
-      const quoteRequest = statusResponse.quoteResponse?.quoteRequest
-
-      // Verify it's ShapeShift's affiliate
-      // The referral field should be 'shapeshift' from the quote request
-      const referral = quoteRequest?.referral
-      const hasShapeshiftReferral = referral?.toLowerCase() === this.shapeshiftNearReferral.toLowerCase()
-
-      // Check if there are app fees
-      const appFees = quoteRequest?.appFees || []
-      const hasAppFees = appFees.length > 0
-
-      const hasShapeshiftAffiliate = hasShapeshiftReferral && hasAppFees
-
-      // Extract fee amount if present
-      let affiliateBps: number | undefined
-      if (hasAppFees && appFees[0]) {
-        affiliateBps = appFees[0].fee
-      }
-
-      const swapDetails = (
-        statusResponse as unknown as {
-          swapDetails?: { depositedAmount?: string; amountIn?: string }
-        }
-      ).swapDetails
-      const quoteAmounts = statusResponse.quoteResponse?.quote
-      let verifiedSellAmountCryptoBaseUnit: string | undefined
-
-      const rawDepositedAmount: string | undefined =
-        swapDetails?.depositedAmount ?? swapDetails?.amountIn ?? quoteAmounts?.amountIn
-      if (rawDepositedAmount) {
-        const sellAssetPrecision = swap.sellAsset.precision
-        if (sellAssetPrecision && rawDepositedAmount.includes('.')) {
-          const [whole, frac = ''] = rawDepositedAmount.split('.')
-          verifiedSellAmountCryptoBaseUnit = whole + frac.padEnd(sellAssetPrecision, '0').slice(0, sellAssetPrecision)
-        } else {
-          verifiedSellAmountCryptoBaseUnit = rawDepositedAmount
-        }
-      }
-
-      const result: SwapVerificationResult = {
-        isVerified: true,
-        hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps,
-        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftNearReferral : undefined,
-        verifiedSellAmountCryptoBaseUnit,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-      }
-
-      logVerification(this.logger, SwapperName.NearIntents, swapId, result)
-
-      return result
-    } catch (error) {
-      this.logger.error(`Error verifying NEAR intents for swap ${swapId}:`, error)
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: error instanceof Error ? error.message : 'Failed to fetch NEAR intents status',
-      }
-    }
+    return result
   }
 
   private async verifyRelay(swap: Swap): Promise<SwapVerificationResult> {
