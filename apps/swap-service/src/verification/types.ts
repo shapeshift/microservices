@@ -7,23 +7,50 @@ export interface ThorchainMayaTxResponse {
   }
 }
 
-export interface RelayAppFee {
-  bps?: string
+interface RelayAppFee {
   recipient?: string
+  bps?: string
+  amount?: string
+  amountUsd?: string
+  amountUsdCurrent?: string
 }
 
-export interface RelayRequest {
-  referrer?: string
-  data?: {
-    appFees?: RelayAppFee[]
-    paidAppFees?: RelayAppFee[]
-    inTxs?: Array<{ data?: { value?: string } }>
-    metadata?: { currencyIn?: { amount?: string } }
-  }
+interface RelayToken {
+  chainId?: number
+  address?: string
+  symbol?: string
+  name?: string
+  decimals?: number
+}
+
+interface RelayCurrencyAmount {
+  currency?: RelayToken
+  amount?: string
+  amountFormatted?: string
+  amountUsd?: string
+  amountUsdCurrent?: string
+  minimumAmount?: string
 }
 
 export interface RelayRequestsResponse {
-  requests?: RelayRequest[]
+  requests?: Array<{
+    id?: string
+    status?: string
+    referrer?: string
+    user?: string
+    recipient?: string
+    createdAt?: string
+    updatedAt?: string
+    data?: {
+      appFees?: Array<RelayAppFee>
+      paidAppFees?: Array<RelayAppFee>
+      appFeeCurrencyObject?: RelayToken
+      metadata?: {
+        currencyIn?: RelayCurrencyAmount
+        currencyOut?: RelayCurrencyAmount
+      }
+    }
+  }>
 }
 
 export interface CowSwapAppDataResponse {

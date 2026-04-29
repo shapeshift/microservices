@@ -37,7 +37,6 @@ export class SwapVerificationService {
   private readonly shapeshiftChainflipAffiliate = 'shapeshift'
   private readonly shapeshiftCowswapAppCode = 'shapeshift'
   private readonly shapeshiftMayaAffiliate = 'ssmaya'
-  private readonly shapeshiftRelayReferrer = 'shapeshift'
   private readonly shapeshiftThorchainAffiliate = 'ss'
 
   private readonly bebopApiKey = env.VITE_BEBOP_API_KEY
@@ -51,7 +50,6 @@ export class SwapVerificationService {
   private readonly chainflipApiUrl = env.VITE_CHAINFLIP_API_URL
   private readonly cowswapApiUrl = env.VITE_COWSWAP_BASE_URL
   private readonly portalsApiUrl = env.VITE_PORTALS_BASE_URL
-  private readonly relayApiUrl = env.VITE_RELAY_API_URL
   private readonly zrxApiUrl = env.VITE_ZRX_BASE_URL
 
   constructor(private readonly httpService: HttpService) {
@@ -134,9 +132,11 @@ export class SwapVerificationService {
     const { quoteRequest, quote } = quoteResponse
     const { referral, appFees = [] } = quoteRequest
 
+    const affiliateAddresses = ['shapeshifttokenomics.sputnik-dao.near']
+
     const shapeshiftFee =
       referral?.toLowerCase() === 'shapeshift'
-        ? appFees.find(({ recipient }) => ['shapeshifttokenomics.sputnik-dao.near'].includes(recipient))
+        ? appFees.find(({ recipient }) => affiliateAddresses.includes(recipient.toLowerCase()))
         : undefined
 
     const verifiedSellAmountCryptoBaseUnit = swapDetails.depositedAmount || swapDetails.amountIn || quote.amountIn
@@ -158,84 +158,64 @@ export class SwapVerificationService {
   }
 
   private async verifyRelay(swap: Swap): Promise<SwapVerificationResult> {
-    const { swapId } = swap
-    const metadata = swap.metadata as Record<string, any>
-    const relayId = (metadata?.relayTransactionMetadata as { relayId?: string } | undefined)?.relayId
+    const { swapId, metadata } = swap
 
-    if (!relayId) {
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: 'Missing relay transaction metadata',
-      }
+    const relayId = metadata.relayTransactionMetadata?.relayId
+    if (!relayId) throw new Error('Missing relayId in relayTransactionMetadata')
+
+    const { data } = await firstValueFrom(
+      this.httpService.get<RelayRequestsResponse>(`${env.VITE_RELAY_API_URL}/requests/v2?id=${relayId}`),
+    )
+
+    const request = data?.requests?.[0]
+    if (!request?.data) throw new Error('No request data found from Relay API')
+
+    const appFees = request.data.appFees?.length ? request.data.appFees : (request.data.paidAppFees ?? [])
+
+    // Relay routes affiliate fees to our BASE-chain treasury
+    const affiliateAddresses = ['0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502']
+
+    const shapeshiftFee =
+      request.referrer?.toLowerCase() === 'shapeshift'
+        ? appFees.find(({ recipient }) => recipient && affiliateAddresses.includes(recipient.toLowerCase()))
+        : undefined
+
+    const parsedBps = Number(shapeshiftFee?.bps)
+    const affiliateBps = Number.isFinite(parsedBps) ? parsedBps : undefined
+
+    // Relay's appFeeCurrencyObject is the source of truth for which asset the affiliate fee was paid in —
+    // it can be the sell asset, the buy asset, or neither, depending on the route.
+    // TODO: replace with `relayTokenToAssetId` from `@shapeshiftoss/swapper`
+    const actualAffiliateFeeAssetId = (() => {
+      if (!shapeshiftFee) return
+
+      const chainId = request.data.appFeeCurrencyObject?.chainId
+      const address = request.data.appFeeCurrencyObject?.address?.toLowerCase()
+
+      if (!chainId || !address) return
+
+      const isNative = address === '0x0000000000000000000000000000000000000000'
+
+      return isNative ? `eip155:${chainId}/slip44:60` : `eip155:${chainId}/erc20:${address}`
+    })()
+
+    const result: SwapVerificationResult = {
+      isVerified: true,
+      hasAffiliate: Boolean(shapeshiftFee),
+      affiliateBps,
+      affiliateAddress: shapeshiftFee?.recipient,
+      verifiedSellAmountCryptoBaseUnit: request.data.metadata?.currencyIn?.amount,
+      actualBuyAmountCryptoBaseUnit: request.data.metadata?.currencyOut?.amount,
+      actualAffiliateFeeAmountCryptoBaseUnit: shapeshiftFee?.amount,
+      actualAffiliateFeeAssetId,
     }
 
-    try {
-      const requestUrl = `${this.relayApiUrl}/requests/v2?id=${relayId}`
+    logVerification(this.logger, SwapperName.Relay, swapId, result, {
+      status: request.status,
+      feeAsset: result.actualAffiliateFeeAssetId,
+    })
 
-      const response = await firstValueFrom(this.httpService.get<RelayRequestsResponse>(requestUrl))
-
-      const requests = response.data?.requests
-
-      if (!requests || requests.length === 0) {
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          actualBuyAmountCryptoBaseUnit: undefined,
-          actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-          error: 'No request data found from Relay API',
-        }
-      }
-
-      const request = requests[0]
-
-      // Check for referrer field at top level
-      const referrer = request.referrer
-      const hasShapeshiftReferrer = referrer?.toLowerCase() === this.shapeshiftRelayReferrer.toLowerCase()
-
-      // Check for appFees or paidAppFees in the data object
-      const appFees = request.data?.appFees || request.data?.paidAppFees || []
-
-      // Extract affiliate info from appFees
-      let affiliateBps: number | undefined
-      let affiliateAddress: string | undefined
-
-      if (appFees.length > 0) {
-        // Get the first app fee entry (should be ShapeShift's)
-        const fee = appFees[0]
-        affiliateBps = fee.bps ? parseInt(fee.bps) : undefined
-        affiliateAddress = fee.recipient
-      }
-
-      // Verification is successful if we have shapeshift as referrer AND we have app fees
-      const hasShapeshiftAffiliate = hasShapeshiftReferrer && appFees.length > 0
-
-      const verifiedSellAmountCryptoBaseUnit =
-        request.data?.inTxs?.[0]?.data?.value?.toString() ??
-        request.data?.metadata?.currencyIn?.amount?.toString() ??
-        undefined
-
-      return {
-        isVerified: true,
-        hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps,
-        affiliateAddress,
-        verifiedSellAmountCryptoBaseUnit,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-      }
-    } catch (error) {
-      this.logger.error(`Error verifying Relay for swap ${swapId}:`, error)
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: error instanceof Error ? error.message : 'Failed to fetch Relay request data',
-      }
-    }
+    return result
   }
 
   private async verifyCowSwap(swap: Swap): Promise<SwapVerificationResult> {
