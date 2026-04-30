@@ -50,12 +50,12 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (!client.userId) return { error: 'Not authenticated' }
 
     try {
-      const { items, nextCursor } = await this.swapsService.getSwapsByUser(client.userId, {
+      const { swaps, nextCursor } = await this.swapsService.getSwapsByUser(client.userId, {
         limit: data.limit || 50,
         cursor: data.cursor,
       })
 
-      return { success: true, swaps: items, nextCursor }
+      return { success: true, swaps, nextCursor }
     } catch (error) {
       this.logger.error('Failed to get swaps', error)
       return { error: 'Failed to get swaps' }

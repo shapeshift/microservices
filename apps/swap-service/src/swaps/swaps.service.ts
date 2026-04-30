@@ -222,7 +222,7 @@ export class SwapsService {
 
     const rows = await this.prisma.swap.findMany({ where, ...swapCursorArgs(limit, cursor) })
 
-    return { items: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
+    return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
   async getPendingSwaps(): Promise<Swap[]> {

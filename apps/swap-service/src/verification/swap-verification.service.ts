@@ -199,6 +199,7 @@ export class SwapVerificationService {
       return isNative ? `eip155:${chainId}/slip44:60` : `eip155:${chainId}/erc20:${address}`
     })()
 
+    // TODO: actualAffiliateFeeUsd, actualAffiliateFeeAmountUsd
     const result: SwapVerificationResult = {
       isVerified: true,
       hasAffiliate: Boolean(shapeshiftFee),

@@ -1,50 +1,89 @@
+import { Type } from 'class-transformer'
+import { IsBoolean, IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
+
+import { PaginationQueryDto } from '../swaps/types'
+
+import { PARTNER_CODE_REGEX } from './utils'
+
+const PARTNER_CODE_MESSAGE = 'Partner code must be 3-32 alphanumeric characters or hyphens'
+
 export interface AffiliateStatsResult {
   totalSwaps: number
   totalVolumeUsd: string
   totalFeesEarnedUsd: string
 }
 
-export interface AffiliateSwapItem {
-  swapId: string
-  status: string
-  sellAsset: unknown
-  buyAsset: unknown
-  sellAmountCryptoBaseUnit: string
-  expectedBuyAmountCryptoBaseUnit: string
-  actualBuyAmountCryptoBaseUnit: string | null
-  sellAmountUsd: string | null
-  buyAssetUsd: string | null
-  affiliateBps: number | null
-  shapeshiftBps: number
-  affiliateFeeUsd: string | null
-  swapperName: string
-  sellTxHash: string | null
-  buyTxHash: string | null
-  isAffiliateVerified: boolean | null
-  createdAt: Date
+export class AddressQueryDto {
+  @IsEthereumAddress()
+  address: string
 }
 
-export interface AffiliateSwapsResult {
-  swaps: AffiliateSwapItem[]
-  nextCursor: string | null
-}
-
-export interface GetAffiliateSwapsOptions {
+export class AffiliateStatsQueryDto extends AddressQueryDto {
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
   startDate?: Date
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
   endDate?: Date
-  limit?: number
-  cursor?: string
 }
 
-export interface CreateAffiliateDto {
+export class AffiliateSwapsQueryDto extends PaginationQueryDto {
+  @IsEthereumAddress()
+  address: string
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  startDate?: Date
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  endDate?: Date
+}
+
+export class CreateAffiliateDto {
+  @IsEthereumAddress()
   walletAddress: string
+
+  @IsOptional()
+  @IsEthereumAddress()
   receiveAddress?: string
+
+  @IsOptional()
+  @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
   partnerCode?: string
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000)
   bps?: number
 }
 
-export interface UpdateAffiliateDto {
+export class UpdateAffiliateDto {
+  @IsOptional()
+  @IsEthereumAddress()
   receiveAddress?: string
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000)
   bps?: number
+
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean
+}
+
+export class ClaimPartnerCodeDto {
+  @IsEthereumAddress()
+  walletAddress: string
+
+  @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
+  partnerCode: string
 }

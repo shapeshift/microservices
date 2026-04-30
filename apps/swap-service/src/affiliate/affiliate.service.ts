@@ -2,16 +2,12 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { Affiliate, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { PaginatedSwaps } from '../swaps/types'
+import { toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
-import type {
-  AffiliateStatsResult,
-  AffiliateSwapsResult,
-  CreateAffiliateDto,
-  GetAffiliateSwapsOptions,
-  UpdateAffiliateDto,
-} from './types'
-import { calculateAffiliateFeeUsd, RESERVED_PARTNER_CODES } from './utils'
+import type { AffiliateStatsResult, AffiliateSwapsQueryDto, CreateAffiliateDto, UpdateAffiliateDto } from './types'
+import { RESERVED_PARTNER_CODES } from './utils'
 
 @Injectable()
 export class AffiliateService {
@@ -105,43 +101,26 @@ export class AffiliateService {
     }
   }
 
-  async getAffiliateSwaps(
-    affiliateAddress: string,
-    options: GetAffiliateSwapsOptions = {},
-  ): Promise<AffiliateSwapsResult> {
-    const { startDate, endDate, limit = 50, cursor } = options
+  async getAffiliateSwaps(affiliateAddress: string, options: AffiliateSwapsQueryDto): Promise<PaginatedSwaps> {
+    const { startDate, endDate, limit, cursor } = options
 
     const items = await this.prisma.swap.findMany({
       ...swapCursorArgs(limit, cursor),
       where: {
         affiliateAddress,
-        ...(startDate && endDate && { createdAt: { gte: startDate, lte: endDate } }),
-      },
-      select: {
-        swapId: true,
-        status: true,
-        sellAsset: true,
-        buyAsset: true,
-        sellAmountCryptoBaseUnit: true,
-        expectedBuyAmountCryptoBaseUnit: true,
-        actualBuyAmountCryptoBaseUnit: true,
-        sellAmountUsd: true,
-        buyAssetUsd: true,
-        affiliateBps: true,
-        shapeshiftBps: true,
-        swapperName: true,
-        sellTxHash: true,
-        buyTxHash: true,
-        isAffiliateVerified: true,
-        createdAt: true,
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: startDate }),
+                ...(endDate && { lte: endDate }),
+              },
+            }
+          : {}),
       },
     })
 
     return {
-      swaps: items.map((swap) => ({
-        ...swap,
-        affiliateFeeUsd: calculateAffiliateFeeUsd(swap.sellAmountUsd, swap.affiliateBps),
-      })),
+      swaps: items.map(toSwap),
       nextCursor: getNextCursor(items, limit),
     }
   }

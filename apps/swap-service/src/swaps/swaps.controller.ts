@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  NotFoundException,
-  Param,
-  ParseDatePipe,
-  Post,
-  Query,
-  ValidationPipe,
-} from '@nestjs/common'
+import { Body, Controller, Get, NotFoundException, Param, ParseDatePipe, Post, Query } from '@nestjs/common'
 
 import type { CreateSwapDto } from '@shapeshift/shared-types'
 
@@ -16,7 +6,6 @@ import { SwapsService } from './swaps.service'
 import { PaginationQueryDto } from './types'
 
 const OptionalDatePipe = new ParseDatePipe({ optional: true })
-const PaginationPipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })
 
 @Controller('swaps')
 export class SwapsController {
@@ -40,12 +29,12 @@ export class SwapsController {
   }
 
   @Get('user/:userId')
-  async getSwapsByUser(@Param('userId') userId: string, @Query(PaginationPipe) query: PaginationQueryDto) {
+  async getSwapsByUser(@Param('userId') userId: string, @Query() query: PaginationQueryDto) {
     return this.swapsService.getSwapsByUser(userId, query)
   }
 
   @Get('account/:accountId')
-  async getSwapsByAccountId(@Param('accountId') accountId: string, @Query(PaginationPipe) query: PaginationQueryDto) {
+  async getSwapsByAccountId(@Param('accountId') accountId: string, @Query() query: PaginationQueryDto) {
     return this.swapsService.getSwapsByAccountId(accountId, query)
   }
 

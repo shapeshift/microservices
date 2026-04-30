@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import type { Response } from 'express'
 
@@ -7,6 +8,8 @@ import { ChainAdapterInitService } from './lib/chain-adapter-init.service'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
+
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 
   // Initialize chain adapters
   const chainAdapterInitService = app.get(ChainAdapterInitService)
@@ -22,7 +25,6 @@ async function bootstrap() {
     res.status(200).json({ status: 'ok' })
   })
 
-  // TODO: Add ValidationPipe when class-validator resolves properly in Yarn workspaces
   app.enableShutdownHooks()
 
   const port = env.PORT || 3001
