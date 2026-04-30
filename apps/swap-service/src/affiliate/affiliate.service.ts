@@ -108,7 +108,14 @@ export class AffiliateService {
       ...swapCursorArgs(limit, cursor),
       where: {
         affiliateAddress,
-        ...(startDate && endDate && { createdAt: { gte: startDate, lte: endDate } }),
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: startDate }),
+                ...(endDate && { lte: endDate }),
+              },
+            }
+          : {}),
       },
     })
 

@@ -11,11 +11,12 @@ import {
   Query,
   Req,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common'
 
 import { AffiliateService } from './affiliate.service'
 import { SiweAuthGuard, SiweRequest } from './siwe-auth.guard'
-import type { CreateAffiliateDto, UpdateAffiliateDto } from './types'
+import { AffiliateSwapsQueryDto, type CreateAffiliateDto, type UpdateAffiliateDto } from './types'
 import {
   assertAddressQuery,
   assertBpsInRange,
@@ -26,28 +27,15 @@ import {
   parseDateRange,
 } from './utils'
 
+const AffiliateSwapsQueryPipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })
+
 @Controller('v1/affiliate')
 export class AffiliateController {
   constructor(private affiliateService: AffiliateService) {}
 
   @Get('swaps')
-  async getSwaps(
-    @Query('address') address: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('limit') limit?: string,
-    @Query('cursor') cursor?: string,
-  ) {
-    assertAddressQuery(address)
-
-    const { start, end } = parseDateRange(startDate, endDate)
-
-    return this.affiliateService.getAffiliateSwaps(address, {
-      startDate: start,
-      endDate: end,
-      limit: limit ? parseInt(limit, 10) : 50,
-      cursor,
-    })
+  async getSwaps(@Query(AffiliateSwapsQueryPipe) query: AffiliateSwapsQueryDto) {
+    return this.affiliateService.getAffiliateSwaps(query.address, query)
   }
 
   @Get('stats')

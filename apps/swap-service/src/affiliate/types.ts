@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsDate, IsOptional } from 'class-validator'
+import { IsDate, IsEthereumAddress, IsOptional } from 'class-validator'
 
 import { PaginationQueryDto } from '../swaps/types'
 
@@ -10,6 +10,9 @@ export interface AffiliateStatsResult {
 }
 
 export class AffiliateSwapsQueryDto extends PaginationQueryDto {
+  @IsEthereumAddress()
+  address: string
+
   @IsOptional()
   @Type(() => Date)
   @IsDate()
