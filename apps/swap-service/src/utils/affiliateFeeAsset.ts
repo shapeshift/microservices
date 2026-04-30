@@ -1,7 +1,7 @@
 import { SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
-type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | 'fixed_base' | 'none'
+type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | 'none'
 
 const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
   [SwapperName.Across]: 'buy_asset',
@@ -16,7 +16,7 @@ const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
   [SwapperName.Mayachain]: 'sell_asset',
   [SwapperName.NearIntents]: 'sell_asset',
   [SwapperName.Portals]: 'sell_asset',
-  [SwapperName.Relay]: 'fixed_base',
+  [SwapperName.Relay]: 'none',
   [SwapperName.Stonfi]: 'sell_asset',
   [SwapperName.Sunio]: 'buy_asset',
   [SwapperName.Thorchain]: 'sell_asset',
@@ -33,8 +33,6 @@ export function resolveAffiliateFeeAssetId(swapperName: SwapperName, sellAsset: 
       return buyAsset.assetId
     case 'sell_asset':
       return sellAsset.assetId
-    case 'fixed_base':
-      return 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
     default:
       return null
   }
