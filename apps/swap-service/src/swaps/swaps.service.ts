@@ -32,6 +32,7 @@ import { PaginationQueryDto } from './types'
 import {
   buildStatusNotification,
   calculateFeeForSwap,
+  computeSellAmountUsd,
   fetchUsdPrices,
   getAffiliateFeeRate,
   toSwap,
@@ -87,6 +88,12 @@ export class SwapsService {
         this.resolveAffiliateAddress(data),
       ])
 
+      const sellAmountUsd = computeSellAmountUsd(
+        data.sellAmountCryptoBaseUnit,
+        data.sellAsset.precision,
+        prices.sellAssetUsd,
+      )
+
       if (referralCode) logger.debug(`Found referral code ${referralCode} for user ${data.userId}`)
 
       const swap = toSwap(
@@ -107,7 +114,7 @@ export class SwapsService {
             metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
             userId: data.userId ?? 'api',
             referralCode,
-            sellAmountUsd: prices.sellAmountUsd,
+            sellAssetUsd: prices.sellAssetUsd,
             buyAssetUsd: prices.buyAssetUsd,
             affiliateAssetUsd: prices.affiliateAssetUsd,
             affiliateAddress,
@@ -124,7 +131,7 @@ export class SwapsService {
           `Swap created: ${swap.swapId}`,
           referralCode && `referral ${referralCode}`,
           affiliateAddress && `affiliate ${affiliateAddress}`,
-          prices.sellAmountUsd && `$${prices.sellAmountUsd}`,
+          sellAmountUsd && `$${sellAmountUsd}`,
         ]
           .filter(Boolean)
           .join(' | '),

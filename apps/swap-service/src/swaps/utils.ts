@@ -57,6 +57,15 @@ export const getAffiliateFeeRate = (verifiedBps: number, shapeshiftBps: number):
   return (verifiedBps - shapeshiftBps) / verifiedBps
 }
 
+export const computeSellAmountUsd = (
+  sellAmountCryptoBaseUnit: string,
+  precision: number,
+  sellAssetUsd: string | null,
+): number | null => {
+  if (!sellAssetUsd) return null
+  return bnOrZero(baseUnitToPrecision(sellAmountCryptoBaseUnit, precision)).times(sellAssetUsd).toNumber()
+}
+
 export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: string | null): Promise<UsdPrices> => {
   try {
     const [sellAssetUsd, buyAssetUsd, affiliateAssetUsd] = await Promise.all([
@@ -65,20 +74,14 @@ export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: s
       affiliateFeeAssetId ? getAssetPriceUsd(affiliateFeeAssetId) : Promise.resolve<number | null>(null),
     ])
 
-    const sellAmountUsd = sellAssetUsd
-      ? bnOrZero(baseUnitToPrecision(data.sellAmountCryptoBaseUnit, data.sellAsset.precision))
-          .times(sellAssetUsd)
-          .toFixed(2)
-      : null
-
     return {
-      sellAmountUsd,
+      sellAssetUsd: sellAssetUsd?.toString() ?? null,
       buyAssetUsd: buyAssetUsd?.toString() ?? null,
       affiliateAssetUsd: affiliateAssetUsd?.toString() ?? null,
     }
   } catch (err) {
     logger.warn(`Failed to fetch USD prices for swap ${data.swapId}:`, err)
-    return { sellAmountUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
+    return { sellAssetUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
   }
 }
 
@@ -119,11 +122,7 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
   let precision: number | null
 
   if (swap.affiliateFeeAssetId === swap.sellAsset.assetId) {
-    // Back-derive sell asset price from stored USD value.
-    if (!swap.sellAmountUsd) return null
-    const sellAmount = bnOrZero(swap.sellAmountCryptoBaseUnit).div(bnOrZero(10).pow(swap.sellAsset.precision))
-    if (sellAmount.isZero()) return null
-    priceUsd = bnOrZero(swap.sellAmountUsd).div(sellAmount).toFixed()
+    priceUsd = swap.sellAssetUsd
     precision = swap.sellAsset.precision
   } else if (swap.affiliateFeeAssetId === swap.buyAsset.assetId) {
     priceUsd = swap.buyAssetUsd
@@ -142,11 +141,22 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
 export const calculateFeeForSwap = (swap: Swap): { feeUsd: number; volumeUsd: number; verifiedBps: number } | null => {
   const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps
   if (!verifiedBps) {
-    logger.warn(`Verified swap ${swap.swapId} missing affiliateBps in verification details, skipping`)
+    logger.warn(`Verified swap ${swap.swapId} missing affiliate bps in verification details, skipping`)
     return null
   }
 
-  const sellAmountUsd = swap.sellAmountUsd ? parseFloat(swap.sellAmountUsd) : null
+  const verifiedSellAmountCryptoBaseUnit = swap.affiliateVerificationDetails?.verifiedSellAmountCryptoBaseUnit
+  if (!verifiedSellAmountCryptoBaseUnit) {
+    logger.warn(`Verified swap ${swap.swapId} missing sell amount in verification details, skipping`)
+    return null
+  }
+
+  const sellAmountUsd = computeSellAmountUsd(
+    verifiedSellAmountCryptoBaseUnit,
+    swap.sellAsset.precision,
+    swap.sellAssetUsd,
+  )
+
   const actualFeeUsd = resolveActualFeeUsd(swap)
 
   if (actualFeeUsd === null && sellAmountUsd === null) {
