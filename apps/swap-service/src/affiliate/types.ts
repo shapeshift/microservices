@@ -1,12 +1,33 @@
 import { Type } from 'class-transformer'
-import { IsDate, IsEthereumAddress, IsOptional } from 'class-validator'
+import { IsBoolean, IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
 
 import { PaginationQueryDto } from '../swaps/types'
+
+import { PARTNER_CODE_REGEX } from './utils'
+
+const PARTNER_CODE_MESSAGE = 'Partner code must be 3-32 alphanumeric characters or hyphens'
 
 export interface AffiliateStatsResult {
   totalSwaps: number
   totalVolumeUsd: string
   totalFeesEarnedUsd: string
+}
+
+export class AddressQueryDto {
+  @IsEthereumAddress()
+  address: string
+}
+
+export class AffiliateStatsQueryDto extends AddressQueryDto {
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  startDate?: Date
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  endDate?: Date
 }
 
 export class AffiliateSwapsQueryDto extends PaginationQueryDto {
@@ -24,15 +45,45 @@ export class AffiliateSwapsQueryDto extends PaginationQueryDto {
   endDate?: Date
 }
 
-export interface CreateAffiliateDto {
+export class CreateAffiliateDto {
+  @IsEthereumAddress()
   walletAddress: string
+
+  @IsOptional()
+  @IsEthereumAddress()
   receiveAddress?: string
+
+  @IsOptional()
+  @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
   partnerCode?: string
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000)
   bps?: number
 }
 
-export interface UpdateAffiliateDto {
+export class UpdateAffiliateDto {
+  @IsOptional()
+  @IsEthereumAddress()
   receiveAddress?: string
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1000)
   bps?: number
+
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean
+}
+
+export class ClaimPartnerCodeDto {
+  @IsEthereumAddress()
+  walletAddress: string
+
+  @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
+  partnerCode: string
 }
