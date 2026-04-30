@@ -45,7 +45,7 @@ export type AggregateFeesParams = {
 }
 
 export type PaginatedSwaps = {
-  items: Swap[]
+  swaps: Swap[]
   nextCursor: string | null
 }
 

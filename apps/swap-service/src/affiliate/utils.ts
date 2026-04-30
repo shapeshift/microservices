@@ -38,8 +38,3 @@ export function parseDateRange(startDate?: string, endDate?: string): { start?: 
     end: endDate ? new Date(endDate) : undefined,
   }
 }
-
-export function calculateAffiliateFeeUsd(sellAmountUsd: string | null, affiliateBps: number | null): string | null {
-  if (!sellAmountUsd || affiliateBps == null) return null
-  return ((parseFloat(sellAmountUsd) * affiliateBps) / 10000).toFixed(2)
-}
