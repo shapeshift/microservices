@@ -1,18 +1,22 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { Affiliate, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { PaginatedSwaps } from '../swaps/types'
-import { toSwap } from '../swaps/utils'
+import { calculateFeeForSwap, getAffiliateFeeRate, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
-import type { AffiliateStatsResult, AffiliateSwapsQueryDto, CreateAffiliateDto, UpdateAffiliateDto } from './types'
+import type {
+  AffiliateStatsQueryDto,
+  AffiliateStatsResult,
+  AffiliateSwapsQueryDto,
+  CreateAffiliateDto,
+  UpdateAffiliateDto,
+} from './types'
 import { RESERVED_PARTNER_CODES } from './utils'
 
 @Injectable()
 export class AffiliateService {
-  private readonly logger = new Logger(AffiliateService.name)
-
   constructor(private prisma: PrismaService) {}
 
   async getAffiliateByWalletAddress(walletAddress: string): Promise<Affiliate | null> {
@@ -27,7 +31,7 @@ export class AffiliateService {
     return affiliate
   }
 
-  async createAffiliate(data: CreateAffiliateDto) {
+  async createAffiliate(data: CreateAffiliateDto): Promise<Affiliate> {
     const { walletAddress, bps, partnerCode, receiveAddress } = data
 
     const existing = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
@@ -41,11 +45,11 @@ export class AffiliateService {
     return this.prisma.affiliate.create({ data: { walletAddress, receiveAddress, partnerCode, bps: bps ?? 60 } })
   }
 
-  async updateAffiliate(walletAddress: string, data: UpdateAffiliateDto) {
+  async updateAffiliate(walletAddress: string, data: UpdateAffiliateDto): Promise<Affiliate> {
     const existing = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
     if (!existing) throw new NotFoundException('Affiliate not found')
 
-    const updateData: Record<string, unknown> = {
+    const updateData: Prisma.AffiliateUpdateInput = {
       bps: data.bps ?? existing.bps,
       isActive: data.isActive ?? existing.isActive,
     }
@@ -57,7 +61,7 @@ export class AffiliateService {
     return this.prisma.affiliate.update({ where: { walletAddress }, data: updateData })
   }
 
-  async claimPartnerCode(walletAddress: string, partnerCode: string) {
+  async claimPartnerCode(walletAddress: string, partnerCode: string): Promise<Affiliate> {
     if (RESERVED_PARTNER_CODES.includes(partnerCode.toLowerCase())) throw new Error('This partner code is reserved')
 
     const existingCode = await this.prisma.affiliate.findUnique({ where: { partnerCode } })
@@ -72,26 +76,40 @@ export class AffiliateService {
     })
   }
 
-  async getAffiliateStats(affiliateAddress: string, startDate?: Date, endDate?: Date): Promise<AffiliateStatsResult> {
-    const where: Prisma.SwapWhereInput = {
-      affiliateAddress,
-      status: 'SUCCESS',
-      isAffiliateVerified: true,
-      ...(startDate && endDate && { createdAt: { gte: startDate, lte: endDate } }),
-    }
+  async getAffiliateStats(affiliateAddress: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
+    const { startDate, endDate } = options
 
-    const totalSwaps = await this.prisma.swap.count({ where })
-    const swaps = await this.prisma.swap.findMany({ where, select: { sellAmountUsd: true, affiliateBps: true } })
+    const items = await this.prisma.swap.findMany({
+      where: {
+        affiliateAddress,
+        status: 'SUCCESS',
+        isAffiliateVerified: true,
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate && { gte: startDate }),
+                ...(endDate && { lte: endDate }),
+              },
+            }
+          : {}),
+      },
+    })
 
+    let totalSwaps = 0
     let totalVolumeUsd = 0
     let totalFeesEarnedUsd = 0
 
-    for (const swap of swaps) {
-      const volumeUsd = parseFloat(swap.sellAmountUsd || '0')
-      const bps = swap.affiliateBps ?? 0
+    for (const item of items) {
+      const swap = toSwap(item)
 
-      totalVolumeUsd += volumeUsd
-      totalFeesEarnedUsd += volumeUsd * (bps / 10000)
+      const fee = calculateFeeForSwap(swap)
+      if (!fee) continue
+
+      const rate = getAffiliateFeeRate(fee.verifiedBps, swap.shapeshiftBps)
+
+      totalSwaps++
+      totalVolumeUsd += fee.volumeUsd
+      totalFeesEarnedUsd += fee.feeUsd * rate
     }
 
     return {

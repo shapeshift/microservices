@@ -36,7 +36,7 @@ export class AffiliateController {
 
   @Get('stats')
   async getStats(@Query() query: AffiliateStatsQueryDto) {
-    return this.affiliateService.getAffiliateStats(query.address, query.startDate, query.endDate)
+    return this.affiliateService.getAffiliateStats(query.address, query)
   }
 
   @Get('lookup/bps')

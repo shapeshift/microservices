@@ -25,7 +25,7 @@ CREATE TABLE "public"."swaps" (
     "metadata" JSONB NOT NULL,
     "userId" TEXT NOT NULL,
     "referralCode" TEXT,
-    "sellAmountUsd" TEXT,
+    "sellAssetUsd" TEXT,
     "buyAssetUsd" TEXT,
     "affiliateAssetUsd" TEXT,
     "isAffiliateVerified" BOOLEAN,

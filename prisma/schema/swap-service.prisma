@@ -36,7 +36,7 @@ model Swap {
   metadata                               Json
   userId                                 String
   referralCode                           String?
-  sellAmountUsd                          String?
+  sellAssetUsd                           String?
   buyAssetUsd                            String?
   affiliateAssetUsd                      String?
   isAffiliateVerified                    Boolean?

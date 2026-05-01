@@ -8,6 +8,7 @@ import { assertGetCowNetwork, getTreasuryAddressFromChainId, SwapperName } from 
 
 import { env } from '../env'
 import type { Swap } from '../swaps/types'
+import { getAssetPriceUsd } from '../utils/pricing'
 
 import {
   AcrossDepositStatusResponse,
@@ -199,7 +200,17 @@ export class SwapVerificationService {
       return isNative ? `eip155:${chainId}/slip44:60` : `eip155:${chainId}/erc20:${address}`
     })()
 
-    // TODO: actualAffiliateFeeUsd, actualAffiliateFeeAmountUsd
+    const actualAffiliateFeeUsd = await (async () => {
+      if (!actualAffiliateFeeAssetId) return
+
+      if (actualAffiliateFeeAssetId === swap.sellAsset.assetId) return swap.sellAssetUsd
+      if (actualAffiliateFeeAssetId === swap.buyAsset.assetId) return swap.buyAssetUsd
+
+      const priceUsd = await getAssetPriceUsd(actualAffiliateFeeAssetId)
+
+      return priceUsd?.toString()
+    })()
+
     const result: SwapVerificationResult = {
       isVerified: true,
       hasAffiliate: Boolean(shapeshiftFee),
@@ -209,6 +220,7 @@ export class SwapVerificationService {
       actualBuyAmountCryptoBaseUnit: request.data.metadata?.currencyOut?.amount,
       actualAffiliateFeeAmountCryptoBaseUnit: shapeshiftFee?.amount,
       actualAffiliateFeeAssetId,
+      actualAffiliateFeeUsd: actualAffiliateFeeUsd ?? undefined,
     }
 
     logVerification(this.logger, SwapperName.Relay, swapId, result, {

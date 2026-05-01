@@ -53,13 +53,15 @@ async function calculateReferralRewards(
       referralCode: {
         not: null,
       },
-      sellAmountUsd: {
+      sellAssetUsd: {
         not: null,
       },
     },
     select: {
       referralCode: true,
-      sellAmountUsd: true,
+      sellAssetUsd: true,
+      sellAmountCryptoBaseUnit: true,
+      sellAsset: true,
       sellAccountId: true,
     },
   })
@@ -77,9 +79,11 @@ async function calculateReferralRewards(
   >()
 
   for (const swap of swaps) {
-    if (!swap.referralCode || !swap.sellAmountUsd) continue
+    if (!swap.referralCode || !swap.sellAssetUsd) continue
 
-    const volumeUsd = parseFloat(swap.sellAmountUsd)
+    const { precision } = swap.sellAsset as { precision: number }
+    const sellAmount = parseFloat(swap.sellAmountCryptoBaseUnit) / 10 ** precision
+    const volumeUsd = parseFloat(swap.sellAssetUsd) * sellAmount
     const existing = referralStats.get(swap.referralCode)
 
     if (existing) {

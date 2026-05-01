@@ -70,7 +70,7 @@ export default {
   },
   userId: 'api',
   referralCode: null,
-  sellAmountUsd: '2.29',
+  sellAssetUsd: '2290',
   buyAssetUsd: '0.9998',
   affiliateAssetUsd: '0.9998',
   isAffiliateVerified: true,

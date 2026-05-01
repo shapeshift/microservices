@@ -24,7 +24,7 @@ export type AffiliateVerificationDetails = {
 }
 
 export type UsdPrices = {
-  sellAmountUsd: string | null
+  sellAssetUsd: string | null
   buyAssetUsd: string | null
   affiliateAssetUsd: string | null
 }
