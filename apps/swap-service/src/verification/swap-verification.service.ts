@@ -19,14 +19,14 @@ import {
   CowSwapAppDataResponse,
   CowSwapDecodedAppData,
   CowSwapOrderResponse,
+  MidgardActionsResponse,
   PortalsOrderResponse,
   RelayRequestsResponse,
   StonfiQuoteMetadata,
-  ThorchainMayaTxResponse,
   ZrxApiResponse,
   ZrxTrade,
 } from './types'
-import { applyBps, logVerification, THORCHAIN_PRECISION, thorchainToNativePrecision } from './utils'
+import { applyBps, logVerification, thorchainToNativePrecision } from './utils'
 
 @Injectable()
 export class SwapVerificationService {
@@ -37,14 +37,9 @@ export class SwapVerificationService {
   private readonly shapeshiftButterswapEntrance = 'shapeshift'
   private readonly shapeshiftChainflipAffiliate = 'shapeshift'
   private readonly shapeshiftCowswapAppCode = 'shapeshift'
-  private readonly shapeshiftMayaAffiliate = 'ssmaya'
-  private readonly shapeshiftThorchainAffiliate = 'ss'
 
   private readonly bebopApiKey = env.VITE_BEBOP_API_KEY
   private readonly chainflipApiKey = env.VITE_CHAINFLIP_API_KEY
-
-  private readonly thorchainNodeUrl = env.VITE_THORCHAIN_NODE_URL
-  private readonly mayachainNodeUrl = env.VITE_MAYACHAIN_NODE_URL
 
   private readonly acrossApiUrl = env.VITE_ACROSS_API_URL
   private readonly bebopApiUrl = env.VITE_BEBOP_API_URL
@@ -84,7 +79,8 @@ export class SwapVerificationService {
         case SwapperName.Thorchain:
           return await this.verifyThorchain(swap)
         case SwapperName.Mayachain:
-          return await this.verifyMaya(swap)
+          return {} as SwapVerificationResult
+        //  return await this.verifyMaya(swap)
         case SwapperName.Chainflip:
           return await this.verifyChainflip(swap)
         case SwapperName.Zrx:
@@ -411,174 +407,140 @@ export class SwapVerificationService {
   }
 
   private async verifyThorchain(swap: Swap): Promise<SwapVerificationResult> {
+    console.log({ swap })
+
     const { swapId } = swap
-    const txHash = swap.sellTxHash || undefined
 
-    if (!txHash) {
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: 'Missing txHash for Thorchain verification',
-      }
+    const txHash = swap.sellTxHash?.replace(/^0x/, '')
+    if (!txHash) throw new Error('Missing txHash')
+
+    const { data } = await firstValueFrom(
+      this.httpService.get<MidgardActionsResponse>(`${env.VITE_THORCHAIN_MIDGARD_URL}/actions?txid=${txHash}`),
+    )
+
+    const action = data.actions[0]
+    if (!action) throw new Error('No action found')
+
+    if (action.type !== 'swap') throw new Error('Invalid swap action')
+
+    if (action.status === 'pending') {
+      // TODO: how to return here (we can't verify it yet, still pending)
     }
 
-    try {
-      // SECURITY: Query Thorchain node API to verify memo contains affiliate info
-      const txUrl = `${this.thorchainNodeUrl}/thorchain/tx/${txHash}`
+    const swapMetadata = action.metadata.swap
+    if (!swapMetadata) throw new Error('No swap metadata found')
 
-      this.logger.log(`Thorchain - Fetching tx from node API: ${txUrl}`)
+    const affiliateAddress = swapMetadata.affiliateAddress
+    const affiliateBps = parseInt(swapMetadata.affiliateFee)
+    const memo = swapMetadata.memo
+    const hasAffiliate = affiliateAddress === 'ss'
+    const actualAffiliateFeeAmountCryptoBaseUnit = action.out.find((out) => out.affiliate)?.coins[0].amount
 
-      const response = await firstValueFrom(this.httpService.get<ThorchainMayaTxResponse>(txUrl))
-
-      const observedTx = response.data?.observed_tx
-
-      if (!observedTx || !observedTx.tx) {
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          actualBuyAmountCryptoBaseUnit: undefined,
-          actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-          error: 'No observed transaction found',
-        }
-      }
-
-      const memo: string | undefined = observedTx.tx.memo
-      if (!memo) {
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          actualBuyAmountCryptoBaseUnit: undefined,
-          actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-          error: 'No memo found in transaction',
-        }
-      }
-
-      // Parse memo format: =:r:thor1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
-      // The affiliate code is after the 4th colon, followed by fee in bps
-      const memoPattern = new RegExp(`:${this.shapeshiftThorchainAffiliate}:(\\d+)`, 'i')
-      const memoMatch = memo.match(memoPattern)
-
-      const hasShapeshiftAffiliate = !!memoMatch
-      const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined
-
-      const coins = observedTx.tx.coins
-      const sellAssetPrecision = swap.sellAsset.precision ?? THORCHAIN_PRECISION
-      const firstCoinAmount = coins?.[0]?.amount
-      const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
-        ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
-        : undefined
-
-      const result: SwapVerificationResult = {
-        isVerified: true,
-        hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftThorchainAffiliate : undefined,
-        verifiedSellAmountCryptoBaseUnit,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-      }
-
-      logVerification(this.logger, SwapperName.Thorchain, swapId, result, { memo })
-
-      return result
-    } catch (error) {
-      this.logger.error(`Error verifying Thorchain for swap ${swapId}:`, error)
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: error instanceof Error ? error.message : 'Failed to fetch Thorchain data from node',
-      }
+    const result: SwapVerificationResult = {
+      isVerified: true,
+      hasAffiliate,
+      affiliateBps,
+      affiliateAddress,
+      verifiedSellAmountCryptoBaseUnit: thorchainToNativePrecision(
+        action.in[0].coins[0].amount,
+        swap.sellAsset.precision,
+      ),
+      actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(
+        action.out[action.out.length - 1].coins[0].amount,
+        swap.sellAsset.precision,
+      ),
+      actualAffiliateFeeAmountCryptoBaseUnit,
     }
+
+    logVerification(this.logger, SwapperName.Thorchain, swapId, result, { memo })
+
+    return result
   }
 
-  private async verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
-    const { swapId } = swap
-    const txHash = swap.sellTxHash || undefined
+  //private async verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
+  //  const { swapId } = swap
+  //  const txHash = swap.sellTxHash || undefined
 
-    if (!txHash) {
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: 'Missing txHash for Maya verification',
-      }
-    }
+  //  if (!txHash) {
+  //    return {
+  //      isVerified: false,
+  //      hasAffiliate: false,
+  //      actualBuyAmountCryptoBaseUnit: undefined,
+  //      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+  //      error: 'Missing txHash for Maya verification',
+  //    }
+  //  }
 
-    try {
-      // SECURITY: Query Maya node API to verify memo contains affiliate info
-      const txUrl = `${this.mayachainNodeUrl}/mayachain/tx/${txHash}`
+  //  try {
+  //    // SECURITY: Query Maya node API to verify memo contains affiliate info
+  //    const txUrl = `${this.mayachainNodeUrl}/mayachain/tx/${txHash}`
 
-      this.logger.log(`Maya - Fetching tx from node API: ${txUrl}`)
+  //    this.logger.log(`Maya - Fetching tx from node API: ${txUrl}`)
 
-      const response = await firstValueFrom(this.httpService.get<ThorchainMayaTxResponse>(txUrl))
+  //    const response = await firstValueFrom(this.httpService.get<ThorchainMayaTxResponse>(txUrl))
 
-      const observedTx = response.data?.observed_tx
+  //    const observedTx = response.data?.observed_tx
 
-      if (!observedTx || !observedTx.tx) {
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          actualBuyAmountCryptoBaseUnit: undefined,
-          actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-          error: 'No observed transaction found',
-        }
-      }
+  //    if (!observedTx || !observedTx.tx) {
+  //      return {
+  //        isVerified: false,
+  //        hasAffiliate: false,
+  //        actualBuyAmountCryptoBaseUnit: undefined,
+  //        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+  //        error: 'No observed transaction found',
+  //      }
+  //    }
 
-      const memo: string | undefined = observedTx.tx.memo
-      if (!memo) {
-        return {
-          isVerified: false,
-          hasAffiliate: false,
-          actualBuyAmountCryptoBaseUnit: undefined,
-          actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-          error: 'No memo found in transaction',
-        }
-      }
+  //    const memo: string | undefined = observedTx.tx.memo
+  //    if (!memo) {
+  //      return {
+  //        isVerified: false,
+  //        hasAffiliate: false,
+  //        actualBuyAmountCryptoBaseUnit: undefined,
+  //        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+  //        error: 'No memo found in transaction',
+  //      }
+  //    }
 
-      // Parse memo format: =:r:maya1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
-      // The affiliate code is after the 4th colon, followed by fee in bps
-      const memoPattern = new RegExp(`:${this.shapeshiftMayaAffiliate}:(\\d+)`, 'i')
-      const memoMatch = memo.match(memoPattern)
+  //    // Parse memo format: =:r:maya1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
+  //    // The affiliate code is after the 4th colon, followed by fee in bps
+  //    const memoPattern = new RegExp(`:${this.shapeshiftMayaAffiliate}:(\\d+)`, 'i')
+  //    const memoMatch = memo.match(memoPattern)
 
-      const hasShapeshiftAffiliate = !!memoMatch
-      const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined
+  //    const hasShapeshiftAffiliate = !!memoMatch
+  //    const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined
 
-      const coins = observedTx.tx.coins
-      const sellAssetPrecision = swap.sellAsset.precision ?? THORCHAIN_PRECISION
-      const firstCoinAmount = coins?.[0]?.amount
-      const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
-        ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
-        : undefined
+  //    const coins = observedTx.tx.coins
+  //    const sellAssetPrecision = swap.sellAsset.precision ?? THORCHAIN_PRECISION
+  //    const firstCoinAmount = coins?.[0]?.amount
+  //    const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
+  //      ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
+  //      : undefined
 
-      const result: SwapVerificationResult = {
-        isVerified: true,
-        hasAffiliate: hasShapeshiftAffiliate,
-        affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-        affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftMayaAffiliate : undefined,
-        verifiedSellAmountCryptoBaseUnit,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-      }
+  //    const result: SwapVerificationResult = {
+  //      isVerified: true,
+  //      hasAffiliate: hasShapeshiftAffiliate,
+  //      affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
+  //      affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftMayaAffiliate : undefined,
+  //      verifiedSellAmountCryptoBaseUnit,
+  //      actualBuyAmountCryptoBaseUnit: undefined,
+  //      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+  //    }
 
-      logVerification(this.logger, SwapperName.Mayachain, swapId, result, { memo })
+  //    logVerification(this.logger, SwapperName.Mayachain, swapId, result, { memo })
 
-      return result
-    } catch (error) {
-      this.logger.error(`Error verifying Maya for swap ${swapId}:`, error)
-      return {
-        isVerified: false,
-        hasAffiliate: false,
-        actualBuyAmountCryptoBaseUnit: undefined,
-        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-        error: error instanceof Error ? error.message : 'Failed to fetch Maya data from node',
-      }
-    }
-  }
+  //    return result
+  //  } catch (error) {
+  //    this.logger.error(`Error verifying Maya for swap ${swapId}:`, error)
+  //    return {
+  //      isVerified: false,
+  //      hasAffiliate: false,
+  //      actualBuyAmountCryptoBaseUnit: undefined,
+  //      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+  //      error: error instanceof Error ? error.message : 'Failed to fetch Maya data from node',
+  //    }
+  //  }
+  //}
 
   private async verifyChainflip(swap: Swap): Promise<SwapVerificationResult> {
     const { swapId } = swap

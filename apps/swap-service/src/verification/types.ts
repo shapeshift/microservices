@@ -1,10 +1,51 @@
-export interface ThorchainMayaTxResponse {
-  observed_tx?: {
-    tx?: {
-      memo?: string
-      coins?: Array<{ amount?: string }>
-    }
+export type MidgardCoin = {
+  amount: string
+  asset: string
+}
+
+export type MidgardInTransaction = {
+  address: string
+  coins: MidgardCoin[]
+  txID: string
+}
+
+export type MidgardOutTransaction = {
+  address: string
+  affiliate?: boolean
+  coins: MidgardCoin[]
+  height: string
+  txID: string
+}
+
+export type MidgardSwapMetadata = {
+  affiliateAddress: string
+  affiliateFee: string
+  inPriceUSD: string
+  isStreamingSwap: boolean
+  liquidityFee: string
+  memo: string
+  networkFees: MidgardCoin[]
+  outPriceUSD: string
+  swapSlip: string
+  swapTarget: string
+  txType: string
+}
+
+export type MidgardAction = {
+  date: string
+  height: string
+  in: MidgardInTransaction[]
+  metadata: {
+    swap?: MidgardSwapMetadata
   }
+  out: MidgardOutTransaction[]
+  pools: string[]
+  status: 'pending' | 'success' | 'failed'
+  type: string
+}
+
+export type MidgardActionsResponse = {
+  actions: MidgardAction[]
 }
 
 interface RelayAppFee {

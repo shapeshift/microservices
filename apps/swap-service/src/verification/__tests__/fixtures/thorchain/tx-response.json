@@ -1,0 +1,34 @@
+{
+  "observed_tx": {
+    "tx": {
+      "id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "chain": "ETH",
+      "from_address": "0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535",
+      "to_address": "0x0000000000000000000000000000000000000000",
+      "coins": [
+        {
+          "asset": "ETH.ETH",
+          "amount": "100000",
+          "decimals": 8
+        }
+      ],
+      "gas": [
+        {
+          "asset": "ETH.ETH",
+          "amount": "120000"
+        }
+      ],
+      "memo": "=:BTC.BTC:bc1qd5w0nndwnefa9uel2c2pqtj7tg6c4d2tlvyuvw:0:ss:30"
+    },
+    "external_observed_height": 24980390,
+    "external_confirmation_delay_height": 24980392,
+    "signers": [],
+    "out_hashes": [
+      "1111111111111111111111111111111111111111111111111111111111111111"
+    ],
+    "status": "done"
+  },
+  "consensus_height": 100000000,
+  "finalised_height": 100000010,
+  "outbound_height": 100000020
+}
