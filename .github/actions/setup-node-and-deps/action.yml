@@ -32,6 +32,6 @@ runs:
       shell: bash
       run: yarn install --immutable
 
-    - name: Generate Prisma client
+    - name: Build workspace packages
       shell: bash
-      run: yarn db:generate
+      run: yarn turbo run build --filter='./packages/*'
