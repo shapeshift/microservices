@@ -74,6 +74,7 @@ export default {
   buyAssetUsd: '0.9998',
   affiliateAssetUsd: '0.9998',
   isAffiliateVerified: true,
+  verificationStatus: 'SUCCESS',
   affiliateVerificationDetails: {
     affiliateBps: 60,
     hasAffiliate: true,

@@ -71,6 +71,7 @@ export default {
   affiliateAssetUsd: '2288.4',
   isAffiliateVerified: null,
   affiliateVerificationDetails: null,
+  verificationStatus: 'PENDING',
   affiliateAddress: '0xa44c286ba83bb771cd0107b2c1df678435bd1535',
   affiliateBps: 60,
   origin: 'api',

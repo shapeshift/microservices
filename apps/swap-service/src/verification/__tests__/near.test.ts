@@ -122,6 +122,6 @@ describe('verifyNearIntents', () => {
     const result = await service.verifySwap(swap)
 
     expect(result.verificationStatus).toBe('PENDING')
-    expect(result.error).toBe('upstream 500')
+    expect(result.noAffiliateReason).toBe('upstream 500')
   })
 })

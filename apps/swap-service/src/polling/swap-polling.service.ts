@@ -50,7 +50,7 @@ export class SwapPollingService {
 
     if (current.status === 'IDLE' || current.status === 'PENDING') {
       try {
-        const statusUpdate = await this.swapsService.pollSwapStatus(current.swapId)
+        const statusUpdate = await this.swapsService.checkSwapStatus(current.swapId)
 
         if (statusUpdate.status !== current.status) {
           this.logger.log(`Status changed for swap ${current.swapId}: ${current.status} -> ${statusUpdate.status}`)

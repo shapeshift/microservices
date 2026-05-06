@@ -203,7 +203,7 @@ describe('verifyRelay', () => {
     const result = await service.verifySwap(swap)
 
     expect(result.verificationStatus).toBe('PENDING')
-    expect(result.error).toBe('No request data found from Relay API')
+    expect(result.noAffiliateReason).toBe('No request data found from Relay API')
   })
 
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
@@ -216,6 +216,6 @@ describe('verifyRelay', () => {
     const result = await service.verifySwap(swap)
 
     expect(result.verificationStatus).toBe('PENDING')
-    expect(result.error).toBe('upstream 500')
+    expect(result.noAffiliateReason).toBe('upstream 500')
   })
 })

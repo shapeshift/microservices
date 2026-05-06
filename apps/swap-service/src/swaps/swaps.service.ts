@@ -350,8 +350,8 @@ export class SwapsService {
     }
   }
 
-  async pollSwapStatus(swapId: string): Promise<SwapStatusResponse> {
-    logger.log(`Polling status for swap: ${swapId}`)
+  async checkSwapStatus(swapId: string): Promise<SwapStatusResponse> {
+    logger.log(`Checking status for swap: ${swapId}`)
 
     const prismaSwap = await this.prisma.swap.findUnique({ where: { swapId } })
     if (!prismaSwap) throw new NotFoundException(`Swap not found: ${swapId}`)
@@ -384,7 +384,7 @@ export class SwapsService {
         statusMessage: typeof statusMessage === 'string' ? statusMessage : '',
       }
     } catch (error) {
-      logger.error(`Failed to poll swap status for ${swapId}:`, error)
+      logger.error(`Failed to check swap status for ${swapId}:`, error)
       return {
         status: 'PENDING',
         statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -395,23 +395,9 @@ export class SwapsService {
   async verifySwap(swap: Swap): Promise<Swap> {
     const verificationResult = await this.swapVerificationService.verifySwap(swap)
 
-    logger.log(
-      [
-        `Swap verified: ${swap.swapId}`,
-        verificationResult.verificationStatus,
-        verificationResult.hasAffiliate &&
-          `affiliate ${verificationResult.affiliateAddress} (${verificationResult.affiliateBps} bps)`,
-        verificationResult.error && `error: ${verificationResult.error}`,
-      ]
-        .filter(Boolean)
-        .join(' | '),
-    )
-
-    // Transient — leave persisted state untouched and let the next polling tick retry.
     if (verificationResult.verificationStatus === 'PENDING') return swap
 
-    const isAffiliateVerified =
-      verificationResult.verificationStatus === 'SUCCESS' && verificationResult.hasAffiliate
+    const isAffiliateVerified = verificationResult.verificationStatus === 'SUCCESS' && verificationResult.hasAffiliate
 
     const affiliateVerificationDetails: AffiliateVerificationDetails = {
       hasAffiliate: verificationResult.hasAffiliate,
