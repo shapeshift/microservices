@@ -10,27 +10,15 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ inputs.node-version }}
-
     - name: Enable Corepack
       shell: bash
       run: corepack enable
 
-    - name: Get yarn cache directory path
-      id: yarn-cache-dir-path
-      shell: bash
-      run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
-
-    - name: Cache yarn dependencies
-      uses: actions/cache@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
-        path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-        key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-yarn-
+        node-version: ${{ inputs.node-version }}
+        cache: yarn
 
     - name: Cache Turbo
       uses: actions/cache@v4
@@ -43,3 +31,7 @@ runs:
     - name: Install dependencies
       shell: bash
       run: yarn install --immutable
+
+    - name: Build workspace packages
+      shell: bash
+      run: yarn turbo run build --filter='./packages/*'
