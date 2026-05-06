@@ -46,31 +46,48 @@ export class SwapPollingService {
   }
 
   private async pollOne(swap: Awaited<ReturnType<SwapsService['getPendingSwaps']>>[number]): Promise<void> {
-    const statusUpdate = await (async () => {
+    let current = swap
+
+    if (current.status === 'IDLE' || current.status === 'PENDING') {
       try {
-        return await this.swapsService.pollSwapStatus(swap.swapId)
+        const statusUpdate = await this.swapsService.pollSwapStatus(current.swapId)
+
+        if (statusUpdate.status !== current.status) {
+          this.logger.log(`Status changed for swap ${current.swapId}: ${current.status} -> ${statusUpdate.status}`)
+
+          current = await this.swapsService.updateSwapStatus({
+            swapId: current.swapId,
+            status: statusUpdate.status,
+            sellTxHash: statusUpdate.sellTxHash,
+            buyTxHash: statusUpdate.buyTxHash,
+            statusMessage: statusUpdate.statusMessage,
+          })
+
+          this.websocketGateway.sendSwapUpdateToUser(current.userId, current)
+        }
       } catch (err) {
-        this.logger.error(`Failed to poll swap ${swap.swapId}:`, err)
-        return
+        this.logger.error(`Failed to poll tx status for swap ${current.swapId}:`, err)
       }
-    })()
+    }
 
-    if (!statusUpdate || statusUpdate.status === swap.status) return
-
-    this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
+    if (current.verificationStatus !== 'PENDING') return
 
     try {
-      const updatedSwap = await this.swapsService.updateSwapStatus({
-        swapId: swap.swapId,
-        status: statusUpdate.status,
-        sellTxHash: statusUpdate.sellTxHash,
-        buyTxHash: statusUpdate.buyTxHash,
-        statusMessage: statusUpdate.statusMessage,
-      })
-
-      this.websocketGateway.sendSwapUpdateToUser(swap.userId, updatedSwap)
-    } catch (error) {
-      this.logger.error(`Failed to persist status change for swap ${swap.swapId}:`, error)
+      if (current.status === 'SUCCESS') {
+        const updated = await this.swapsService.verifySwap(current)
+        if (updated.verificationStatus !== current.verificationStatus) {
+          this.logger.log(
+            `Verification changed for swap ${current.swapId}: ${current.verificationStatus} -> ${updated.verificationStatus}`,
+          )
+          this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+        }
+      } else if (current.status === 'FAILED') {
+        const updated = await this.swapsService.markVerificationFailed(current.swapId)
+        this.logger.log(`Verification short-circuited to FAILED for swap ${current.swapId} (tx FAILED)`)
+        this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+      }
+    } catch (err) {
+      this.logger.error(`Failed to verify swap ${current.swapId}:`, err)
     }
   }
 }

@@ -14,13 +14,13 @@ model Affiliate {
 }
 
 model Swap {
-  swapId                                 String   @id
+  swapId                                 String             @id
   sellAsset                              Json
   buyAsset                               Json
   sellAmountCryptoBaseUnit               String
   expectedBuyAmountCryptoBaseUnit        String
   actualBuyAmountCryptoBaseUnit          String?
-  status                                 String   @default("PENDING")
+  status                                 String             @default("PENDING")
   source                                 String
   swapperName                            String
   sellAccountId                          String
@@ -30,9 +30,9 @@ model Swap {
   buyTxHash                              String?
   txLink                                 String?
   statusMessage                          String?
-  isStreaming                            Boolean  @default(false)
-  createdAt                              DateTime @default(now())
-  updatedAt                              DateTime @updatedAt
+  isStreaming                            Boolean            @default(false)
+  createdAt                              DateTime           @default(now())
+  updatedAt                              DateTime           @updatedAt
   metadata                               Json
   userId                                 String
   referralCode                           String?
@@ -41,16 +41,24 @@ model Swap {
   affiliateAssetUsd                      String?
   isAffiliateVerified                    Boolean?
   affiliateVerificationDetails           Json?
-  affiliateAddress                       String?  @db.Citext
+  affiliateAddress                       String?            @db.Citext
   affiliateBps                           Int?
   origin                                 String?
   affiliateFeeAssetId                    String?
   actualAffiliateFeeAmountCryptoBaseUnit String?
   shapeshiftBps                          Int
+  verificationStatus                     VerificationStatus @default(PENDING)
 
   @@index([referralCode])
   @@index([affiliateAddress])
   @@index([status, sellTxHash])
+  @@index([verificationStatus, sellTxHash])
   @@index([userId])
   @@map("swaps")
+}
+
+enum VerificationStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }

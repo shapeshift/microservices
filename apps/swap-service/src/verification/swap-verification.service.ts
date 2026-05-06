@@ -61,14 +61,6 @@ export class SwapVerificationService {
   async verifySwap(swap: Swap): Promise<SwapVerificationResult> {
     const { swapId, swapperName } = swap
 
-    const unverified = (error: string): SwapVerificationResult => ({
-      isVerified: false,
-      hasAffiliate: false,
-      actualBuyAmountCryptoBaseUnit: undefined,
-      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-      error,
-    })
-
     try {
       this.logger.log(`Verifying affiliate for swap ${swapId} on ${swapperName}`)
 
@@ -107,7 +99,13 @@ export class SwapVerificationService {
           return await this.verifyAcross(swap)
         case SwapperName.Debridge:
         case SwapperName.Test:
-          return unverified(`Verification not implemented for ${swapperName}`)
+          return {
+            verificationStatus: 'SUCCESS',
+            hasAffiliate: false,
+            actualBuyAmountCryptoBaseUnit: undefined,
+            actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+            error: `Verification not implemented for ${swapperName}`,
+          }
         default: {
           const _exhaustive: never = swapperName
           void _exhaustive
@@ -117,7 +115,14 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying swap ${swapId} for ${swapperName}:`, error)
 
-      return unverified(error instanceof Error ? error.message : 'Unknown error')
+      // Unexpected exception — treat as transient and let the next polling tick retry.
+      return {
+        verificationStatus: 'PENDING',
+        hasAffiliate: false,
+        actualBuyAmountCryptoBaseUnit: undefined,
+        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }
     }
   }
 
@@ -125,7 +130,15 @@ export class SwapVerificationService {
     const { swapId, metadata } = swap
 
     const depositAddress = metadata.nearIntentsSpecific?.depositAddress
-    if (!depositAddress) throw new Error('Missing depositAddress in nearIntentsSpecific metadata')
+    if (!depositAddress) {
+      return {
+        verificationStatus: 'FAILED',
+        hasAffiliate: false,
+        actualBuyAmountCryptoBaseUnit: undefined,
+        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+        error: 'Missing depositAddress in nearIntentsSpecific metadata',
+      }
+    }
 
     const status = await OneClickService.getExecutionStatus(depositAddress)
 
@@ -143,7 +156,7 @@ export class SwapVerificationService {
     const verifiedSellAmountCryptoBaseUnit = swapDetails.depositedAmount || swapDetails.amountIn || quote.amountIn
 
     const result: SwapVerificationResult = {
-      isVerified: true,
+      verificationStatus: 'SUCCESS',
       hasAffiliate: Boolean(shapeshiftFee),
       affiliateBps: shapeshiftFee?.fee,
       affiliateAddress: shapeshiftFee?.recipient,
@@ -162,14 +175,30 @@ export class SwapVerificationService {
     const { swapId, metadata } = swap
 
     const relayId = metadata.relayTransactionMetadata?.relayId
-    if (!relayId) throw new Error('Missing relayId in relayTransactionMetadata')
+    if (!relayId) {
+      return {
+        verificationStatus: 'FAILED',
+        hasAffiliate: false,
+        actualBuyAmountCryptoBaseUnit: undefined,
+        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+        error: 'Missing relayId in relayTransactionMetadata',
+      }
+    }
 
     const { data } = await firstValueFrom(
       this.httpService.get<RelayRequestsResponse>(`${env.VITE_RELAY_API_URL}/requests/v2?id=${relayId}`),
     )
 
     const request = data?.requests?.[0]
-    if (!request?.data) throw new Error('No request data found from Relay API')
+    if (!request?.data) {
+      return {
+        verificationStatus: 'PENDING',
+        hasAffiliate: false,
+        actualBuyAmountCryptoBaseUnit: undefined,
+        actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+        error: 'No request data found from Relay API',
+      }
+    }
 
     const appFees = request.data.appFees?.length ? request.data.appFees : (request.data.paidAppFees ?? [])
 
@@ -212,7 +241,7 @@ export class SwapVerificationService {
     })()
 
     const result: SwapVerificationResult = {
-      isVerified: true,
+      verificationStatus: 'SUCCESS',
       hasAffiliate: Boolean(shapeshiftFee),
       affiliateBps,
       affiliateAddress: shapeshiftFee?.recipient,
@@ -245,7 +274,7 @@ export class SwapVerificationService {
     if (!appDataHash) {
       this.logger.warn(`CowSwap - Missing appDataHash for swap ${swapId}`)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -293,7 +322,7 @@ export class SwapVerificationService {
       }
 
       const result: SwapVerificationResult = {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
         affiliateAddress: hasShapeshiftAffiliate ? affiliateAddress : undefined,
@@ -308,7 +337,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying CowSwap for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -331,7 +360,7 @@ export class SwapVerificationService {
     if (!orderId) {
       this.logger.warn(`Portals - Missing orderId for swap ${swapId}`)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -346,7 +375,7 @@ export class SwapVerificationService {
     } catch {
       this.logger.warn(`Portals - Unsupported chain for treasury address: ${sellChainId}`)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -370,7 +399,7 @@ export class SwapVerificationService {
       if (!partner) {
         this.logger.warn(`Portals - No partner found in API response for swap ${swapId}`)
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -386,7 +415,7 @@ export class SwapVerificationService {
       const verifiedSellAmountCryptoBaseUnit = orderData?.context?.inputAmount?.toString() ?? undefined
 
       const result: SwapVerificationResult = {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: swap.affiliateBps ?? undefined,
         affiliateAddress: hasShapeshiftAffiliate ? expectedTreasuryAddress : undefined,
@@ -401,7 +430,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Portals for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -416,7 +445,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -436,7 +465,7 @@ export class SwapVerificationService {
 
       if (!observedTx || !observedTx.tx) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -447,7 +476,7 @@ export class SwapVerificationService {
       const memo: string | undefined = observedTx.tx.memo
       if (!memo) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -471,7 +500,7 @@ export class SwapVerificationService {
         : undefined
 
       const result: SwapVerificationResult = {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
         affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftThorchainAffiliate : undefined,
@@ -486,7 +515,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Thorchain for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -501,7 +530,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -521,7 +550,7 @@ export class SwapVerificationService {
 
       if (!observedTx || !observedTx.tx) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -532,7 +561,7 @@ export class SwapVerificationService {
       const memo: string | undefined = observedTx.tx.memo
       if (!memo) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -556,7 +585,7 @@ export class SwapVerificationService {
         : undefined
 
       const result: SwapVerificationResult = {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
         affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftMayaAffiliate : undefined,
@@ -571,7 +600,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Maya for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -587,7 +616,7 @@ export class SwapVerificationService {
 
     if (!chainflipSwapId) {
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -609,7 +638,7 @@ export class SwapVerificationService {
 
       if (!swapData) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -630,7 +659,7 @@ export class SwapVerificationService {
       )?.toString()
 
       return {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? parseInt(String(affiliateBps)) : undefined,
         affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftChainflipAffiliate : undefined,
@@ -641,7 +670,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Chainflip for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -658,7 +687,7 @@ export class SwapVerificationService {
 
     if (!tradeHash) {
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -684,7 +713,7 @@ export class SwapVerificationService {
 
       if (!trade) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -711,7 +740,7 @@ export class SwapVerificationService {
       const verifiedSellAmountCryptoBaseUnit = (trade.sellAmount ?? trade.inputTokenAmount ?? trade.amount)?.toString()
 
       return {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
         affiliateAddress: hasShapeshiftAffiliate ? this.shapeshift0xIntegrator : undefined,
@@ -722,7 +751,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying 0x for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -737,7 +766,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -790,7 +819,7 @@ export class SwapVerificationService {
 
       if (!trade) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -809,7 +838,7 @@ export class SwapVerificationService {
       const verifiedSellAmountCryptoBaseUnit = sellTokenEntries[0]?.amount?.toString() ?? undefined
 
       const result: SwapVerificationResult = {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps,
         affiliateAddress: this.shapeshiftBebopSource,
@@ -824,7 +853,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Bebop for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -837,7 +866,7 @@ export class SwapVerificationService {
     const { swapId } = swap
 
     const result: SwapVerificationResult = {
-      isVerified: true,
+      verificationStatus: 'SUCCESS',
       hasAffiliate: false,
       actualBuyAmountCryptoBaseUnit: undefined,
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -855,7 +884,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -874,7 +903,7 @@ export class SwapVerificationService {
 
       if (!bridgeInfo) {
         return {
-          isVerified: false,
+          verificationStatus: 'SUCCESS',
           hasAffiliate: false,
           actualBuyAmountCryptoBaseUnit: undefined,
           actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -892,7 +921,7 @@ export class SwapVerificationService {
       )?.toString()
 
       const result: SwapVerificationResult = {
-        isVerified: true,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: hasShapeshiftAffiliate,
         affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
         affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftButterswapEntrance : undefined,
@@ -907,7 +936,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying ButterSwap for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -923,7 +952,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -941,7 +970,7 @@ export class SwapVerificationService {
       )?.toString()
 
       const result: SwapVerificationResult = {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         verifiedSellAmountCryptoBaseUnit,
@@ -955,7 +984,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Cetus for swap ${swapId}:`, error)
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -971,7 +1000,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -989,7 +1018,7 @@ export class SwapVerificationService {
       )?.toString()
 
       const result: SwapVerificationResult = {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         verifiedSellAmountCryptoBaseUnit,
@@ -1003,7 +1032,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Sun.io for swap ${swapId}:`, error)
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -1019,7 +1048,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -1038,7 +1067,7 @@ export class SwapVerificationService {
       )?.toString()
 
       const result: SwapVerificationResult = {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress,
@@ -1053,7 +1082,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying AVNU for swap ${swapId}:`, error)
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -1069,7 +1098,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -1092,7 +1121,7 @@ export class SwapVerificationService {
       )?.toString()
 
       const result: SwapVerificationResult = {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress: referrerAddress,
@@ -1107,7 +1136,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying STON.fi for swap ${swapId}:`, error)
       return Promise.resolve({
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -1123,7 +1152,7 @@ export class SwapVerificationService {
 
     if (!txHash) {
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
@@ -1152,7 +1181,7 @@ export class SwapVerificationService {
       )?.toString()
 
       const result: SwapVerificationResult = {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate,
         affiliateBps: hasAffiliate ? affiliateBps : undefined,
         affiliateAddress,
@@ -1167,7 +1196,7 @@ export class SwapVerificationService {
     } catch (error) {
       this.logger.error(`Error verifying Across for swap ${swapId}:`, error)
       return {
-        isVerified: false,
+        verificationStatus: 'SUCCESS',
         hasAffiliate: false,
         actualBuyAmountCryptoBaseUnit: undefined,
         actualAffiliateFeeAmountCryptoBaseUnit: undefined,
