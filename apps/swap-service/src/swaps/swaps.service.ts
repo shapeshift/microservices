@@ -232,11 +232,23 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
-  async getPendingSwaps(): Promise<Swap[]> {
+  async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
         sellTxHash: { not: null },
-        OR: [{ status: { in: ['IDLE', 'PENDING'] } }, { verificationStatus: 'PENDING' }],
+        status: { in: ['IDLE', 'PENDING'] },
+      },
+    })
+
+    return swaps.map(toSwap)
+  }
+
+  async getPendingVerificationSwaps(): Promise<Swap[]> {
+    const swaps = await this.prisma.swap.findMany({
+      where: {
+        sellTxHash: { not: null },
+        verificationStatus: 'PENDING',
+        status: { in: ['SUCCESS', 'FAILED'] },
       },
     })
 
@@ -393,8 +405,16 @@ export class SwapsService {
   }
 
   async verifySwap(swap: Swap): Promise<Swap> {
-    const verificationResult = await this.swapVerificationService.verifySwap(swap)
+    if (swap.status === 'FAILED') {
+      return toSwap(
+        await this.prisma.swap.update({
+          where: { swapId: swap.swapId },
+          data: { verificationStatus: 'FAILED', isAffiliateVerified: false },
+        }),
+      )
+    }
 
+    const verificationResult = await this.swapVerificationService.verifySwap(swap)
     if (verificationResult.verificationStatus === 'PENDING') return swap
 
     const isAffiliateVerified = verificationResult.verificationStatus === 'SUCCESS' && verificationResult.hasAffiliate
@@ -418,15 +438,6 @@ export class SwapsService {
           actualBuyAmountCryptoBaseUnit: verificationResult.actualBuyAmountCryptoBaseUnit,
           actualAffiliateFeeAmountCryptoBaseUnit: verificationResult.actualAffiliateFeeAmountCryptoBaseUnit,
         },
-      }),
-    )
-  }
-
-  async markVerificationFailed(swapId: string): Promise<Swap> {
-    return toSwap(
-      await this.prisma.swap.update({
-        where: { swapId },
-        data: { verificationStatus: 'FAILED', isAffiliateVerified: false },
       }),
     )
   }

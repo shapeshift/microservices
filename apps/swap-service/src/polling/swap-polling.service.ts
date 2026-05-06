@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 
 import { SwapsService } from '../swaps/swaps.service'
+import type { Swap } from '../swaps/types'
 import { WebsocketGateway } from '../websocket/websocket.gateway'
 
 const POLL_CONCURRENCY = 10
@@ -10,7 +11,8 @@ const POLL_CONCURRENCY = 10
 export class SwapPollingService {
   private readonly logger = new Logger(SwapPollingService.name)
 
-  private isPolling = false
+  private isPollingTx = false
+  private isPollingVerification = false
 
   constructor(
     private swapsService: SwapsService,
@@ -18,76 +20,84 @@ export class SwapPollingService {
   ) {}
 
   @Cron(CronExpression.EVERY_5_SECONDS)
-  async pollPendingSwaps() {
-    if (this.isPolling) return
-    this.isPolling = true
+  async pollPendingTxStatus() {
+    if (this.isPollingTx) return
+    this.isPollingTx = true
 
     try {
-      // TODO: paginate with a batch size + oldest-first ordering once the in-flight
-      // queue grows enough that one cron tick can't drain it within the 5s interval.
-      const pendingSwaps = await this.swapsService.getPendingSwaps()
-      if (pendingSwaps.length === 0) return
+      const swaps = await this.swapsService.getPendingTxSwaps()
+      if (swaps.length === 0) return
 
-      this.logger.log(`Polling ${pendingSwaps.length} pending swaps`)
-
-      const queue = [...pendingSwaps]
-      const workers = Array.from({ length: Math.min(POLL_CONCURRENCY, queue.length) }, async () => {
-        while (queue.length > 0) {
-          const swap = queue.shift()
-          if (swap) await this.pollOne(swap)
-        }
-      })
-      await Promise.all(workers)
+      this.logger.log(`Polling tx status for ${swaps.length} swaps`)
+      await this.runWorkers(swaps, (swap) => this.pollTxStatus(swap))
     } catch (err) {
-      this.logger.error('Failed to poll pending swaps:', err)
+      this.logger.error('Failed to poll pending tx status:', err)
     } finally {
-      this.isPolling = false
+      this.isPollingTx = false
     }
   }
 
-  private async pollOne(swap: Awaited<ReturnType<SwapsService['getPendingSwaps']>>[number]): Promise<void> {
-    let current = swap
-
-    if (current.status === 'IDLE' || current.status === 'PENDING') {
-      try {
-        const statusUpdate = await this.swapsService.checkSwapStatus(current.swapId)
-
-        if (statusUpdate.status !== current.status) {
-          this.logger.log(`Status changed for swap ${current.swapId}: ${current.status} -> ${statusUpdate.status}`)
-
-          current = await this.swapsService.updateSwapStatus({
-            swapId: current.swapId,
-            status: statusUpdate.status,
-            sellTxHash: statusUpdate.sellTxHash,
-            buyTxHash: statusUpdate.buyTxHash,
-            statusMessage: statusUpdate.statusMessage,
-          })
-
-          this.websocketGateway.sendSwapUpdateToUser(current.userId, current)
-        }
-      } catch (err) {
-        this.logger.error(`Failed to poll tx status for swap ${current.swapId}:`, err)
-      }
-    }
-
-    if (current.verificationStatus !== 'PENDING') return
+  @Cron(CronExpression.EVERY_30_SECONDS)
+  async pollPendingVerification() {
+    if (this.isPollingVerification) return
+    this.isPollingVerification = true
 
     try {
-      if (current.status === 'SUCCESS') {
-        const updated = await this.swapsService.verifySwap(current)
-        if (updated.verificationStatus !== current.verificationStatus) {
-          this.logger.log(
-            `Verification changed for swap ${current.swapId}: ${current.verificationStatus} -> ${updated.verificationStatus}`,
-          )
-          this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
-        }
-      } else if (current.status === 'FAILED') {
-        const updated = await this.swapsService.markVerificationFailed(current.swapId)
-        this.logger.log(`Verification short-circuited to FAILED for swap ${current.swapId} (tx FAILED)`)
-        this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+      const swaps = await this.swapsService.getPendingVerificationSwaps()
+      if (swaps.length === 0) return
+
+      this.logger.log(`Polling verification for ${swaps.length} swaps`)
+      await this.runWorkers(swaps, (swap) => this.pollVerification(swap))
+    } catch (err) {
+      this.logger.error('Failed to poll pending verification:', err)
+    } finally {
+      this.isPollingVerification = false
+    }
+  }
+
+  private async runWorkers(swaps: Swap[], handler: (swap: Swap) => Promise<void>): Promise<void> {
+    const queue = [...swaps]
+    const workers = Array.from({ length: Math.min(POLL_CONCURRENCY, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const swap = queue.shift()
+        if (swap) await handler(swap)
+      }
+    })
+    await Promise.all(workers)
+  }
+
+  private async pollTxStatus(swap: Swap): Promise<void> {
+    try {
+      const statusUpdate = await this.swapsService.checkSwapStatus(swap.swapId)
+
+      if (statusUpdate.status === swap.status) return
+
+      this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
+
+      const updated = await this.swapsService.updateSwapStatus({
+        swapId: swap.swapId,
+        status: statusUpdate.status,
+        sellTxHash: statusUpdate.sellTxHash,
+        buyTxHash: statusUpdate.buyTxHash,
+        statusMessage: statusUpdate.statusMessage,
+      })
+
+      this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+    } catch (err) {
+      this.logger.error(`Failed to poll tx status for swap ${swap.swapId}:`, err)
+    }
+  }
+
+  private async pollVerification(swap: Swap): Promise<void> {
+    try {
+      const updated = await this.swapsService.verifySwap(swap)
+      if (updated.verificationStatus !== swap.verificationStatus) {
+        this.logger.log(
+          `Verification changed for swap ${swap.swapId}: ${swap.verificationStatus} -> ${updated.verificationStatus}`,
+        )
       }
     } catch (err) {
-      this.logger.error(`Failed to verify swap ${current.swapId}:`, err)
+      this.logger.error(`Failed to verify swap ${swap.swapId}:`, err)
     }
   }
 }
