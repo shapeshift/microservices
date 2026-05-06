@@ -193,7 +193,7 @@ describe('verifyRelay', () => {
     expect(result).toMatchObject({
       verificationStatus: 'FAILED',
       hasAffiliate: false,
-      error: 'Missing relayId in relayTransactionMetadata',
+      noAffiliateReason: 'Missing relayId in relayTransactionMetadata',
     })
   })
 

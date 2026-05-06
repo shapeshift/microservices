@@ -112,7 +112,7 @@ describe('verifyNearIntents', () => {
     expect(result).toMatchObject({
       verificationStatus: 'FAILED',
       hasAffiliate: false,
-      error: 'Missing depositAddress in nearIntentsSpecific metadata',
+      noAffiliateReason: 'Missing depositAddress in nearIntentsSpecific metadata',
     })
   })
 

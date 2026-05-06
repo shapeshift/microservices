@@ -114,31 +114,13 @@ export class SwapVerificationService {
   }
 
   private logResult(swap: Swap, result: SwapVerificationResult): void {
-    const detail = result.hasAffiliate
-      ? `affiliate=${result.affiliateAddress} (${result.affiliateBps} bps)`
+    const affiliateDetails = result.hasAffiliate
+      ? `${result.affiliateAddress} - ${result.affiliateBps} bps`
       : `noAffiliateReason=${result.noAffiliateReason ?? 'unknown'}`
 
-    const segments = [
-      `${swap.swapperName} verification`,
-      `swapId=${swap.swapId}`,
-      `status=${result.verificationStatus}`,
-      detail,
-    ]
-
-    const hasAmounts =
-      result.verifiedSellAmountCryptoBaseUnit ||
-      result.actualBuyAmountCryptoBaseUnit ||
-      result.actualAffiliateFeeAmountCryptoBaseUnit
-
-    if (hasAmounts) {
-      segments.push(
-        `sell=${result.verifiedSellAmountCryptoBaseUnit ?? 'none'}`,
-        `buy=${result.actualBuyAmountCryptoBaseUnit ?? 'none'}`,
-        `fee=${result.actualAffiliateFeeAmountCryptoBaseUnit ?? 'none'}`,
-      )
-    }
-
-    this.logger.log(segments.join(' | '))
+    this.logger.log(
+      `${swap.swapperName} verification for swap: ${swap.swapId} ${result.verificationStatus} (${affiliateDetails})`,
+    )
   }
 
   private async verifyNearIntents(swap: Swap): Promise<SwapVerificationResult> {
