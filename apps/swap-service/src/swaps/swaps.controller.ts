@@ -16,11 +16,6 @@ export class SwapsController {
     return this.swapsService.createSwap(data)
   }
 
-  @Get('pending')
-  async getPendingSwaps() {
-    return this.swapsService.getPendingSwaps()
-  }
-
   @Get(':swapId')
   async getSwapById(@Param('swapId') swapId: string) {
     const swap = await this.swapsService.getSwapById(swapId)

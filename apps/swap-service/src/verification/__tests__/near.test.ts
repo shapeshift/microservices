@@ -26,7 +26,7 @@ describe('verifyNearIntents', () => {
     const result = await service.verifySwap(swap)
 
     expect(result).toMatchObject({
-      isVerified: true,
+      verificationStatus: 'SUCCESS',
       hasAffiliate: true,
       affiliateBps: 30,
       affiliateAddress: 'shapeshifttokenomics.sputnik-dao.near',
@@ -56,7 +56,7 @@ describe('verifyNearIntents', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(true)
+    expect(result.verificationStatus).toBe('SUCCESS')
     expect(result.hasAffiliate).toBe(false)
     expect(result.affiliateBps).toBeUndefined()
     expect(result.affiliateAddress).toBeUndefined()
@@ -104,24 +104,24 @@ describe('verifyNearIntents', () => {
     expect(result.verifiedSellAmountCryptoBaseUnit).toBe(response.quoteResponse.quote.amountIn)
   })
 
-  it('returns unverified when nearIntentsSpecific.depositAddress is missing', async () => {
+  it('returns FAILED when nearIntentsSpecific.depositAddress is missing', async () => {
     const swapWithoutMetadata = { ...swap, metadata: {} as SwapperSpecificMetadata } as Swap
 
     const result = await service.verifySwap(swapWithoutMetadata)
 
     expect(result).toMatchObject({
-      isVerified: false,
+      verificationStatus: 'FAILED',
       hasAffiliate: false,
-      error: 'Missing depositAddress in nearIntentsSpecific metadata',
+      noAffiliateReason: 'Missing depositAddress in nearIntentsSpecific metadata',
     })
   })
 
-  it('returns unverified when the SDK throws', async () => {
+  it('returns PENDING when the SDK throws (transient — retry next tick)', async () => {
     jest.spyOn(OneClickService, 'getExecutionStatus').mockRejectedValue(new Error('upstream 500'))
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(false)
-    expect(result.error).toBe('upstream 500')
+    expect(result.verificationStatus).toBe('PENDING')
+    expect(result.noAffiliateReason).toBe('upstream 500')
   })
 })
