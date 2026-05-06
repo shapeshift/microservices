@@ -18,7 +18,7 @@
     "dev": "turbo run dev",
     "start": "turbo run start",
     "start:dev": "turbo run start:dev",
-    "test": "jest",
+    "test": "turbo run test",
     "lint": "eslint --cache \"{apps,packages}/**/*.ts\"",
     "lint:fix": "yarn lint --fix",
     "format": "prettier --check \"**/*.{ts,js,json,md}\"",

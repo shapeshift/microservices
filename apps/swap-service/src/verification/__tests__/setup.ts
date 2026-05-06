@@ -19,9 +19,10 @@ jest.mock('../../env', () => ({
   },
 }))
 
-// @shapeshiftoss/swapper transitively pulls chain-adapters → p-queue (ESM) → bigint-buffer.
-// We don't exercise swapper internals here, so stub the module surface the verifier touches.
-// Keep enum string values identical to the real module so production code paths match.
+jest.mock('../../utils/pricing', () => ({
+  getAssetPriceUsd: jest.fn(),
+}))
+
 jest.mock('@shapeshiftoss/swapper', () => ({
   SwapperName: {
     Thorchain: 'THORChain',

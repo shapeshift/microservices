@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
     branches:
-      - main
+      - develop
 
 env:
   NODE_VERSION: '22.5.1'
@@ -25,8 +25,6 @@ jobs:
 
       - name: Lint
         run: yarn lint
-        continue-on-error: true
 
       - name: Run tests
         run: yarn test
-        continue-on-error: true
