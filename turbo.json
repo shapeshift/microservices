@@ -22,9 +22,7 @@
       "cache": false,
       "persistent": true
     },
-    "test": {
-      "dependsOn": ["^build"]
-    },
+    "test": {},
     "//#db:generate": {
       "cache": false
     },
