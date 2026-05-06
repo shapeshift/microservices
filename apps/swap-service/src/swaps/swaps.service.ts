@@ -183,8 +183,8 @@ export class SwapsService {
 
       try {
         await this.sendStatusUpdateNotification(swap)
-      } catch {
-        logger.error(`Failed to send notification for swap ${swap.swapId}`)
+      } catch (err) {
+        logger.error(`Failed to send notification for swap ${swap.swapId}:`, err)
       }
 
       logger.log(`Swap status updated: ${swap.swapId} -> ${swap.status}`)
