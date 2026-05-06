@@ -6,13 +6,8 @@
     "depositedAmount": "1000000000000000",
     "depositedAmountUsd": "2.2886",
     "depositedAmountFormatted": "0.001",
-    "intentHashes": [
-      "CyGhYmfjXbN7MAJLS5dpR2p8ANnuuXDGC5qCmFr1NGZT"
-    ],
-    "nearTxHashes": [
-      "58TKUK7G2RGmR2YEKuqyQaxRfkQVH5XupDUnsXUj4dVH",
-      "GJxyXn2QihLDLC3JoRESSesj3ufdz1yhbMAzqZ5TfKHK"
-    ],
+    "intentHashes": ["CyGhYmfjXbN7MAJLS5dpR2p8ANnuuXDGC5qCmFr1NGZT"],
+    "nearTxHashes": ["58TKUK7G2RGmR2YEKuqyQaxRfkQVH5XupDUnsXUj4dVH", "GJxyXn2QihLDLC3JoRESSesj3ufdz1yhbMAzqZ5TfKHK"],
     "amountIn": "1000000000000000",
     "amountInFormatted": "0.001",
     "amountInUsd": "2.2886",

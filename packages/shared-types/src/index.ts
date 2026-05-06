@@ -114,7 +114,7 @@ export interface SwapStatusResponse {
 }
 
 export interface SwapVerificationResult {
-  isVerified: boolean
+  verificationStatus: 'PENDING' | 'SUCCESS' | 'FAILED'
   hasAffiliate: boolean
   affiliateBps?: number
   affiliateAddress?: string
@@ -123,7 +123,7 @@ export interface SwapVerificationResult {
   actualAffiliateFeeAmountCryptoBaseUnit: string | undefined
   actualAffiliateFeeAssetId?: string
   actualAffiliateFeeUsd?: string
-  error?: string
+  noAffiliateReason?: string
 }
 
 export interface Fees {

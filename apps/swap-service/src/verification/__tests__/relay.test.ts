@@ -29,7 +29,7 @@ describe('verifyRelay', () => {
     const result = await service.verifySwap(swap)
 
     expect(result).toMatchObject({
-      isVerified: true,
+      verificationStatus: 'SUCCESS',
       hasAffiliate: true,
       affiliateBps: 60,
       affiliateAddress: DAO_TREASURY_BASE,
@@ -77,7 +77,7 @@ describe('verifyRelay', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(true)
+    expect(result.verificationStatus).toBe('SUCCESS')
     expect(result.hasAffiliate).toBe(false)
     expect(result.affiliateBps).toBeUndefined()
     expect(result.affiliateAddress).toBeUndefined()
@@ -183,7 +183,7 @@ describe('verifyRelay', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('999')
   })
 
-  it('returns unverified when relayTransactionMetadata.relayId is missing', async () => {
+  it('returns FAILED when relayTransactionMetadata.relayId is missing', async () => {
     const swapWithoutMetadata = { ...swap, metadata: {} as SwapperSpecificMetadata } as Swap
 
     service = new SwapVerificationService(makeHttpMock(relayResponse))
@@ -191,22 +191,22 @@ describe('verifyRelay', () => {
     const result = await service.verifySwap(swapWithoutMetadata)
 
     expect(result).toMatchObject({
-      isVerified: false,
+      verificationStatus: 'FAILED',
       hasAffiliate: false,
-      error: 'Missing relayId in relayTransactionMetadata',
+      noAffiliateReason: 'Missing relayId in relayTransactionMetadata',
     })
   })
 
-  it('returns unverified when API returns no requests', async () => {
+  it('returns PENDING when API returns no requests (transient — retry next tick)', async () => {
     service = new SwapVerificationService(makeHttpMock({ requests: [] }))
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(false)
-    expect(result.error).toBe('No request data found from Relay API')
+    expect(result.verificationStatus).toBe('PENDING')
+    expect(result.noAffiliateReason).toBe('No request data found from Relay API')
   })
 
-  it('returns unverified when the HTTP call fails', async () => {
+  it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
     const httpMock = {
       get: jest.fn().mockReturnValue(throwError(() => new Error('upstream 500'))),
     } as unknown as HttpService
@@ -215,7 +215,7 @@ describe('verifyRelay', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(false)
-    expect(result.error).toBe('upstream 500')
+    expect(result.verificationStatus).toBe('PENDING')
+    expect(result.noAffiliateReason).toBe('upstream 500')
   })
 })

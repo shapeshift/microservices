@@ -1,9 +1,7 @@
-import type { Logger } from '@nestjs/common'
-
 import type { SwapVerificationResult } from '@shapeshift/shared-types'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
-import type { SwapperName } from '@shapeshiftoss/swapper'
 
+export const BPS_DENOMINATOR = 10000n
 export const THORCHAIN_PRECISION = 8
 
 export const thorchainToNativePrecision = (thorchainAmount: string, nativePrecision: number): string =>
@@ -11,7 +9,16 @@ export const thorchainToNativePrecision = (thorchainAmount: string, nativePrecis
     .shiftedBy(nativePrecision - THORCHAIN_PRECISION)
     .toFixed(0, 1)
 
-const BPS_DENOMINATOR = 10000n
+export const noAffiliateResult = (
+  verificationStatus: SwapVerificationResult['verificationStatus'],
+  noAffiliateReason: string,
+): SwapVerificationResult => ({
+  verificationStatus,
+  hasAffiliate: false,
+  actualBuyAmountCryptoBaseUnit: undefined,
+  actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+  noAffiliateReason,
+})
 
 export const applyBps = (amount: string | undefined, bps: number | undefined): string | undefined => {
   if (!amount || bps === undefined) return undefined
@@ -21,32 +28,4 @@ export const applyBps = (amount: string | undefined, bps: number | undefined): s
   } catch {
     return undefined
   }
-}
-
-export const logVerification = (
-  logger: Logger,
-  swapperName: SwapperName,
-  swapId: string,
-  result: SwapVerificationResult,
-  extra?: Record<string, string | number | undefined>,
-): void => {
-  const affiliate = result.hasAffiliate
-    ? `affiliate=${result.affiliateAddress} (${result.affiliateBps} bps)`
-    : 'affiliate=none'
-
-  const extras = Object.entries(extra ?? {})
-    .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${k}=${v}`)
-
-  const segments = [
-    `${swapperName} verification`,
-    `swapId=${swapId}`,
-    affiliate,
-    `sell=${result.verifiedSellAmountCryptoBaseUnit ?? 'none'}`,
-    `buy=${result.actualBuyAmountCryptoBaseUnit ?? 'none'}`,
-    `fee=${result.actualAffiliateFeeAmountCryptoBaseUnit ?? 'none'}`,
-    ...extras,
-  ]
-
-  logger.log(segments.join(' | '))
 }

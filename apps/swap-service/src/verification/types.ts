@@ -1,3 +1,12 @@
+export interface ThorchainMayaTxResponse {
+  observed_tx?: {
+    tx?: {
+      memo?: string
+      coins?: Array<{ amount?: string }>
+    }
+  }
+}
+
 export type MidgardCoin = {
   amount: string
   asset: string

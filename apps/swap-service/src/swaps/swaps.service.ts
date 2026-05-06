@@ -183,11 +183,11 @@ export class SwapsService {
 
       try {
         await this.sendStatusUpdateNotification(swap)
-      } catch {
-        logger.error(`Failed to send notification for swap ${swap.swapId}`)
+      } catch (err) {
+        logger.error(`Failed to send notification for swap ${swap.swapId}:`, err)
       }
 
-      logger.log(`Swap status updated: ${swap.swapId} -> ${swap.status}`)
+      logger.log(`Swap status updated for swap: ${swap.swapId} (${swap.status})`)
 
       return swap
     } catch (error) {
@@ -232,9 +232,24 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
-  async getPendingSwaps(): Promise<Swap[]> {
+  async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      where: { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
+      where: {
+        sellTxHash: { not: null },
+        status: { in: ['IDLE', 'PENDING'] },
+      },
+    })
+
+    return swaps.map(toSwap)
+  }
+
+  async getPendingVerificationSwaps(): Promise<Swap[]> {
+    const swaps = await this.prisma.swap.findMany({
+      where: {
+        sellTxHash: { not: null },
+        verificationStatus: 'PENDING',
+        status: { in: ['SUCCESS', 'FAILED'] },
+      },
     })
 
     return swaps.map(toSwap)
@@ -347,8 +362,8 @@ export class SwapsService {
     }
   }
 
-  async pollSwapStatus(swapId: string): Promise<SwapStatusResponse> {
-    logger.log(`Polling status for swap: ${swapId}`)
+  async checkSwapStatus(swapId: string): Promise<SwapStatusResponse> {
+    logger.log(`Checking status for swap: ${swapId}`)
 
     const prismaSwap = await this.prisma.swap.findUnique({ where: { swapId } })
     if (!prismaSwap) throw new NotFoundException(`Swap not found: ${swapId}`)
@@ -374,8 +389,6 @@ export class SwapsService {
 
       const statusMessage = Array.isArray(message) ? message[0] : message
 
-      await this.reconcileSwap(swap)
-
       return {
         status: status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING',
         sellTxHash: swap.sellTxHash,
@@ -383,7 +396,7 @@ export class SwapsService {
         statusMessage: typeof statusMessage === 'string' ? statusMessage : '',
       }
     } catch (error) {
-      logger.error(`Failed to poll swap status for ${swapId}:`, error)
+      logger.error(`Failed to check swap status for ${swapId}:`, error)
       return {
         status: 'PENDING',
         statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -391,34 +404,33 @@ export class SwapsService {
     }
   }
 
-  private async reconcileSwap(swap: Swap): Promise<void> {
-    try {
-      const verificationResult = await this.swapVerificationService.verifySwap(swap)
-
-      logger.log(
-        [
-          `Swap verified: ${swap.swapId}`,
-          verificationResult.isVerified ? 'ok' : 'failed',
-          verificationResult.hasAffiliate &&
-            `affiliate ${verificationResult.affiliateAddress} (${verificationResult.affiliateBps} bps)`,
-          verificationResult.error && `error: ${verificationResult.error}`,
-        ]
-          .filter(Boolean)
-          .join(' | '),
+  async verifySwap(swap: Swap): Promise<Swap> {
+    if (swap.status === 'FAILED') {
+      return toSwap(
+        await this.prisma.swap.update({
+          where: { swapId: swap.swapId },
+          data: { verificationStatus: 'FAILED', isAffiliateVerified: false },
+        }),
       )
+    }
 
-      const isAffiliateVerified = verificationResult.isVerified && verificationResult.hasAffiliate
+    const verificationResult = await this.swapVerificationService.verifySwap(swap)
+    if (verificationResult.verificationStatus === 'PENDING') return swap
 
-      const affiliateVerificationDetails: AffiliateVerificationDetails = {
-        hasAffiliate: verificationResult.hasAffiliate,
-        affiliateBps: verificationResult.affiliateBps,
-        affiliateAddress: verificationResult.affiliateAddress,
-        verifiedSellAmountCryptoBaseUnit: verificationResult.verifiedSellAmountCryptoBaseUnit,
-      }
+    const isAffiliateVerified = verificationResult.verificationStatus === 'SUCCESS' && verificationResult.hasAffiliate
 
+    const affiliateVerificationDetails: AffiliateVerificationDetails = {
+      hasAffiliate: verificationResult.hasAffiliate,
+      affiliateBps: verificationResult.affiliateBps,
+      affiliateAddress: verificationResult.affiliateAddress,
+      verifiedSellAmountCryptoBaseUnit: verificationResult.verifiedSellAmountCryptoBaseUnit,
+    }
+
+    return toSwap(
       await this.prisma.swap.update({
         where: { swapId: swap.swapId },
         data: {
+          verificationStatus: verificationResult.verificationStatus,
           isAffiliateVerified,
           affiliateFeeAssetId: verificationResult.actualAffiliateFeeAssetId,
           affiliateAssetUsd: verificationResult.actualAffiliateFeeUsd,
@@ -426,9 +438,7 @@ export class SwapsService {
           actualBuyAmountCryptoBaseUnit: verificationResult.actualBuyAmountCryptoBaseUnit,
           actualAffiliateFeeAmountCryptoBaseUnit: verificationResult.actualAffiliateFeeAmountCryptoBaseUnit,
         },
-      })
-    } catch (error) {
-      logger.warn(`Failed to verify affiliate for swap ${swap.swapId}:`, error)
-    }
+      }),
+    )
   }
 }
