@@ -52,7 +52,7 @@ model Swap {
   @@index([referralCode])
   @@index([affiliateAddress])
   @@index([status, sellTxHash])
-  @@index([verificationStatus, sellTxHash])
+  @@index([verificationStatus, status])
   @@index([userId])
   @@map("swaps")
 }

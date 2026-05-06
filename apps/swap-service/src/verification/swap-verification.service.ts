@@ -493,7 +493,7 @@ export class SwapVerificationService {
 
     // 0x fees are decimal (e.g., 0.0015 == 15 bps)
     const integratorFee = trade.integratorFee || trade.affiliateFee || trade.partnerFee
-    const affiliateBps = integratorFee ? parseFloat(integratorFee) * 10000 : undefined
+    const affiliateBps = integratorFee ? Math.round(parseFloat(integratorFee) * 10000) : undefined
 
     const verifiedSellAmountCryptoBaseUnit = (trade.sellAmount ?? trade.inputTokenAmount ?? trade.amount)?.toString()
 

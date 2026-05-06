@@ -35,7 +35,7 @@ export default {
   sellAmountCryptoBaseUnit: '1000000000000000',
   expectedBuyAmountCryptoBaseUnit: '2272662',
   actualBuyAmountCryptoBaseUnit: '2272662',
-  status: 'PENDING',
+  status: 'SUCCESS',
   source: 'Relay',
   swapperName: SwapperName.Relay,
   sellAccountId: '3c70e97c6f86a5b5cfdf82dfd3380ac4ed3d8b89dabf86f631bdf739372926be',
