@@ -341,26 +341,37 @@ export class SwapVerificationService {
 
     if (action.type !== 'swap') return noAffiliateResult('FAILED', 'Invalid swap action type')
     if (action.status === 'pending') return noAffiliateResult('PENDING', 'Swap action still pending')
+    if (action.status === 'failed') return noAffiliateResult('FAILED', 'Swap action failed on Thorchain')
 
     const swapMetadata = action.metadata.swap
     if (!swapMetadata) return noAffiliateResult('FAILED', 'No swap metadata found')
 
     const affiliateAddress = swapMetadata.affiliateAddress
 
+    // Memo format: =:ASSET:DESTADDR:LIM/INTERVAL/QUANTITY:AFFILIATE:FEE
+    // The destination is what THORChain observed on-chain, so it's the trusted source for matching the buy out.
+    const destinationAddress = swapMetadata.memo.split(':')[2]
+    if (!destinationAddress) return noAffiliateResult('FAILED', 'Could not parse destination address from memo')
+
+    const buyOut = action.out.find(
+      (out) => !out.affiliate && out.address.toLowerCase() === destinationAddress.toLowerCase(),
+    )
+    if (!buyOut) return noAffiliateResult('FAILED', 'No outbound matching memo destination')
+
+    const feeOut = action.out.find((out) => out.affiliate)
+    const hasAffiliate = affiliateAddress === 'ss' && !!feeOut
+
     return {
       verificationStatus: 'SUCCESS',
-      hasAffiliate: affiliateAddress === 'ss',
-      affiliateBps: parseInt(swapMetadata.affiliateFee),
-      affiliateAddress,
+      hasAffiliate,
+      affiliateBps: hasAffiliate ? parseInt(swapMetadata.affiliateFee) : undefined,
+      affiliateAddress: hasAffiliate ? affiliateAddress : undefined,
       verifiedSellAmountCryptoBaseUnit: thorchainToNativePrecision(
         action.in[0].coins[0].amount,
         swap.sellAsset.precision,
       ),
-      actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(
-        action.out[action.out.length - 1].coins[0].amount,
-        swap.buyAsset.precision,
-      ),
-      actualAffiliateFeeAmountCryptoBaseUnit: action.out.find((out) => out.affiliate)?.coins[0].amount,
+      actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(buyOut.coins[0].amount, swap.buyAsset.precision),
+      actualAffiliateFeeAmountCryptoBaseUnit: hasAffiliate ? feeOut?.coins[0].amount : undefined,
     }
   }
 

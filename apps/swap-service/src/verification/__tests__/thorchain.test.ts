@@ -4,17 +4,13 @@ import { of, throwError } from 'rxjs'
 import type { Swap } from '../../swaps/types'
 import { SwapVerificationService } from '../swap-verification.service'
 
-import thorchainStatusResponse from './fixtures/thorchain/status-response.json'
+import thorchainResponse from './fixtures/thorchain/response.json'
 import thorchainSwap from './fixtures/thorchain/swap'
-import thorchainTxResponse from './fixtures/thorchain/tx-response.json'
 
 const swap = thorchainSwap as unknown as Swap
 
-const makeHttpMock = (txResponse: unknown, statusResponse: unknown): HttpService => {
-  const get = jest.fn().mockImplementation((url: string) => {
-    if (url.includes('/tx/status/')) return of({ data: statusResponse })
-    return of({ data: txResponse })
-  })
+const makeHttpMock = (response: unknown): HttpService => {
+  const get = jest.fn().mockReturnValue(of({ data: response }))
   return { get } as unknown as HttpService
 }
 
@@ -25,167 +21,172 @@ describe('verifyThorchain', () => {
     jest.restoreAllMocks()
   })
 
-  it('verifies a successful swap with shapeshift affiliate memo', async () => {
-    service = new SwapVerificationService(makeHttpMock(thorchainTxResponse, thorchainStatusResponse))
+  it('verifies a successful swap with shapeshift affiliate', async () => {
+    service = new SwapVerificationService(makeHttpMock(thorchainResponse))
 
     const result = await service.verifySwap(swap)
 
     expect(result).toMatchObject({
-      isVerified: true,
+      verificationStatus: 'SUCCESS',
       hasAffiliate: true,
-      affiliateBps: 30,
+      affiliateBps: 60,
       affiliateAddress: 'ss',
-      verifiedSellAmountCryptoBaseUnit: '1000000000000000',
-      actualBuyAmountCryptoBaseUnit: '2000',
-      actualAffiliateFeeAmountCryptoBaseUnit: '3000000000000',
+      verifiedSellAmountCryptoBaseUnit: '3000000000000000',
+      actualBuyAmountCryptoBaseUnit: '6643738',
+      actualAffiliateFeeAmountCryptoBaseUnit: '6944500',
     })
   })
 
-  it('strips 0x prefix from sellTxHash before calling thornode', async () => {
-    const httpMock = makeHttpMock(thorchainTxResponse, thorchainStatusResponse)
-    service = new SwapVerificationService(httpMock)
+  it('strips 0x prefix from sellTxHash before calling Midgard', async () => {
+    const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: thorchainResponse }))
+    service = new SwapVerificationService({ get } as unknown as HttpService)
 
     await service.verifySwap(swap)
 
-    const get = httpMock.get as unknown as jest.Mock
-    const urls = get.mock.calls.map(([url]: [string]) => url)
-    expect(urls.every((url: string) => !/\/(0x)/i.test(url))).toBe(true)
-    expect(urls.some((url: string) => url.includes('/thorchain/tx/'))).toBe(true)
-    expect(urls.some((url: string) => url.includes('/thorchain/tx/status/'))).toBe(true)
+    const url = get.mock.calls[0][0]
+    expect(url).toMatch(/\/actions\?txid=[0-9a-f]+$/i)
+    expect(url).not.toMatch(/=0x/i)
   })
 
-  it('returns hasAffiliate=false when memo lacks the ss affiliate code', async () => {
-    const txResponse = structuredClone(thorchainTxResponse)
-    txResponse.observed_tx.tx.memo = '=:BTC.BTC:bc1qd5w0nndwnefa9uel2c2pqtj7tg6c4d2tlvyuvw:0:t:30'
+  it('does not attribute affiliate fields when the action affiliate is not ss', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].metadata.swap.affiliateAddress = 'other'
 
-    service = new SwapVerificationService(makeHttpMock(txResponse, thorchainStatusResponse))
+    service = new SwapVerificationService(makeHttpMock(response))
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(true)
+    expect(result.verificationStatus).toBe('SUCCESS')
     expect(result.hasAffiliate).toBe(false)
-    expect(result.affiliateBps).toBeUndefined()
     expect(result.affiliateAddress).toBeUndefined()
+    expect(result.affiliateBps).toBeUndefined()
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('parses bps when memo uses a streaming-swap limit (LIM/INTERVAL/QUANTITY)', async () => {
-    const txResponse = structuredClone(thorchainTxResponse)
-    txResponse.observed_tx.tx.memo =
-      '=:BTC.BTC:bc1qd5w0nndwnefa9uel2c2pqtj7tg6c4d2tlvyuvw:0/1/0:ss:30'
+  it('returns hasAffiliate=false when affiliateAddress is ss but no fee was paid out', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].out = response.actions[0].out.filter((out) => !out.affiliate)
 
-    service = new SwapVerificationService(makeHttpMock(txResponse, thorchainStatusResponse))
-
-    const result = await service.verifySwap(swap)
-
-    expect(result.hasAffiliate).toBe(true)
-    expect(result.affiliateBps).toBe(30)
-  })
-
-  it('sums multiple out_txs to the receiveAddress (streaming-swap split outbounds)', async () => {
-    const statusResponse = structuredClone(thorchainStatusResponse)
-    statusResponse.out_txs = [
-      {
-        id: 'a',
-        chain: 'BTC',
-        from_address: 'bc1qvault00000000000000000000000000000000',
-        to_address: 'bc1qd5w0nndwnefa9uel2c2pqtj7tg6c4d2tlvyuvw',
-        coins: [{ asset: 'BTC.BTC', amount: '1200' }],
-        gas: [],
-        memo: 'OUT:...',
-      },
-      {
-        id: 'b',
-        chain: 'BTC',
-        from_address: 'bc1qvault00000000000000000000000000000000',
-        to_address: 'bc1qd5w0nndwnefa9uel2c2pqtj7tg6c4d2tlvyuvw',
-        coins: [{ asset: 'BTC.BTC', amount: '800' }],
-        gas: [],
-        memo: 'OUT:...',
-      },
-    ]
-
-    service = new SwapVerificationService(makeHttpMock(thorchainTxResponse, statusResponse))
+    service = new SwapVerificationService(makeHttpMock(response))
 
     const result = await service.verifySwap(swap)
 
-    expect(result.actualBuyAmountCryptoBaseUnit).toBe('2000')
+    expect(result.hasAffiliate).toBe(false)
+    expect(result.affiliateAddress).toBeUndefined()
+    expect(result.affiliateBps).toBeUndefined()
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('matches the receiveAddress case-insensitively', async () => {
-    const statusResponse = structuredClone(thorchainStatusResponse)
-    statusResponse.out_txs[0].to_address = 'BC1QD5W0NNDWNEFA9UEL2C2PQTJ7TG6C4D2TLVYUVW'
-
-    service = new SwapVerificationService(makeHttpMock(thorchainTxResponse, statusResponse))
-
-    const result = await service.verifySwap(swap)
-
-    expect(result.actualBuyAmountCryptoBaseUnit).toBe('2000')
-  })
-
-  it('ignores out_txs that are not addressed to the user (e.g. RUNE affiliate outbound)', async () => {
-    const statusResponse = structuredClone(thorchainStatusResponse)
-    // Drop the BTC outbound, leave only the RUNE outbound to the affiliate.
-    statusResponse.out_txs = statusResponse.out_txs.filter(
-      (out: { chain?: string }) => out.chain !== 'BTC',
-    )
-
-    service = new SwapVerificationService(makeHttpMock(thorchainTxResponse, statusResponse))
-
-    const result = await service.verifySwap(swap)
-
-    expect(result.actualBuyAmountCryptoBaseUnit).toBeUndefined()
-  })
-
-  it('leaves actualBuyAmountCryptoBaseUnit undefined when out_txs is missing', async () => {
-    const statusResponse = structuredClone(thorchainStatusResponse) as Partial<
-      typeof thorchainStatusResponse
-    >
-    delete statusResponse.out_txs
-
-    service = new SwapVerificationService(makeHttpMock(thorchainTxResponse, statusResponse))
-
-    const result = await service.verifySwap(swap)
-
-    expect(result.actualBuyAmountCryptoBaseUnit).toBeUndefined()
-  })
-
-  it('returns unverified when sellTxHash is missing', async () => {
-    service = new SwapVerificationService(makeHttpMock(thorchainTxResponse, thorchainStatusResponse))
+  it('returns FAILED when sellTxHash is missing', async () => {
+    service = new SwapVerificationService(makeHttpMock(thorchainResponse))
 
     const result = await service.verifySwap({ ...swap, sellTxHash: null } as Swap)
 
     expect(result).toMatchObject({
-      isVerified: false,
+      verificationStatus: 'FAILED',
       hasAffiliate: false,
-      error: 'Missing txHash for Thorchain verification',
+      noAffiliateReason: 'Missing txHash for Thorchain verification',
     })
   })
 
-  it('returns unverified when observed_tx is missing', async () => {
-    service = new SwapVerificationService(makeHttpMock({}, thorchainStatusResponse))
+  it('returns PENDING when Midgard returns no actions', async () => {
+    service = new SwapVerificationService(makeHttpMock({ actions: [] }))
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(false)
-    expect(result.error).toBe('No observed transaction found')
+    expect(result.verificationStatus).toBe('PENDING')
+    expect(result.noAffiliateReason).toBe('No action found in Midgard')
   })
 
-  it('returns unverified when memo is missing', async () => {
-    const txResponse = structuredClone(thorchainTxResponse) as {
-      observed_tx: { tx: Partial<(typeof thorchainTxResponse)['observed_tx']['tx']> }
+  it('returns PENDING when the action is still pending', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].status = 'pending'
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.verificationStatus).toBe('PENDING')
+    expect(result.noAffiliateReason).toBe('Swap action still pending')
+  })
+
+  it('returns FAILED when the action type is not swap', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].type = 'addLiquidity'
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.verificationStatus).toBe('FAILED')
+    expect(result.noAffiliateReason).toBe('Invalid swap action type')
+  })
+
+  it('returns FAILED when swap metadata is missing', async () => {
+    const response = structuredClone(thorchainResponse) as {
+      actions: Array<{ metadata: { swap?: unknown } }>
     }
-    delete txResponse.observed_tx.tx.memo
+    delete response.actions[0].metadata.swap
 
-    service = new SwapVerificationService(makeHttpMock(txResponse, thorchainStatusResponse))
+    service = new SwapVerificationService(makeHttpMock(response))
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(false)
-    expect(result.error).toBe('No memo found in transaction')
+    expect(result.verificationStatus).toBe('FAILED')
+    expect(result.noAffiliateReason).toBe('No swap metadata found')
   })
 
-  it('returns unverified when the HTTP call fails', async () => {
+  it('selects the buy out by memo destination rather than array position', async () => {
+    const response = structuredClone(thorchainResponse)
+    // Move the destination out to the front so position-based selection would return the wrong entry.
+    response.actions[0].out.reverse()
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.actualBuyAmountCryptoBaseUnit).toBe('6643738')
+  })
+
+  it('returns FAILED when no out matches the memo destination', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].out = response.actions[0].out.map((out) =>
+      out.affiliate ? out : { ...out, address: '0xdeadbeef' },
+    )
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.verificationStatus).toBe('FAILED')
+    expect(result.noAffiliateReason).toBe('No outbound matching memo destination')
+  })
+
+  it('returns FAILED when the action status is failed (refund)', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].status = 'failed'
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.verificationStatus).toBe('FAILED')
+    expect(result.noAffiliateReason).toBe('Swap action failed on Thorchain')
+  })
+
+  it('returns FAILED when the memo has no destination address', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].metadata.swap.memo = ''
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.verificationStatus).toBe('FAILED')
+    expect(result.noAffiliateReason).toBe('Could not parse destination address from memo')
+  })
+
+  it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
     const httpMock = {
       get: jest.fn().mockReturnValue(throwError(() => new Error('upstream 500'))),
     } as unknown as HttpService
@@ -194,7 +195,7 @@ describe('verifyThorchain', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.isVerified).toBe(false)
-    expect(result.error).toBe('upstream 500')
+    expect(result.verificationStatus).toBe('PENDING')
+    expect(result.noAffiliateReason).toBe('upstream 500')
   })
 })
