@@ -1,0 +1,76 @@
+{
+  "actions": [
+    {
+      "date": "1778278960278752371",
+      "height": "26094014",
+      "in": [
+        {
+          "address": "0xa44c286ba83bb771cd0107b2c1df678435bd1535",
+          "coins": [
+            {
+              "amount": "300000",
+              "asset": "ETH.ETH"
+            }
+          ],
+          "txID": "4A4CE957A047378C3F3AC57CA3CC3AB03E61814A7B415F493704D84A9E42D0EB"
+        }
+      ],
+      "metadata": {
+        "swap": {
+          "affiliateAddress": "ss",
+          "affiliateFee": "60",
+          "inPriceUSD": "2316.00252129584",
+          "isStreamingSwap": true,
+          "liquidityFee": "2327555",
+          "memo": "=:ETH.USDC:0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535:660984846:ss:60",
+          "networkFees": [
+            {
+              "amount": "25005800",
+              "asset": "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"
+            }
+          ],
+          "outPriceUSD": "0.9998584435447455",
+          "swapSlip": "20",
+          "swapTarget": "660984846",
+          "txType": "swap"
+        }
+      },
+      "out": [
+        {
+          "address": "thor1dl7un46w7l7f3ewrnrm6nq58nerjtp0dradjtd",
+          "affiliate": true,
+          "coins": [
+            {
+              "amount": "6944500",
+              "asset": "THOR.RUNE"
+            }
+          ],
+          "height": "26094015",
+          "txID": ""
+        },
+        {
+          "address": "0xa44c286ba83bb771cd0107b2c1df678435bd1535",
+          "coins": [
+            {
+              "amount": "664373800",
+              "asset": "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"
+            }
+          ],
+          "height": "26094019",
+          "txID": "E6CECF7727DA23DDC52605D728775E7E022935987548FF5E9E922FDFBC55F9FC"
+        }
+      ],
+      "pools": [
+        "ETH.ETH",
+        "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"
+      ],
+      "status": "success",
+      "type": "swap"
+    }
+  ],
+  "count": "1",
+  "meta": {
+    "nextPageToken": "260940149000000079",
+    "prevPageToken": "260940149000000079"
+  }
+}
