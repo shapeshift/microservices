@@ -8,6 +8,7 @@ jest.mock('../../env', () => ({
     VITE_CHAINFLIP_API_KEY: 'x',
     VITE_NEAR_INTENTS_API_KEY: 'x',
     VITE_THORCHAIN_NODE_URL: 'https://thornode.test',
+    VITE_THORCHAIN_MIDGARD_URL: 'https://midgard.test',
     VITE_MAYACHAIN_NODE_URL: 'https://mayanode.test',
     VITE_ACROSS_API_URL: 'https://across.test',
     VITE_BEBOP_API_URL: 'https://bebop.test',
@@ -22,6 +23,18 @@ jest.mock('../../env', () => ({
 jest.mock('../../utils/pricing', () => ({
   getAssetPriceUsd: jest.fn(),
 }))
+
+// chain-adapters transitively imports p-queue (ESM-only) which Jest's CJS loader can't parse.
+// We only need bnOrZero in tests, so stub it via bignumber.js directly.
+jest.mock('@shapeshiftoss/chain-adapters', () => {
+  const BigNumber = require('bignumber.js')
+  return {
+    bnOrZero: (x: unknown) => {
+      const bn = new BigNumber(x as BigNumber.Value)
+      return bn.isFinite() ? bn : new BigNumber(0)
+    },
+  }
+})
 
 jest.mock('@shapeshiftoss/swapper', () => ({
   SwapperName: {
