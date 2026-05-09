@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common'
+import type BigNumberJs from 'bignumber.js'
 
 Logger.overrideLogger(false)
 
@@ -27,10 +28,10 @@ jest.mock('../../utils/pricing', () => ({
 // chain-adapters transitively imports p-queue (ESM-only) which Jest's CJS loader can't parse.
 // We only need bnOrZero in tests, so stub it via bignumber.js directly.
 jest.mock('@shapeshiftoss/chain-adapters', () => {
-  const BigNumber = require('bignumber.js')
+  const BigNumber = jest.requireActual<typeof BigNumberJs>('bignumber.js')
   return {
     bnOrZero: (x: unknown) => {
-      const bn = new BigNumber(x as BigNumber.Value)
+      const bn = new BigNumber(x as BigNumberJs.Value)
       return bn.isFinite() ? bn : new BigNumber(0)
     },
   }
