@@ -1,15 +1,13 @@
 import type { SwapVerificationResult } from '@shapeshift/shared-types'
+import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
 export const BPS_DENOMINATOR = 10000n
 export const THORCHAIN_PRECISION = 8
 
-export const thorchainToNativePrecision = (thorchainAmount: string, nativePrecision: number): string => {
-  const diff = nativePrecision - THORCHAIN_PRECISION
-  if (diff === 0) return thorchainAmount
-  if (diff > 0) return thorchainAmount + '0'.repeat(diff)
-  const trimmed = thorchainAmount.slice(0, diff)
-  return trimmed || '0'
-}
+export const thorchainToNativePrecision = (thorchainAmount: string, nativePrecision: number): string =>
+  bnOrZero(thorchainAmount)
+    .shiftedBy(nativePrecision - THORCHAIN_PRECISION)
+    .toFixed(0, 1)
 
 export const noAffiliateResult = (
   verificationStatus: SwapVerificationResult['verificationStatus'],

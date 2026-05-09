@@ -19,6 +19,7 @@ import {
   CowSwapAppDataResponse,
   CowSwapDecodedAppData,
   CowSwapOrderResponse,
+  MidgardActionsResponse,
   PortalsOrderResponse,
   RelayRequestsResponse,
   StonfiQuoteMetadata,
@@ -38,12 +39,10 @@ export class SwapVerificationService {
   private readonly shapeshiftChainflipAffiliate = 'shapeshift'
   private readonly shapeshiftCowswapAppCode = 'shapeshift'
   private readonly shapeshiftMayaAffiliate = 'ssmaya'
-  private readonly shapeshiftThorchainAffiliate = 'ss'
 
   private readonly bebopApiKey = env.VITE_BEBOP_API_KEY
   private readonly chainflipApiKey = env.VITE_CHAINFLIP_API_KEY
 
-  private readonly thorchainNodeUrl = env.VITE_THORCHAIN_NODE_URL
   private readonly mayachainNodeUrl = env.VITE_MAYACHAIN_NODE_URL
 
   private readonly acrossApiUrl = env.VITE_ACROSS_API_URL
@@ -330,48 +329,49 @@ export class SwapVerificationService {
   }
 
   private async verifyThorchain(swap: Swap): Promise<SwapVerificationResult> {
-    const txHash = swap.sellTxHash || undefined
-
+    const txHash = swap.sellTxHash?.replace(/^0x/, '')
     if (!txHash) return noAffiliateResult('FAILED', 'Missing txHash for Thorchain verification')
 
-    // SECURITY: Query Thorchain node API to verify memo contains affiliate info
-    const txUrl = `${this.thorchainNodeUrl}/thorchain/tx/${txHash}`
+    const { data } = await firstValueFrom(
+      this.httpService.get<MidgardActionsResponse>(`${env.VITE_THORCHAIN_MIDGARD_URL}/actions?txid=${txHash}`),
+    )
 
-    this.logger.log(`Thorchain - Fetching tx from node API: ${txUrl}`)
+    const action = data.actions[0]
+    if (!action) return noAffiliateResult('PENDING', 'No action found in Midgard')
 
-    const response = await firstValueFrom(this.httpService.get<ThorchainMayaTxResponse>(txUrl))
+    if (action.type !== 'swap') return noAffiliateResult('FAILED', 'Invalid swap action type')
+    if (action.status === 'pending') return noAffiliateResult('PENDING', 'Swap action still pending')
+    if (action.status === 'failed') return noAffiliateResult('FAILED', 'Swap action failed on Thorchain')
 
-    const observedTx = response.data?.observed_tx
+    const swapMetadata = action.metadata.swap
+    if (!swapMetadata) return noAffiliateResult('FAILED', 'No swap metadata found')
 
-    if (!observedTx || !observedTx.tx) return noAffiliateResult('PENDING', 'No observed transaction found')
+    const affiliateAddress = swapMetadata.affiliateAddress
 
-    const memo: string | undefined = observedTx.tx.memo
-    // Observed tx's memo is immutable on chain — absence is definitive, not transient.
-    if (!memo) return noAffiliateResult('SUCCESS', 'No memo found in transaction')
+    // Memo format: =:ASSET:DESTADDR:LIM/INTERVAL/QUANTITY:AFFILIATE:FEE
+    // The destination is what THORChain observed on-chain, so it's the trusted source for matching the buy out.
+    const destinationAddress = swapMetadata.memo.split(':')[2]
+    if (!destinationAddress) return noAffiliateResult('FAILED', 'Could not parse destination address from memo')
 
-    // Parse memo format: =:r:thor1dz68dtlzrxnjflha9vvs7yt7p77mqdnf5yugww:131082237:ss:0
-    // The affiliate code is after the 4th colon, followed by fee in bps
-    const memoPattern = new RegExp(`:${this.shapeshiftThorchainAffiliate}:(\\d+)`, 'i')
-    const memoMatch = memo.match(memoPattern)
+    const buyOut = action.out.find(
+      (out) => !out.affiliate && out.address.toLowerCase() === destinationAddress.toLowerCase(),
+    )
+    if (!buyOut) return noAffiliateResult('FAILED', 'No outbound matching memo destination')
 
-    const hasShapeshiftAffiliate = !!memoMatch
-    const affiliateBps = memoMatch ? parseInt(memoMatch[1]) : undefined
-
-    const coins = observedTx.tx.coins
-    const sellAssetPrecision = swap.sellAsset.precision ?? THORCHAIN_PRECISION
-    const firstCoinAmount = coins?.[0]?.amount
-    const verifiedSellAmountCryptoBaseUnit = firstCoinAmount
-      ? thorchainToNativePrecision(firstCoinAmount, sellAssetPrecision)
-      : undefined
+    const feeOut = action.out.find((out) => out.affiliate)
+    const hasAffiliate = affiliateAddress === 'ss' && !!feeOut
 
     return {
       verificationStatus: 'SUCCESS',
-      hasAffiliate: hasShapeshiftAffiliate,
-      affiliateBps: hasShapeshiftAffiliate && affiliateBps ? affiliateBps : undefined,
-      affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftThorchainAffiliate : undefined,
-      verifiedSellAmountCryptoBaseUnit,
-      actualBuyAmountCryptoBaseUnit: undefined,
-      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+      hasAffiliate,
+      affiliateBps: hasAffiliate ? parseInt(swapMetadata.affiliateFee) : undefined,
+      affiliateAddress: hasAffiliate ? affiliateAddress : undefined,
+      verifiedSellAmountCryptoBaseUnit: thorchainToNativePrecision(
+        action.in[0].coins[0].amount,
+        swap.sellAsset.precision,
+      ),
+      actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(buyOut.coins[0].amount, swap.buyAsset.precision),
+      actualAffiliateFeeAmountCryptoBaseUnit: hasAffiliate ? feeOut?.coins[0].amount : undefined,
     }
   }
 

@@ -1,11 +1,13 @@
+import type { AssetId } from '@shapeshiftoss/caip'
+import { thorchainAssetId } from '@shapeshiftoss/caip'
 import { SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
-type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | 'none'
+type FeeAssetStrategy = 'buy_asset' | 'sell_asset' | AssetId | null
 
 const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
   [SwapperName.Across]: 'buy_asset',
-  [SwapperName.ArbitrumBridge]: 'none',
+  [SwapperName.ArbitrumBridge]: null,
   [SwapperName.Avnu]: 'sell_asset',
   [SwapperName.Bebop]: 'buy_asset',
   [SwapperName.ButterSwap]: 'buy_asset',
@@ -16,12 +18,12 @@ const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
   [SwapperName.Mayachain]: 'sell_asset',
   [SwapperName.NearIntents]: 'sell_asset',
   [SwapperName.Portals]: 'sell_asset',
-  [SwapperName.Relay]: 'none',
+  [SwapperName.Relay]: null,
   [SwapperName.Stonfi]: 'sell_asset',
   [SwapperName.Sunio]: 'buy_asset',
-  [SwapperName.Thorchain]: 'sell_asset',
+  [SwapperName.Thorchain]: thorchainAssetId,
   [SwapperName.Zrx]: 'buy_asset',
-  [SwapperName.Test]: 'none',
+  [SwapperName.Test]: null,
 }
 
 export function resolveAffiliateFeeAssetId(swapperName: SwapperName, sellAsset: Asset, buyAsset: Asset): string | null {
@@ -34,6 +36,6 @@ export function resolveAffiliateFeeAssetId(swapperName: SwapperName, sellAsset: 
     case 'sell_asset':
       return sellAsset.assetId
     default:
-      return null
+      return strategy
   }
 }
