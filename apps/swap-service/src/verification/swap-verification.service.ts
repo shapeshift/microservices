@@ -4,7 +4,12 @@ import { Injectable, Logger } from '@nestjs/common'
 import { firstValueFrom } from 'rxjs'
 
 import { SwapVerificationResult } from '@shapeshift/shared-types'
-import { assertGetCowNetwork, getTreasuryAddressFromChainId, SwapperName } from '@shapeshiftoss/swapper'
+import {
+  assertGetCowNetwork,
+  getTreasuryAddressFromChainId,
+  relayTokenToAssetId,
+  SwapperName,
+} from '@shapeshiftoss/swapper'
 
 import { env } from '../env'
 import type { Swap } from '../swaps/types'
@@ -179,18 +184,17 @@ export class SwapVerificationService {
 
     // Relay's appFeeCurrencyObject is the source of truth for which asset the affiliate fee was paid in —
     // it can be the sell asset, the buy asset, or neither, depending on the route.
-    // TODO: replace with `relayTokenToAssetId` from `@shapeshiftoss/swapper`
     const actualAffiliateFeeAssetId = (() => {
       if (!shapeshiftFee) return
 
-      const chainId = request.data.appFeeCurrencyObject?.chainId
-      const address = request.data.appFeeCurrencyObject?.address?.toLowerCase()
+      const currency = request.data.appFeeCurrencyObject
+      if (!currency) return
 
-      if (!chainId || !address) return
-
-      const isNative = address === '0x0000000000000000000000000000000000000000'
-
-      return isNative ? `eip155:${chainId}/slip44:60` : `eip155:${chainId}/erc20:${address}`
+      try {
+        return relayTokenToAssetId(currency)
+      } catch {
+        return
+      }
     })()
 
     const actualAffiliateFeeUsd = await (async () => {

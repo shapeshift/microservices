@@ -5473,9 +5473,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@shapeshiftoss/swapper@npm:17.7.0":
-  version: 17.7.0
-  resolution: "@shapeshiftoss/swapper@npm:17.7.0"
+"@shapeshiftoss/swapper@npm:17.7.3":
+  version: 17.7.3
+  resolution: "@shapeshiftoss/swapper@npm:17.7.3"
   dependencies:
     "@arbitrum/sdk": "npm:^4.0.1"
     "@avnu/avnu-sdk": "npm:^4.0.1"
@@ -5512,7 +5512,7 @@ __metadata:
     retry-axios: "npm:^2.6.0"
     uuid: "npm:^9.0.0"
     viem: "npm:2.43.5"
-  checksum: 10/488518817eec6f91b5c8d7f712a7d5e5c815f8caa6439757faea00b9456056fb309b4d7e4c2eb92ebf90f989093f7e34b56affaaaeffd59ce878b13dc604933f
+  checksum: 10/8c91468552e92bd64efa4a230c1c1c80b3dcabaccb787ce9f52cb4de76f918e9e284695bd1a0411d5e5ded2e4ce630884277388ac62bee08a449a0a8e4506926
   languageName: node
   linkType: hard
 
@@ -16987,7 +16987,7 @@ __metadata:
     "@pulumi/pulumi": "npm:3.160.0"
     "@shapeshiftoss/caip": "npm:8.16.7"
     "@shapeshiftoss/chain-adapters": "npm:11.3.9"
-    "@shapeshiftoss/swapper": "npm:17.7.0"
+    "@shapeshiftoss/swapper": "npm:17.7.3"
     "@shapeshiftoss/types": "npm:8.6.7"
     "@shapeshiftoss/unchained-client": "npm:10.14.10"
     "@shapeshiftoss/unchained-pulumi": "npm:1.0.2"
