@@ -4,17 +4,17 @@ import { of, throwError } from 'rxjs'
 import type { Swap } from '../../swaps/types'
 import { SwapVerificationService } from '../swap-verification.service'
 
-import thorchainResponse from './fixtures/thorchain/response.json'
-import thorchainSwap from './fixtures/thorchain/swap'
+import mayaResponse from './fixtures/maya/response.json'
+import mayaSwap from './fixtures/maya/swap'
 
-const swap = thorchainSwap as unknown as Swap
+const swap = mayaSwap as unknown as Swap
 
 const makeHttpMock = (response: unknown): HttpService => {
   const get = jest.fn().mockReturnValue(of({ data: response }))
   return { get } as unknown as HttpService
 }
 
-describe('verifyThorchain', () => {
+describe('verifyMaya', () => {
   let service: SwapVerificationService
 
   beforeEach(() => {
@@ -22,7 +22,7 @@ describe('verifyThorchain', () => {
   })
 
   it('verifies a successful swap with shapeshift affiliate', async () => {
-    service = new SwapVerificationService(makeHttpMock(thorchainResponse))
+    service = new SwapVerificationService(makeHttpMock(mayaResponse))
 
     const result = await service.verifySwap(swap)
 
@@ -30,15 +30,15 @@ describe('verifyThorchain', () => {
       verificationStatus: 'SUCCESS',
       hasAffiliate: true,
       affiliateBps: 60,
-      affiliateAddress: 'ss',
-      verifiedSellAmountCryptoBaseUnit: '3000000000000000',
-      actualBuyAmountCryptoBaseUnit: '6643738',
-      actualAffiliateFeeAmountCryptoBaseUnit: '6944500',
+      affiliateAddress: 'ssmaya',
+      verifiedSellAmountCryptoBaseUnit: '4000000000000000',
+      actualBuyAmountCryptoBaseUnit: '7340228',
+      actualAffiliateFeeAmountCryptoBaseUnit: '4237779000',
     })
   })
 
   it('strips 0x prefix from sellTxHash before calling Midgard', async () => {
-    const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: thorchainResponse }))
+    const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: mayaResponse }))
     service = new SwapVerificationService({ get } as unknown as HttpService)
 
     await service.verifySwap(swap)
@@ -48,8 +48,8 @@ describe('verifyThorchain', () => {
     expect(url).not.toMatch(/=0x/i)
   })
 
-  it('does not attribute affiliate fields when the action affiliate is not ss', async () => {
-    const response = structuredClone(thorchainResponse)
+  it('does not attribute affiliate fields when the action affiliate is not ssmaya', async () => {
+    const response = structuredClone(mayaResponse)
     response.actions[0].metadata.swap.affiliateAddress = 'other'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -63,9 +63,9 @@ describe('verifyThorchain', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('returns hasAffiliate=false when affiliateAddress is ss but no fee was paid out', async () => {
-    const response = structuredClone(thorchainResponse)
-    response.actions[0].out = response.actions[0].out.filter((out) => !out.affiliate)
+  it('returns hasAffiliate=false when affiliateAddress is ssmaya but no fee was paid out', async () => {
+    const response = structuredClone(mayaResponse)
+    response.actions[0].out = response.actions[0].out.filter((out) => !('affiliate' in out && out.affiliate))
 
     service = new SwapVerificationService(makeHttpMock(response))
 
@@ -78,7 +78,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {
-    service = new SwapVerificationService(makeHttpMock(thorchainResponse))
+    service = new SwapVerificationService(makeHttpMock(mayaResponse))
 
     const result = await service.verifySwap({ ...swap, sellTxHash: null } as Swap)
 
@@ -99,7 +99,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns PENDING when the action is still pending', async () => {
-    const response = structuredClone(thorchainResponse)
+    const response = structuredClone(mayaResponse)
     response.actions[0].status = 'pending'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -111,7 +111,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns FAILED when the action type is not swap', async () => {
-    const response = structuredClone(thorchainResponse)
+    const response = structuredClone(mayaResponse)
     response.actions[0].type = 'addLiquidity'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -123,7 +123,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns FAILED when swap metadata is missing', async () => {
-    const response = structuredClone(thorchainResponse) as {
+    const response = structuredClone(mayaResponse) as {
       actions: Array<{ metadata: { swap?: unknown } }>
     }
     delete response.actions[0].metadata.swap
@@ -137,21 +137,20 @@ describe('verifyThorchain', () => {
   })
 
   it('selects the buy out by memo destination rather than array position', async () => {
-    const response = structuredClone(thorchainResponse)
-    // Move the destination out to the front so position-based selection would return the wrong entry.
+    const response = structuredClone(mayaResponse)
     response.actions[0].out.reverse()
 
     service = new SwapVerificationService(makeHttpMock(response))
 
     const result = await service.verifySwap(swap)
 
-    expect(result.actualBuyAmountCryptoBaseUnit).toBe('6643738')
+    expect(result.actualBuyAmountCryptoBaseUnit).toBe('7340228')
   })
 
   it('returns FAILED when no out matches the memo destination', async () => {
-    const response = structuredClone(thorchainResponse)
+    const response = structuredClone(mayaResponse)
     response.actions[0].out = response.actions[0].out.map((out) =>
-      out.affiliate ? out : { ...out, address: '0xdeadbeef' },
+      'affiliate' in out && out.affiliate ? out : { ...out, address: '0xdeadbeef' },
     )
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -163,7 +162,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns FAILED when the action status is failed (refund)', async () => {
-    const response = structuredClone(thorchainResponse)
+    const response = structuredClone(mayaResponse)
     response.actions[0].status = 'failed'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -175,7 +174,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns FAILED when the memo has no destination address', async () => {
-    const response = structuredClone(thorchainResponse)
+    const response = structuredClone(mayaResponse)
     response.actions[0].metadata.swap.memo = ''
 
     service = new SwapVerificationService(makeHttpMock(response))
