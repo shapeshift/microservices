@@ -1,0 +1,94 @@
+{
+  "actions": [
+    {
+      "date": "1778781664239595999",
+      "height": "16562704",
+      "in": [
+        {
+          "address": "0xa44c286ba83bb771cd0107b2c1df678435bd1535",
+          "coins": [
+            {
+              "amount": "400000",
+              "asset": "ETH.ETH"
+            }
+          ],
+          "txID": "E4DAC04D7194ABA8F3A9FA154CD7BE3055A03D35797F1916D8721F6273FA16EB"
+        }
+      ],
+      "metadata": {
+        "swap": {
+          "affiliateAddress": "ssmaya",
+          "affiliateFee": "60",
+          "inPriceUSD": "2292.5229642298773",
+          "isStreamingSwap": true,
+          "liquidityFee": "126740373",
+          "memo": "=:ETH.USDC:0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535:724374326:ssmaya:60",
+          "networkFees": [
+            {
+              "amount": "170650000",
+              "asset": "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"
+            }
+          ],
+          "outPriceUSD": "1.0158642784979675",
+          "streamingSwapMeta": {
+            "count": "1",
+            "depositedCoin": {
+              "amount": "0",
+              "asset": ""
+            },
+            "inCoin": {
+              "amount": "0",
+              "asset": ""
+            },
+            "interval": "0",
+            "lastHeight": "0",
+            "outCoin": {
+              "amount": "0",
+              "asset": ""
+            },
+            "outEstimation": "4237779000",
+            "quantity": "1"
+          },
+          "swapSlip": "2",
+          "swapTarget": "724374326"
+        }
+      },
+      "out": [
+        {
+          "address": "0xa44c286ba83bb771cd0107b2c1df678435bd1535",
+          "coins": [
+            {
+              "amount": "734022800",
+              "asset": "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"
+            }
+          ],
+          "height": "16562711",
+          "txID": "389BD007E29E081811C735F773D360A05DFC3E0C8608781A85602A7C7AE2AD4B"
+        },
+        {
+          "address": "maya122h9hlrugzdny9ct95z6g7afvpzu34s73tgnyv",
+          "affiliate": true,
+          "coins": [
+            {
+              "amount": "4237779000",
+              "asset": "MAYA.CACAO"
+            }
+          ],
+          "height": "16562705",
+          "txID": ""
+        }
+      ],
+      "pools": [
+        "ETH.ETH",
+        "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"
+      ],
+      "status": "success",
+      "type": "swap"
+    }
+  ],
+  "count": "1",
+  "meta": {
+    "nextPageToken": "165627049000000001",
+    "prevPageToken": "165627049000000001"
+  }
+}
