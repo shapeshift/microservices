@@ -57,11 +57,11 @@ interface RelayAppFee {
 }
 
 interface RelayToken {
-  chainId?: number
-  address?: string
-  symbol?: string
-  name?: string
-  decimals?: number
+  chainId: number
+  address: string
+  symbol: string
+  name: string
+  decimals: number
 }
 
 interface RelayCurrencyAmount {

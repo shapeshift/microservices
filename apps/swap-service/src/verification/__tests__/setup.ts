@@ -60,4 +60,10 @@ jest.mock('@shapeshiftoss/swapper', () => ({
   },
   assertGetCowNetwork: jest.fn(),
   getTreasuryAddressFromChainId: jest.fn(),
+  relayTokenToAssetId: (token: { chainId: number; address: string }) => {
+    const isNative = token.address.toLowerCase() === '0x0000000000000000000000000000000000000000'
+    return isNative
+      ? `eip155:${token.chainId}/slip44:60`
+      : `eip155:${token.chainId}/erc20:${token.address.toLowerCase()}`
+  },
 }))
