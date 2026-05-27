@@ -51,9 +51,6 @@ export const formatAmount = (amount: string | number): string => {
 }
 
 export const getAffiliateFeeRate = (verifiedBps: number, shapeshiftBps: number): number => {
-  // Partner configured at or below the platform floor — partner keeps the whole fee.
-  if (verifiedBps <= shapeshiftBps) return 1
-  // Platform takes shapeshiftBps; partner gets the remainder.
   return (verifiedBps - shapeshiftBps) / verifiedBps
 }
 

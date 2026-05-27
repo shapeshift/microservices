@@ -81,10 +81,11 @@ export default {
     affiliateAddress: '0x9c9aA90363630d4ab1D9dbF416cc3BBC8d3Ed502',
     verifiedSellAmountCryptoBaseUnit: '1000000000000000',
   },
-  affiliateAddress: null,
+  partnerAddress: null,
   affiliateBps: 60,
+  partnerBps: 0,
   origin: 'api',
   affiliateFeeAssetId: 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
   actualAffiliateFeeAmountCryptoBaseUnit: '6000000000000',
-  shapeshiftBps: 10,
+  shapeshiftBps: 60,
 } satisfies Swap

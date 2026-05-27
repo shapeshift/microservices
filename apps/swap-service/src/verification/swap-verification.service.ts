@@ -644,7 +644,7 @@ export class SwapVerificationService {
     // TODO: Implement on-chain/API verification for AVNU
     const affiliateBps = swap.affiliateBps ?? undefined
     const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
-    const affiliateAddress = swap.affiliateAddress ?? undefined
+    const affiliateAddress = swap.partnerAddress ?? undefined
 
     const verifiedSellAmountCryptoBaseUnit = (
       (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit

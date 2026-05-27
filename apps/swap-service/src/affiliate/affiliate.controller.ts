@@ -13,10 +13,11 @@ import {
   UseGuards,
 } from '@nestjs/common'
 
+import { SHAPESHIFT_BPS } from '../swaps/constants'
+
 import { AffiliateService } from './affiliate.service'
 import { SiweAuthGuard, SiweRequest } from './siwe-auth.guard'
 import {
-  AddressQueryDto,
   AffiliateStatsQueryDto,
   AffiliateSwapsQueryDto,
   ClaimPartnerCodeDto,
@@ -39,17 +40,12 @@ export class AffiliateController {
     return this.affiliateService.getAffiliateStats(query.address, query)
   }
 
-  @Get('lookup/bps')
-  async lookupBps(@Query() query: AddressQueryDto) {
-    const bps = await this.affiliateService.lookupAffiliateBps(query.address)
-    return { bps }
-  }
-
   @Get(':address')
   async getAffiliate(@Param('address') address: string) {
     const affiliate = await this.affiliateService.getAffiliateByWalletAddress(address)
     if (!affiliate) throw new NotFoundException('Affiliate not found')
-    return affiliate
+    const { bps: partnerBps, ...rest } = affiliate
+    return { ...rest, partnerBps, shapeshiftBps: SHAPESHIFT_BPS }
   }
 
   @UseGuards(SiweAuthGuard)

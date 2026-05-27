@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { Affiliate, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { SHAPESHIFT_BPS } from '../swaps/constants'
 import { PaginatedSwaps } from '../swaps/types'
 import { calculateFeeForSwap, getAffiliateFeeRate, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
@@ -76,12 +77,12 @@ export class AffiliateService {
     })
   }
 
-  async getAffiliateStats(affiliateAddress: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
+  async getAffiliateStats(address: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
     const { startDate, endDate } = options
 
     const items = await this.prisma.swap.findMany({
       where: {
-        affiliateAddress,
+        partnerAddress: address,
         status: 'SUCCESS',
         isAffiliateVerified: true,
         ...(startDate || endDate
@@ -119,13 +120,13 @@ export class AffiliateService {
     }
   }
 
-  async getAffiliateSwaps(affiliateAddress: string, options: AffiliateSwapsQueryDto): Promise<PaginatedSwaps> {
+  async getAffiliateSwaps(address: string, options: AffiliateSwapsQueryDto): Promise<PaginatedSwaps> {
     const { startDate, endDate, limit, cursor } = options
 
     const items = await this.prisma.swap.findMany({
       ...swapCursorArgs(limit, cursor),
       where: {
-        affiliateAddress,
+        partnerAddress: address,
         ...(startDate || endDate
           ? {
               createdAt: {
@@ -148,14 +149,10 @@ export class AffiliateService {
     if (!affiliate) return null
 
     return {
+      partnerBps: affiliate.bps,
       partnerCode: affiliate.partnerCode,
-      affiliateAddress: affiliate.receiveAddress ?? affiliate.walletAddress,
-      bps: affiliate.bps,
+      partnerAddress: affiliate.receiveAddress ?? affiliate.walletAddress,
+      shapeshiftBps: SHAPESHIFT_BPS,
     }
-  }
-
-  async lookupAffiliateBps(affiliateAddress: string): Promise<number> {
-    const affiliate = await this.getAffiliateByWalletAddress(affiliateAddress)
-    return affiliate?.bps ?? 60
   }
 }
