@@ -5,7 +5,7 @@ import { PaginationQueryDto } from '../swaps/types'
 
 import { PARTNER_CODE_REGEX } from './utils'
 
-const PARTNER_CODE_MESSAGE = 'Partner code must be 3-32 alphanumeric characters or hyphens'
+const PARTNER_CODE_MESSAGE = 'Partner code must be 3-32 lowercase letters or numbers (e.g. mypartnercode)'
 
 export interface AffiliateStatsResult {
   totalSwaps: number
