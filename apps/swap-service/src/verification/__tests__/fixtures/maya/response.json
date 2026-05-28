@@ -78,10 +78,7 @@
           "txID": ""
         }
       ],
-      "pools": [
-        "ETH.ETH",
-        "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"
-      ],
+      "pools": ["ETH.ETH", "ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48"],
       "status": "success",
       "type": "swap"
     }

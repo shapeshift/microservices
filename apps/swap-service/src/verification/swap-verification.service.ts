@@ -320,7 +320,7 @@ export class SwapVerificationService {
     return {
       verificationStatus: 'SUCCESS',
       hasAffiliate: hasShapeshiftAffiliate,
-      affiliateBps: swap.affiliateBps ?? undefined,
+      affiliateBps: swap.affiliateBps,
       affiliateAddress: hasShapeshiftAffiliate ? expectedTreasuryAddress : undefined,
       verifiedSellAmountCryptoBaseUnit,
       actualBuyAmountCryptoBaseUnit: undefined,
@@ -567,7 +567,7 @@ export class SwapVerificationService {
     const entrance = bridgeInfo.entrance
     const hasShapeshiftAffiliate = entrance?.toLowerCase() === this.shapeshiftButterswapEntrance.toLowerCase()
 
-    const affiliateBps = swap.affiliateBps ?? undefined
+    const affiliateBps = swap.affiliateBps
 
     const verifiedSellAmountCryptoBaseUnit = (
       (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
@@ -592,8 +592,8 @@ export class SwapVerificationService {
     if (!txHash) return noAffiliateResult('FAILED', 'Missing txHash for Cetus verification')
 
     // TODO: Implement on-chain/API verification for Cetus
-    const affiliateBps = swap.affiliateBps ?? undefined
-    const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
+    const affiliateBps = swap.affiliateBps
+    const hasAffiliate = affiliateBps > 0
 
     const verifiedSellAmountCryptoBaseUnit = (
       (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
@@ -617,8 +617,8 @@ export class SwapVerificationService {
     if (!txHash) return noAffiliateResult('FAILED', 'Missing txHash for Sun.io verification')
 
     // TODO: Implement on-chain/API verification for Sun.io
-    const affiliateBps = swap.affiliateBps ?? undefined
-    const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
+    const affiliateBps = swap.affiliateBps
+    const hasAffiliate = affiliateBps > 0
 
     const verifiedSellAmountCryptoBaseUnit = (
       (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
@@ -642,9 +642,9 @@ export class SwapVerificationService {
     if (!txHash) return noAffiliateResult('FAILED', 'Missing txHash for AVNU verification')
 
     // TODO: Implement on-chain/API verification for AVNU
-    const affiliateBps = swap.affiliateBps ?? undefined
-    const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
-    const affiliateAddress = swap.affiliateAddress ?? undefined
+    const affiliateBps = swap.affiliateBps
+    const hasAffiliate = affiliateBps > 0
+    const affiliateAddress = swap.partnerAddress ?? undefined
 
     const verifiedSellAmountCryptoBaseUnit = (
       (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
@@ -673,9 +673,9 @@ export class SwapVerificationService {
 
     const referrerAddress = stonfiSpecific?.referrerAddress
 
-    const affiliateBps = swap.affiliateBps ?? stonfiSpecific?.referrerFeeBps ?? undefined
+    const affiliateBps = swap.affiliateBps
 
-    const hasAffiliate = !!referrerAddress && (affiliateBps !== undefined ? affiliateBps > 0 : false)
+    const hasAffiliate = !!referrerAddress && affiliateBps > 0
 
     const verifiedSellAmountCryptoBaseUnit = (
       (metadata?.sellAmountIncludingProtocolFeesCryptoBaseUnit as string | undefined) ?? swap.sellAmountCryptoBaseUnit
@@ -708,8 +708,8 @@ export class SwapVerificationService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const depositStatus = response.data
 
-    const affiliateBps = swap.affiliateBps ?? undefined
-    const hasAffiliate = affiliateBps !== undefined && affiliateBps > 0
+    const affiliateBps = swap.affiliateBps
+    const hasAffiliate = affiliateBps > 0
 
     const affiliateAddress =
       (metadata?.appFeeRecipient as string | undefined) || (metadata?.integratorId as string | undefined)

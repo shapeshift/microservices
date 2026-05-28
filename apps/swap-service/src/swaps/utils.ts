@@ -50,11 +50,9 @@ export const formatAmount = (amount: string | number): string => {
     .replace(/\.?0+$/, '')
 }
 
-export const getAffiliateFeeRate = (verifiedBps: number, shapeshiftBps: number): number => {
-  // Partner configured at or below the platform floor — partner keeps the whole fee.
-  if (verifiedBps <= shapeshiftBps) return 1
-  // Platform takes shapeshiftBps; partner gets the remainder.
-  return (verifiedBps - shapeshiftBps) / verifiedBps
+export const getPartnerFeeRate = (verifiedBps: number, partnerBps: number): number => {
+  if (verifiedBps <= 0) return 0
+  return Math.min(partnerBps / verifiedBps, 1)
 }
 
 export const computeSellAmountUsd = (

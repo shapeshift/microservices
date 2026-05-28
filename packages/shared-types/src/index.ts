@@ -72,14 +72,16 @@ export interface CreateSwapDto {
   source: string
   swapperName: SwapperName
   sellAccountId: string
-  buyAccountId?: string
-  receiveAddress?: string
+  buyAccountId: string
+  receiveAddress: string
+  affiliateBps: number
+  shapeshiftBps: number
   isStreaming?: boolean
   metadata?: Record<string, any>
-  affiliateAddress?: string
-  affiliateBps?: number
+  partnerAddress?: string
+  partnerBps?: number
   partnerCode?: string
-  origin?: 'web' | 'api' | 'widget'
+  origin?: 'web' | 'api'
 }
 
 export interface UpdateSwapStatusDto {

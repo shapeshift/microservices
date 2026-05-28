@@ -8,7 +8,7 @@ import {
 import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
-import { hashAccountId, NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
+import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
@@ -26,6 +26,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
+import { REFERRER_FEE_RATE } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
@@ -34,7 +35,7 @@ import {
   calculateFeeForSwap,
   computeSellAmountUsd,
   fetchUsdPrices,
-  getAffiliateFeeRate,
+  getPartnerFeeRate,
   toSwap,
   toSwapperSwap,
 } from './utils'
@@ -46,9 +47,6 @@ export class SwapsService {
   private readonly notificationsClient: NotificationsServiceClient
   private readonly userServiceClient: UserServiceClient
   private readonly chainAdapterAsserts: ReturnType<typeof buildChainAdapterAsserts>
-
-  private static readonly API_BASE_BPS = 10
-  private static readonly REFERRER_FEE_RATE = 0.1
 
   constructor(
     private prisma: PrismaService,
@@ -82,10 +80,10 @@ export class SwapsService {
     try {
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
 
-      const [referralCode, prices, affiliateAddress] = await Promise.all([
+      const [referralCode, prices, partnerAddress] = await Promise.all([
         this.getReferralCode(data.userId),
         fetchUsdPrices(data, affiliateFeeAssetId),
-        this.resolveAffiliateAddress(data),
+        this.resolvePartnerAddress(data),
       ])
 
       const sellAmountUsd = computeSellAmountUsd(
@@ -107,8 +105,8 @@ export class SwapsService {
             expectedBuyAmountCryptoBaseUnit: data.expectedBuyAmountCryptoBaseUnit,
             source: data.source,
             swapperName: data.swapperName,
-            sellAccountId: data.sellAccountId ? hashAccountId(data.sellAccountId) : 'api',
-            buyAccountId: data.buyAccountId ? hashAccountId(data.buyAccountId) : null,
+            sellAccountId: data.sellAccountId,
+            buyAccountId: data.buyAccountId,
             receiveAddress: data.receiveAddress,
             isStreaming: data.isStreaming ?? false,
             metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
@@ -117,10 +115,11 @@ export class SwapsService {
             sellAssetUsd: prices.sellAssetUsd,
             buyAssetUsd: prices.buyAssetUsd,
             affiliateAssetUsd: prices.affiliateAssetUsd,
-            affiliateAddress,
-            affiliateBps: data.affiliateBps ?? null,
+            partnerAddress,
+            partnerBps: data.partnerBps,
+            affiliateBps: data.affiliateBps,
+            shapeshiftBps: data.shapeshiftBps,
             origin: data.origin ?? null,
-            shapeshiftBps: SwapsService.API_BASE_BPS,
             affiliateFeeAssetId,
           },
         }),
@@ -130,7 +129,7 @@ export class SwapsService {
         [
           `Swap created: ${swap.swapId}`,
           referralCode && `referral ${referralCode}`,
-          affiliateAddress && `affiliate ${affiliateAddress}`,
+          partnerAddress && `partner ${partnerAddress}`,
           sellAmountUsd && `$${sellAmountUsd}`,
         ]
           .filter(Boolean)
@@ -149,8 +148,8 @@ export class SwapsService {
     return this.userServiceClient.getUserReferralCode(userId)
   }
 
-  private async resolveAffiliateAddress(data: CreateSwapDto): Promise<string | null> {
-    if (data.affiliateAddress) return data.affiliateAddress
+  private async resolvePartnerAddress(data: CreateSwapDto): Promise<string | null> {
+    if (data.partnerAddress) return data.partnerAddress
     if (!data.partnerCode) return null
 
     try {
@@ -161,7 +160,7 @@ export class SwapsService {
 
       return affiliate?.receiveAddress ?? affiliate?.walletAddress ?? null
     } catch (error) {
-      logger.warn(`Failed to resolve affiliate address for partner code ${data.partnerCode}:`, error)
+      logger.warn(`Failed to resolve partner address for partner code ${data.partnerCode}:`, error)
       return null
     }
   }
@@ -219,9 +218,7 @@ export class SwapsService {
   }
 
   async getSwapsByAccountId(accountId: string, options: PaginationQueryDto): Promise<PaginatedSwaps> {
-    const hashedAccountId = hashAccountId(accountId)
-
-    return this.paginateSwaps({ OR: [{ sellAccountId: hashedAccountId }, { buyAccountId: hashedAccountId }] }, options)
+    return this.paginateSwaps({ OR: [{ sellAccountId: accountId }, { buyAccountId: accountId }] }, options)
   }
 
   private async paginateSwaps(where: Prisma.SwapWhereInput, options: PaginationQueryDto): Promise<PaginatedSwaps> {
@@ -267,7 +264,7 @@ export class SwapsService {
       calcFee: (swap) => {
         const fee = calculateFeeForSwap(swap)
         if (!fee) return null
-        return { feeUsd: fee.feeUsd * SwapsService.REFERRER_FEE_RATE, volumeUsd: fee.volumeUsd }
+        return { feeUsd: fee.feeUsd * REFERRER_FEE_RATE, volumeUsd: fee.volumeUsd }
       },
     })
 
@@ -287,25 +284,25 @@ export class SwapsService {
     }
   }
 
-  async calculateAffiliateFees(affiliateAddress: string, startDate?: Date, endDate?: Date): Promise<Fees> {
+  async calculateAffiliateFees(address: string, startDate?: Date, endDate?: Date): Promise<Fees> {
     logger.log(
-      `Calculating affiliate fees for address: ${affiliateAddress}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
+      `Calculating affiliate fees for address: ${address}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
 
     const fees = await this.aggregateFees({
-      baseWhere: { affiliateAddress, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
+      baseWhere: { partnerAddress: address, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
       startDate,
       endDate,
       calcFee: (swap) => {
         const fee = calculateFeeForSwap(swap)
         if (!fee) return null
-        const rate = getAffiliateFeeRate(fee.verifiedBps, swap.shapeshiftBps)
+        const rate = getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)
         return { feeUsd: fee.feeUsd * rate, volumeUsd: fee.volumeUsd }
       },
     })
 
     logger.log(
-      `Affiliate fees for ${affiliateAddress}\n` +
+      `Affiliate fees for ${address}\n` +
         `  period:   ${fees.periodCount} swaps, $${fees.periodVolumeUsd.toFixed(2)} volume, $${fees.periodFeesUsd.toFixed(2)} fee\n` +
         `  all-time: ${fees.allTimeCount} swaps, $${fees.allTimeFeesUsd.toFixed(2)} fee`,
     )

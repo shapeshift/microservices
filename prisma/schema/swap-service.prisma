@@ -24,8 +24,8 @@ model Swap {
   source                                 String
   swapperName                            String
   sellAccountId                          String
-  buyAccountId                           String?
-  receiveAddress                         String?
+  buyAccountId                           String
+  receiveAddress                         String
   sellTxHash                             String?
   buyTxHash                              String?
   txLink                                 String?
@@ -41,16 +41,17 @@ model Swap {
   affiliateAssetUsd                      String?
   isAffiliateVerified                    Boolean?
   affiliateVerificationDetails           Json?
-  affiliateAddress                       String?            @db.Citext
-  affiliateBps                           Int?
+  partnerAddress                         String?            @db.Citext
+  partnerBps                             Int                @default(0)
+  affiliateBps                           Int
+  shapeshiftBps                          Int
   origin                                 String?
   affiliateFeeAssetId                    String?
   actualAffiliateFeeAmountCryptoBaseUnit String?
-  shapeshiftBps                          Int
   verificationStatus                     VerificationStatus @default(PENDING)
 
   @@index([referralCode])
-  @@index([affiliateAddress])
+  @@index([partnerAddress])
   @@index([status, sellTxHash])
   @@index([verificationStatus, status])
   @@index([userId])
