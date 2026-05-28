@@ -66,7 +66,7 @@ export class AffiliateService {
     return this.prisma.affiliate.update({ where: { walletAddress }, data: updateData })
   }
 
-async getAffiliateStats(address: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
+  async getAffiliateStats(address: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
     const { startDate, endDate } = options
 
     const items = await this.prisma.swap.findMany({
