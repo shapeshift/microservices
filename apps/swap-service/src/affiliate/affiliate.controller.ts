@@ -12,6 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common'
+import type { Affiliate } from '@prisma/client'
 
 import { SHAPESHIFT_BPS } from '../swaps/constants'
 
@@ -25,6 +26,11 @@ import {
   UpdateAffiliateDto,
 } from './types'
 import { assertSiweMatches } from './utils'
+
+const toAffiliateResponse = (affiliate: Affiliate) => {
+  const { bps: partnerBps, ...rest } = affiliate
+  return { ...rest, partnerBps, shapeshiftBps: SHAPESHIFT_BPS }
+}
 
 @Controller('v1/affiliate')
 export class AffiliateController {
@@ -44,8 +50,7 @@ export class AffiliateController {
   async getAffiliate(@Param('address') address: string) {
     const affiliate = await this.affiliateService.getAffiliateByWalletAddress(address)
     if (!affiliate) throw new NotFoundException('Affiliate not found')
-    const { bps: partnerBps, ...rest } = affiliate
-    return { ...rest, partnerBps, shapeshiftBps: SHAPESHIFT_BPS }
+    return toAffiliateResponse(affiliate)
   }
 
   @UseGuards(SiweAuthGuard)
@@ -54,7 +59,7 @@ export class AffiliateController {
     assertSiweMatches(req, data.walletAddress, 'Authenticated address does not match walletAddress')
 
     try {
-      return await this.affiliateService.createAffiliate(data)
+      return toAffiliateResponse(await this.affiliateService.createAffiliate(data))
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('already')) throw new ConflictException(error.message)
@@ -68,7 +73,7 @@ export class AffiliateController {
   async updateAffiliate(@Req() req: SiweRequest, @Param('address') address: string, @Body() data: UpdateAffiliateDto) {
     assertSiweMatches(req, address, 'Authenticated address does not match target address')
 
-    return this.affiliateService.updateAffiliate(address, data)
+    return toAffiliateResponse(await this.affiliateService.updateAffiliate(address, data))
   }
 
   @UseGuards(SiweAuthGuard)
@@ -77,7 +82,7 @@ export class AffiliateController {
     assertSiweMatches(req, data.walletAddress, 'Authenticated address does not match walletAddress')
 
     try {
-      return await this.affiliateService.claimPartnerCode(data.walletAddress, data.partnerCode)
+      return toAffiliateResponse(await this.affiliateService.claimPartnerCode(data.walletAddress, data.partnerCode))
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('taken') || error.message.includes('reserved')) {
