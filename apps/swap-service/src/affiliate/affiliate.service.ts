@@ -38,9 +38,7 @@ export class AffiliateService {
     const existing = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
     if (existing) throw new Error('Affiliate already registered')
 
-    if (isReservedPartnerCode(partnerCode)) {
-      throw new Error('This partner code is reserved')
-    }
+    if (isReservedPartnerCode(partnerCode)) throw new Error('This partner code is reserved')
 
     const existingCode = await this.prisma.affiliate.findUnique({ where: { partnerCode } })
     if (existingCode) throw new Error('Partner code already taken')
