@@ -18,13 +18,7 @@ import { SHAPESHIFT_BPS } from '../swaps/constants'
 
 import { AffiliateService } from './affiliate.service'
 import { SiweAuthGuard, SiweRequest } from './siwe-auth.guard'
-import {
-  AffiliateStatsQueryDto,
-  AffiliateSwapsQueryDto,
-  ClaimPartnerCodeDto,
-  CreateAffiliateDto,
-  UpdateAffiliateDto,
-} from './types'
+import { AffiliateStatsQueryDto, AffiliateSwapsQueryDto, CreateAffiliateDto, UpdateAffiliateDto } from './types'
 import { assertSiweMatches } from './utils'
 
 const toAffiliateResponse = (affiliate: Affiliate) => {
@@ -62,7 +56,10 @@ export class AffiliateController {
       return toAffiliateResponse(await this.affiliateService.createAffiliate(data))
     } catch (error) {
       if (error instanceof Error) {
-        if (error.message.includes('already')) throw new ConflictException(error.message)
+        if (error.message.includes('reserved')) throw new BadRequestException(error.message)
+        if (error.message.includes('already') || error.message.includes('taken')) {
+          throw new ConflictException(error.message)
+        }
       }
       throw error
     }
@@ -74,26 +71,6 @@ export class AffiliateController {
     assertSiweMatches(req, address, 'Authenticated address does not match target address')
 
     return toAffiliateResponse(await this.affiliateService.updateAffiliate(address, data))
-  }
-
-  @UseGuards(SiweAuthGuard)
-  @Post('claim-code')
-  async claimPartnerCode(@Req() req: SiweRequest, @Body() data: ClaimPartnerCodeDto) {
-    assertSiweMatches(req, data.walletAddress, 'Authenticated address does not match walletAddress')
-
-    try {
-      return toAffiliateResponse(await this.affiliateService.claimPartnerCode(data.walletAddress, data.partnerCode))
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('taken') || error.message.includes('reserved')) {
-          throw new ConflictException(error.message)
-        }
-        if (error.message.includes('must be')) {
-          throw new BadRequestException(error.message)
-        }
-      }
-      throw error
-    }
   }
 }
 
