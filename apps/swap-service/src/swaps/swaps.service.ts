@@ -8,7 +8,7 @@ import {
 import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
-import { hashAccountId, NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
+import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
@@ -105,8 +105,8 @@ export class SwapsService {
             expectedBuyAmountCryptoBaseUnit: data.expectedBuyAmountCryptoBaseUnit,
             source: data.source,
             swapperName: data.swapperName,
-            sellAccountId: data.sellAccountId ? hashAccountId(data.sellAccountId) : 'api',
-            buyAccountId: data.buyAccountId ? hashAccountId(data.buyAccountId) : null,
+            sellAccountId: data.sellAccountId,
+            buyAccountId: data.buyAccountId,
             receiveAddress: data.receiveAddress,
             isStreaming: data.isStreaming ?? false,
             metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
@@ -218,9 +218,7 @@ export class SwapsService {
   }
 
   async getSwapsByAccountId(accountId: string, options: PaginationQueryDto): Promise<PaginatedSwaps> {
-    const hashedAccountId = hashAccountId(accountId)
-
-    return this.paginateSwaps({ OR: [{ sellAccountId: hashedAccountId }, { buyAccountId: hashedAccountId }] }, options)
+    return this.paginateSwaps({ OR: [{ sellAccountId: accountId }, { buyAccountId: accountId }] }, options)
   }
 
   private async paginateSwaps(where: Prisma.SwapWhereInput, options: PaginationQueryDto): Promise<PaginatedSwaps> {

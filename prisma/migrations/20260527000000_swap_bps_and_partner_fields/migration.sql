@@ -27,3 +27,9 @@ UPDATE "swaps" SET "receiveAddress" = 'unknown' WHERE "receiveAddress" IS NULL;
 
 -- Make receiveAddress non-nullable
 ALTER TABLE "swaps" ALTER COLUMN "receiveAddress" SET NOT NULL;
+
+-- Backfill NULL buyAccountId with receiveAddress (destination = buy account)
+UPDATE "swaps" SET "buyAccountId" = "receiveAddress" WHERE "buyAccountId" IS NULL;
+
+-- Make buyAccountId non-nullable
+ALTER TABLE "swaps" ALTER COLUMN "buyAccountId" SET NOT NULL;

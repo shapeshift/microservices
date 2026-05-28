@@ -39,7 +39,7 @@ export default {
   source: 'Relay',
   swapperName: SwapperName.Relay,
   sellAccountId: '3c70e97c6f86a5b5cfdf82dfd3380ac4ed3d8b89dabf86f631bdf739372926be',
-  buyAccountId: null,
+  buyAccountId: '3c70e97c6f86a5b5cfdf82dfd3380ac4ed3d8b89dabf86f631bdf739372926be',
   receiveAddress: '0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535',
   sellTxHash: '0x77395ef0ae19f5fc083d305dec06f1fbc87afe34686b33a7648a56ca687315df',
   buyTxHash: '0x77395ef0ae19f5fc083d305dec06f1fbc87afe34686b33a7648a56ca687315df',

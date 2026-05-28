@@ -24,7 +24,7 @@ model Swap {
   source                                 String
   swapperName                            String
   sellAccountId                          String
-  buyAccountId                           String?
+  buyAccountId                           String
   receiveAddress                         String
   sellTxHash                             String?
   buyTxHash                              String?

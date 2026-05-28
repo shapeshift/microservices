@@ -72,7 +72,7 @@ export interface CreateSwapDto {
   source: string
   swapperName: SwapperName
   sellAccountId: string
-  buyAccountId?: string
+  buyAccountId: string
   receiveAddress: string
   affiliateBps: number
   shapeshiftBps: number
