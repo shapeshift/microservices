@@ -18,12 +18,7 @@ import { SHAPESHIFT_BPS } from '../swaps/constants'
 
 import { AffiliateService } from './affiliate.service'
 import { SiweAuthGuard, SiweRequest } from './siwe-auth.guard'
-import {
-  AffiliateStatsQueryDto,
-  AffiliateSwapsQueryDto,
-  CreateAffiliateDto,
-  UpdateAffiliateDto,
-} from './types'
+import { AffiliateStatsQueryDto, AffiliateSwapsQueryDto, CreateAffiliateDto, UpdateAffiliateDto } from './types'
 import { assertSiweMatches } from './utils'
 
 const toAffiliateResponse = (affiliate: Affiliate) => {

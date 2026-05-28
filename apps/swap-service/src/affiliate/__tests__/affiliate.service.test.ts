@@ -60,18 +60,18 @@ describe('AffiliateService.createAffiliate', () => {
     })
     const service = new AffiliateService(prisma)
 
-    await expect(
-      service.createAffiliate({ walletAddress: wallet, partnerCode: 'newcode', bps: 60 }),
-    ).rejects.toThrow(/already/)
+    await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'newcode', bps: 60 })).rejects.toThrow(
+      /already/,
+    )
   })
 
   it('rejects reserved partner codes (case-insensitive)', async () => {
     const prisma = makePrismaMock()
     const service = new AffiliateService(prisma)
 
-    await expect(
-      service.createAffiliate({ walletAddress: wallet, partnerCode: 'ADMIN', bps: 60 }),
-    ).rejects.toThrow(/reserved/)
+    await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'ADMIN', bps: 60 })).rejects.toThrow(
+      /reserved/,
+    )
   })
 
   it('rejects when partner code is already taken', async () => {
@@ -82,8 +82,8 @@ describe('AffiliateService.createAffiliate', () => {
     const prisma = makePrismaMock({ findUnique })
     const service = new AffiliateService(prisma)
 
-    await expect(
-      service.createAffiliate({ walletAddress: wallet, partnerCode: 'goodcode', bps: 60 }),
-    ).rejects.toThrow(/taken/)
+    await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'goodcode', bps: 60 })).rejects.toThrow(
+      /taken/,
+    )
   })
 })

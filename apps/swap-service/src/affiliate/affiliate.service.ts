@@ -14,7 +14,7 @@ import type {
   CreateAffiliateDto,
   UpdateAffiliateDto,
 } from './types'
-import { RESERVED_PARTNER_CODES } from './utils'
+import { isReservedPartnerCode } from './utils'
 
 @Injectable()
 export class AffiliateService {
@@ -38,7 +38,7 @@ export class AffiliateService {
     const existing = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
     if (existing) throw new Error('Affiliate already registered')
 
-    if (RESERVED_PARTNER_CODES.includes(partnerCode.toLowerCase())) {
+    if (isReservedPartnerCode(partnerCode)) {
       throw new Error('This partner code is reserved')
     }
 
