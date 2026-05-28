@@ -35,7 +35,7 @@ import {
   calculateFeeForSwap,
   computeSellAmountUsd,
   fetchUsdPrices,
-  getAffiliateFeeRate,
+  getPartnerFeeRate,
   toSwap,
   toSwapperSwap,
 } from './utils'
@@ -296,7 +296,7 @@ export class SwapsService {
       calcFee: (swap) => {
         const fee = calculateFeeForSwap(swap)
         if (!fee) return null
-        const rate = getAffiliateFeeRate(fee.verifiedBps, swap.shapeshiftBps)
+        const rate = getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)
         return { feeUsd: fee.feeUsd * rate, volumeUsd: fee.volumeUsd }
       },
     })

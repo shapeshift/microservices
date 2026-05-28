@@ -4,7 +4,7 @@ import { Affiliate, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { SHAPESHIFT_BPS } from '../swaps/constants'
 import { PaginatedSwaps } from '../swaps/types'
-import { calculateFeeForSwap, getAffiliateFeeRate, toSwap } from '../swaps/utils'
+import { calculateFeeForSwap, getPartnerFeeRate, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
 import type {
@@ -106,7 +106,7 @@ export class AffiliateService {
       const fee = calculateFeeForSwap(swap)
       if (!fee) continue
 
-      const rate = getAffiliateFeeRate(fee.verifiedBps, swap.shapeshiftBps)
+      const rate = getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)
 
       totalSwaps++
       totalVolumeUsd += fee.volumeUsd

@@ -50,8 +50,9 @@ export const formatAmount = (amount: string | number): string => {
     .replace(/\.?0+$/, '')
 }
 
-export const getAffiliateFeeRate = (verifiedBps: number, shapeshiftBps: number): number => {
-  return (verifiedBps - shapeshiftBps) / verifiedBps
+export const getPartnerFeeRate = (verifiedBps: number, partnerBps: number): number => {
+  if (verifiedBps <= 0) return 0
+  return Math.min(partnerBps / verifiedBps, 1)
 }
 
 export const computeSellAmountUsd = (
