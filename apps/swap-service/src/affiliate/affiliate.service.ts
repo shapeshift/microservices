@@ -38,12 +38,16 @@ export class AffiliateService {
     const existing = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
     if (existing) throw new Error('Affiliate already registered')
 
-    if (data.partnerCode) {
-      const existingCode = await this.prisma.affiliate.findUnique({ where: { partnerCode } })
-      if (existingCode) throw new Error('Partner code already taken')
+    if (RESERVED_PARTNER_CODES.includes(partnerCode.toLowerCase())) {
+      throw new Error('This partner code is reserved')
     }
 
-    return this.prisma.affiliate.create({ data: { walletAddress, receiveAddress, partnerCode, bps: bps ?? 60 } })
+    const existingCode = await this.prisma.affiliate.findUnique({ where: { partnerCode } })
+    if (existingCode) throw new Error('Partner code already taken')
+
+    return this.prisma.affiliate.create({
+      data: { walletAddress, receiveAddress, partnerCode, bps },
+    })
   }
 
   async updateAffiliate(walletAddress: string, data: UpdateAffiliateDto): Promise<Affiliate> {
@@ -62,22 +66,7 @@ export class AffiliateService {
     return this.prisma.affiliate.update({ where: { walletAddress }, data: updateData })
   }
 
-  async claimPartnerCode(walletAddress: string, partnerCode: string): Promise<Affiliate> {
-    if (RESERVED_PARTNER_CODES.includes(partnerCode.toLowerCase())) throw new Error('This partner code is reserved')
-
-    const existingCode = await this.prisma.affiliate.findUnique({ where: { partnerCode } })
-    if (existingCode && existingCode.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
-      throw new Error('Partner code already taken')
-    }
-
-    return this.prisma.affiliate.upsert({
-      where: { walletAddress },
-      update: { partnerCode },
-      create: { walletAddress, partnerCode, bps: 60 },
-    })
-  }
-
-  async getAffiliateStats(address: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
+async getAffiliateStats(address: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
     const { startDate, endDate } = options
 
     const items = await this.prisma.swap.findMany({
