@@ -53,15 +53,13 @@ export class CreateAffiliateDto {
   @IsEthereumAddress()
   receiveAddress?: string
 
-  @IsOptional()
   @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
-  partnerCode?: string
+  partnerCode: string
 
-  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(1000)
-  bps?: number
+  bps: number
 }
 
 export class UpdateAffiliateDto {
@@ -78,12 +76,4 @@ export class UpdateAffiliateDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean
-}
-
-export class ClaimPartnerCodeDto {
-  @IsEthereumAddress()
-  walletAddress: string
-
-  @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
-  partnerCode: string
 }
