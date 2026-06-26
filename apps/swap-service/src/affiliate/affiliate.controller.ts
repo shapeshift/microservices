@@ -32,12 +32,16 @@ export class AffiliateController {
 
   @Get('swaps')
   async getSwaps(@Query() query: AffiliateSwapsQueryDto) {
-    return this.affiliateService.getAffiliateSwaps(query.address, query)
+    if (query.partnerCode) return this.affiliateService.getAffiliateSwapsByPartnerCode(query.partnerCode, query)
+    if (query.address) return this.affiliateService.getAffiliateSwapsByAddress(query.address, query)
+    throw new BadRequestException('partnerCode or address is required')
   }
 
   @Get('stats')
   async getStats(@Query() query: AffiliateStatsQueryDto) {
-    return this.affiliateService.getAffiliateStats(query.address, query)
+    if (query.partnerCode) return this.affiliateService.getAffiliateStatsByPartnerCode(query.partnerCode, query)
+    if (query.address) return this.affiliateService.getAffiliateStatsByAddress(query.address, query)
+    throw new BadRequestException('partnerCode or address is required')
   }
 
   @Get(':address')

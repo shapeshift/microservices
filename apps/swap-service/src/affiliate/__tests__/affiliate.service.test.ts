@@ -8,13 +8,14 @@ type MockAffiliateDelegate = {
   create: jest.Mock
 }
 
-const makePrismaMock = (overrides?: Partial<MockAffiliateDelegate>): PrismaService => {
+const makePrismaMock = (overrides?: Partial<MockAffiliateDelegate>, swapFindMany?: jest.Mock): PrismaService => {
   const affiliate: MockAffiliateDelegate = {
     findUnique: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
     ...overrides,
   }
-  return { affiliate } as unknown as PrismaService
+  const swap = { findMany: swapFindMany ?? jest.fn().mockResolvedValue([]) }
+  return { affiliate, swap } as unknown as PrismaService
 }
 
 const baseRow = (overrides?: Partial<Affiliate>): Affiliate => ({
@@ -85,5 +86,67 @@ describe('AffiliateService.createAffiliate', () => {
     await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'goodcode', bps: 60 })).rejects.toThrow(
       /taken/,
     )
+  })
+})
+
+describe('AffiliateService attribution reads', () => {
+  const address = '0x1111111111111111111111111111111111111111'
+
+  // Pull the `where` from the first prisma.swap.findMany call as a typed object so the
+  // assertions below don't trip the no-unsafe-any lint rules on jest's `any`-typed calls.
+  const whereOfFirstCall = (findMany: jest.Mock): Record<string, unknown> => {
+    const [[args]] = findMany.mock.calls as Array<[{ where: Record<string, unknown> }]>
+    return args.where
+  }
+
+  it('getAffiliateStatsByAddress filters through the affiliate relation, never partnerAddress', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const service = new AffiliateService(makePrismaMock(undefined, findMany))
+
+    await service.getAffiliateStatsByAddress(address, {})
+
+    const where = whereOfFirstCall(findMany)
+    expect(where).toMatchObject({
+      affiliate: { OR: [{ walletAddress: address }, { receiveAddress: address }] },
+    })
+    expect(where).not.toHaveProperty('partnerAddress')
+  })
+
+  it('getAffiliateSwapsByAddress filters through the affiliate relation, never partnerAddress', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const service = new AffiliateService(makePrismaMock(undefined, findMany))
+
+    await service.getAffiliateSwapsByAddress(address, { limit: 50 })
+
+    const where = whereOfFirstCall(findMany)
+    expect(where).toMatchObject({
+      affiliate: { OR: [{ walletAddress: address }, { receiveAddress: address }] },
+    })
+    expect(where).not.toHaveProperty('partnerAddress')
+  })
+
+  it('getAffiliateSwapsByPartnerCode filters directly on partnerCode, with no join or address', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const service = new AffiliateService(makePrismaMock(undefined, findMany))
+
+    await service.getAffiliateSwapsByPartnerCode('goodcode', { limit: 50 })
+
+    const where = whereOfFirstCall(findMany)
+    expect(where).toMatchObject({ partnerCode: 'goodcode' })
+    expect(where).not.toHaveProperty('affiliate')
+    expect(where).not.toHaveProperty('partnerAddress')
+  })
+
+  it('getAffiliateStatsByPartnerCode filters directly on partnerCode, with no join or address', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const service = new AffiliateService(makePrismaMock(undefined, findMany))
+
+    const result = await service.getAffiliateStatsByPartnerCode('goodcode', {})
+
+    const where = whereOfFirstCall(findMany)
+    expect(where).toMatchObject({ partnerCode: 'goodcode', status: 'SUCCESS', isAffiliateVerified: true })
+    expect(where).not.toHaveProperty('affiliate')
+    expect(where).not.toHaveProperty('partnerAddress')
+    expect(result).toEqual({ totalSwaps: 0, totalVolumeUsd: '0.00', totalFeesEarnedUsd: '0.00' })
   })
 })

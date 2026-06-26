@@ -80,10 +80,10 @@ export class SwapsService {
     try {
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
 
-      const [referralCode, prices, partnerAddress] = await Promise.all([
+      const [referralCode, prices, partner] = await Promise.all([
         this.getReferralCode(data.userId),
         fetchUsdPrices(data, affiliateFeeAssetId),
-        this.resolvePartnerAddress(data),
+        this.resolvePartner(data),
       ])
 
       const sellAmountUsd = computeSellAmountUsd(
@@ -115,7 +115,8 @@ export class SwapsService {
             sellAssetUsd: prices.sellAssetUsd,
             buyAssetUsd: prices.buyAssetUsd,
             affiliateAssetUsd: prices.affiliateAssetUsd,
-            partnerAddress,
+            partnerAddress: partner.partnerAddress,
+            partnerCode: partner.partnerCode,
             partnerBps: data.partnerBps,
             affiliateBps: data.affiliateBps,
             shapeshiftBps: data.shapeshiftBps,
@@ -129,7 +130,7 @@ export class SwapsService {
         [
           `Swap created: ${swap.swapId}`,
           referralCode && `referral ${referralCode}`,
-          partnerAddress && `partner ${partnerAddress}`,
+          (partner.partnerCode ?? partner.partnerAddress) && `partner ${partner.partnerCode ?? partner.partnerAddress}`,
           sellAmountUsd && `$${sellAmountUsd}`,
         ]
           .filter(Boolean)
@@ -148,21 +149,28 @@ export class SwapsService {
     return this.userServiceClient.getUserReferralCode(userId)
   }
 
-  private async resolvePartnerAddress(data: CreateSwapDto): Promise<string | null> {
-    if (data.partnerAddress) return data.partnerAddress
-    if (!data.partnerCode) return null
+  private async resolvePartner(
+    data: CreateSwapDto,
+  ): Promise<{ partnerCode: string | null; partnerAddress: string | null }> {
+    if (data.partnerCode) {
+      try {
+        const affiliate = await this.prisma.affiliate.findUnique({
+          where: { partnerCode: data.partnerCode },
+          select: { partnerCode: true, receiveAddress: true, walletAddress: true },
+        })
 
-    try {
-      const affiliate = await this.prisma.affiliate.findFirst({
-        where: { partnerCode: data.partnerCode },
-        select: { receiveAddress: true, walletAddress: true },
-      })
-
-      return affiliate?.receiveAddress ?? affiliate?.walletAddress ?? null
-    } catch (error) {
-      logger.warn(`Failed to resolve partner address for partner code ${data.partnerCode}:`, error)
-      return null
+        if (affiliate) {
+          return {
+            partnerCode: affiliate.partnerCode,
+            partnerAddress: affiliate.receiveAddress ?? affiliate.walletAddress,
+          }
+        }
+      } catch (error) {
+        logger.warn(`Failed to resolve partner code ${data.partnerCode}:`, error)
+      }
     }
+
+    return { partnerCode: null, partnerAddress: data.partnerAddress ?? null }
   }
 
   async updateSwapStatus(data: UpdateSwapStatusDto): Promise<Swap> {
@@ -290,7 +298,12 @@ export class SwapsService {
     )
 
     const fees = await this.aggregateFees({
-      baseWhere: { partnerAddress: address, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
+      baseWhere: {
+        affiliate: { OR: [{ walletAddress: address }, { receiveAddress: address }] },
+        isAffiliateVerified: true,
+        status: 'SUCCESS',
+        origin: 'api',
+      },
       startDate,
       endDate,
       calcFee: (swap) => {

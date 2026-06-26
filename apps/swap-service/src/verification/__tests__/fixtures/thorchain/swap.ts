@@ -73,6 +73,7 @@ export default {
   isAffiliateVerified: null,
   affiliateVerificationDetails: null,
   partnerAddress: '0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535',
+  partnerCode: 'testpartner',
   affiliateBps: 60,
   partnerBps: 50,
   origin: 'api',

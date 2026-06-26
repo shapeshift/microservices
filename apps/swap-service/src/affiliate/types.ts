@@ -13,12 +13,15 @@ export interface AffiliateStatsResult {
   totalFeesEarnedUsd: string
 }
 
-export class AddressQueryDto {
+export class AffiliateStatsQueryDto {
+  @IsOptional()
   @IsEthereumAddress()
-  address: string
-}
+  address?: string
 
-export class AffiliateStatsQueryDto extends AddressQueryDto {
+  @IsOptional()
+  @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
+  partnerCode?: string
+
   @IsOptional()
   @Type(() => Date)
   @IsDate()
@@ -31,8 +34,13 @@ export class AffiliateStatsQueryDto extends AddressQueryDto {
 }
 
 export class AffiliateSwapsQueryDto extends PaginationQueryDto {
+  @IsOptional()
   @IsEthereumAddress()
-  address: string
+  address?: string
+
+  @IsOptional()
+  @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
+  partnerCode?: string
 
   @IsOptional()
   @Type(() => Date)

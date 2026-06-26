@@ -2,11 +2,12 @@ model Affiliate {
   id             String   @id @default(cuid())
   walletAddress  String   @unique @map("wallet_address") @db.Citext
   receiveAddress String?  @map("receive_address") @db.Citext
-  partnerCode    String?  @unique @map("partner_code") @db.Citext
+  partnerCode    String   @unique @map("partner_code") @db.Citext
   bps            Int      @default(60)
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
+  swaps          Swap[]
 
   @@index([partnerCode])
   @@index([isActive])
@@ -42,6 +43,8 @@ model Swap {
   isAffiliateVerified                    Boolean?
   affiliateVerificationDetails           Json?
   partnerAddress                         String?            @db.Citext
+  partnerCode                            String?            @db.Citext
+  affiliate                              Affiliate?         @relation(fields: [partnerCode], references: [partnerCode])
   partnerBps                             Int                @default(0)
   affiliateBps                           Int
   shapeshiftBps                          Int
@@ -52,6 +55,7 @@ model Swap {
 
   @@index([referralCode])
   @@index([partnerAddress])
+  @@index([partnerCode])
   @@index([status, sellTxHash])
   @@index([verificationStatus, status])
   @@index([userId])
