@@ -292,18 +292,13 @@ export class SwapsService {
     }
   }
 
-  async calculateAffiliateFees(address: string, startDate?: Date, endDate?: Date): Promise<Fees> {
+  async calculateAffiliateFeesByPartnerCode(partnerCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
     logger.log(
-      `Calculating affiliate fees for address: ${address}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
+      `Calculating affiliate fees for ${partnerCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
 
     const fees = await this.aggregateFees({
-      baseWhere: {
-        affiliate: { OR: [{ walletAddress: address }, { receiveAddress: address }] },
-        isAffiliateVerified: true,
-        status: 'SUCCESS',
-        origin: 'api',
-      },
+      baseWhere: { partnerCode, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
       startDate,
       endDate,
       calcFee: (swap) => {
@@ -315,7 +310,7 @@ export class SwapsService {
     })
 
     logger.log(
-      `Affiliate fees for ${address}\n` +
+      `Affiliate fees for ${partnerCode}\n` +
         `  period:   ${fees.periodCount} swaps, $${fees.periodVolumeUsd.toFixed(2)} volume, $${fees.periodFeesUsd.toFixed(2)} fee\n` +
         `  all-time: ${fees.allTimeCount} swaps, $${fees.allTimeFeesUsd.toFixed(2)} fee`,
     )
