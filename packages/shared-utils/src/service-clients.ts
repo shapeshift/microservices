@@ -3,6 +3,7 @@ import axios from 'axios'
 
 import type { CreateNotificationDto, Device, Fees, User } from '@shapeshift/shared-types'
 
+import { API_KEY_HEADER } from './api-key.guard'
 import { getRequiredEnvVar } from './index'
 
 export class UserServiceClient {
@@ -14,6 +15,7 @@ export class UserServiceClient {
       baseURL: baseUrl,
       headers: {
         'Content-Type': 'application/json',
+        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
       },
     })
   }
@@ -80,6 +82,7 @@ export class NotificationsServiceClient {
       baseURL: baseUrl,
       headers: {
         'Content-Type': 'application/json',
+        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
       },
     })
   }
@@ -109,6 +112,7 @@ export class SwapServiceClient {
       baseURL: baseUrl,
       headers: {
         'Content-Type': 'application/json',
+        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
       },
     })
   }

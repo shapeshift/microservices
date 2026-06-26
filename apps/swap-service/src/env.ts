@@ -11,6 +11,7 @@ const schema = z.object({
   // Security
   ACCOUNT_ID_SALT: z.string().min(1),
   SIWE_JWT_SECRET: z.string().min(1),
+  SERVICE_API_KEY: z.string().min(1),
 
   // API Keys
   VITE_BEBOP_API_KEY: z.string().min(1),
