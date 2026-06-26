@@ -166,7 +166,8 @@ export class SwapsService {
           }
         }
       } catch (error) {
-        logger.warn(`Failed to resolve partner code ${data.partnerCode}:`, error)
+        logger.error(`Failed to resolve partner code ${data.partnerCode}:`, error)
+        throw error
       }
     }
 
