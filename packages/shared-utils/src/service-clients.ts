@@ -110,8 +110,6 @@ export class SwapServiceClient {
       baseURL: baseUrl,
       headers: {
         'Content-Type': 'application/json',
-        // swap-service is the only API-key-guarded service, so it's the only
-        // client that forwards the shared secret.
         [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
       },
     })

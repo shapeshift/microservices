@@ -1,6 +1,5 @@
-import * as crypto from 'crypto'
-
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
+import * as crypto from 'crypto'
 
 export const API_KEY_HEADER = 'x-api-key'
 
@@ -24,9 +23,7 @@ export class ApiKeyGuard implements CanActivate {
 
   constructor() {
     const key = process.env.SERVICE_API_KEY
-    if (!key) {
-      throw new Error('Required environment variable SERVICE_API_KEY is not set')
-    }
+    if (!key) throw new Error('Required environment variable SERVICE_API_KEY is not set')
     this.expectedKey = key
   }
 

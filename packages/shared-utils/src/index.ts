@@ -89,4 +89,4 @@ export const getOptionalEnvVar = (name: string, defaultValue?: string): string |
 export { NotificationsServiceClient, SwapServiceClient, UserServiceClient } from './service-clients'
 
 // Auth
-export { ApiKeyGuard, API_KEY_HEADER } from './api-key.guard'
+export { API_KEY_HEADER, ApiKeyGuard } from './api-key.guard'
