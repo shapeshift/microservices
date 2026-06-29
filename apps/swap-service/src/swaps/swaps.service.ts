@@ -171,7 +171,25 @@ export class SwapsService {
       }
     }
 
-    return { partnerCode: null, partnerAddress: data.partnerAddress ?? null }
+    if (data.partnerAddress) {
+      try {
+        const matches = await this.prisma.affiliate.findMany({
+          where: { OR: [{ walletAddress: data.partnerAddress }, { receiveAddress: data.partnerAddress }] },
+          select: { partnerCode: true },
+          take: 2,
+        })
+
+        return {
+          partnerCode: matches.length === 1 ? matches[0].partnerCode : null,
+          partnerAddress: data.partnerAddress,
+        }
+      } catch (error) {
+        logger.error(`Failed to resolve partner address ${data.partnerAddress}:`, error)
+        throw error
+      }
+    }
+
+    return { partnerCode: null, partnerAddress: null }
   }
 
   async updateSwapStatus(data: UpdateSwapStatusDto): Promise<Swap> {
