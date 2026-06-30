@@ -31,7 +31,9 @@
     "db:migrate:status": "prisma migrate status",
     "db:migrate:create": "prisma migrate dev --create-only --name",
     "db:studio": "prisma studio",
-    "referral-rewards": "ts-node scripts/referral-rewards.ts"
+    "referral-rewards": "ts-node scripts/referral-rewards.ts",
+    "affiliate-payouts": "ts-node --transpile-only scripts/affiliate-payouts.ts",
+    "affiliate-payouts:test": "jest --config scripts/jest.config.ts"
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",

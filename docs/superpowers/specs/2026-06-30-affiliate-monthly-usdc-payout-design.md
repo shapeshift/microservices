@@ -48,6 +48,7 @@ Payouts are USDC on **Arbitrum One**, imported via the Safe CSV-airdrop app
 | Decision | Choice |
 |---|---|
 | Eligible swaps | `status='SUCCESS' AND isAffiliateVerified=true`, **all origins** (web + api). Matches the affiliate `/stats` endpoint partners already see. |
+| Fee basis | **On-chain verified actual fee**, guarded by a deviation check vs. the bps-implied fee; anomalies are flagged + excluded (see Fee-deviation guard). |
 | Minimum payout | **No minimum** — any partner with `feesEarnedUsd > 0` and a valid address gets a row. |
 | Invalid/non-EVM recipient | **Exclude from CSV + warn** (listed in summary and JSON). Run still succeeds. |
 | Location / invocation | `scripts/affiliate-payouts.ts`, wired as `yarn affiliate-payouts`. |
@@ -80,15 +81,45 @@ yarn affiliate-payouts generate [startDate] [endDate]
 2. **Group by `partnerCode`.** For each swap, run
    `calculateFeeForSwap(toSwap(swap))`. If it returns `null` (missing/unpriceable
    verification details), skip the swap and increment a `skippedSwaps` counter.
-   Otherwise:
+   Otherwise apply the **fee-deviation guard** (below), and if it passes:
    ```ts
    const rate = getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)
-   partner.feesEarnedUsd += fee.feeUsd * rate
+   partner.feesEarnedUsd += fee.feeUsd * rate   // fee.feeUsd = on-chain actual when present
    partner.volumeUsd     += fee.volumeUsd
    partner.swapCount     += 1
    ```
-   Reusing the app functions keeps payout numbers identical to the affiliate
+   Reusing the app functions keeps payout numbers consistent with the affiliate
    `/stats` dashboard (single source of truth).
+
+### Fee-deviation guard (money-correctness)
+
+The payout uses the **on-chain verified affiliate fee** (`actualAffiliateFeeAmountCryptoBaseUnit`
+→ `fee.actualFeeUsd`) when present, because that is what was actually collected. But that
+field is **not always trustworthy**: some swaps record a fee asset / amount that doesn't match
+what was really taken. Confirmed example: **MayaChain swaps** (affiliate `ssmaya`) label the
+affiliate fee asset as USDC while the fee is actually collected in **CACAO**, so the stored
+base-unit amount, priced/scaled as USDC, produces a wildly wrong USD fee (observed: **$39,020
+"fee" on a $100 swap**, which would have paid a partner ~$29k).
+
+To catch this, `calculateFeeForSwap` is extended to also expose `actualFeeUsd` and
+`impliedFeeUsd` (`= verifiedVolumeUsd × verifiedBps / 10000`). For each swap with an on-chain
+fee, the script compares the two:
+
+```
+deviation = |actualFeeUsd - impliedFeeUsd| / impliedFeeUsd
+```
+
+- An on-chain fee never equals the implied fee exactly (quote→execution price drift, partial /
+  streaming fills, fee-asset conversion), so a relative tolerance band is allowed:
+  `FEE_DEVIATION_TOLERANCE = 0.5` (±50%, tunable).
+- If `deviation > tolerance`, **or** the implied fee can't be computed (volume unpriceable),
+  the swap is treated as an **anomaly**: excluded from the partner's total and recorded in
+  `warnings`. The partner is still paid for their other, non-anomalous swaps.
+- Swaps with **no** on-chain fee are not guarded — `fee.feeUsd` already equals the bps-implied
+  fee, which is the trusted value.
+
+This diverges from the current `/stats` numbers for affected swaps — by design, because
+`/stats` would surface the same corrupt figures.
 3. **Resolve addresses:** for each `partnerCode`, look up the `Affiliate` and take
    `receiveAddress ?? walletAddress`.
 4. **Convert to USDC:** USD amount is treated 1:1 with USDC. Floor each partner
@@ -129,7 +160,8 @@ Written to `payouts/` at repo root (add to `.gitignore` if not already ignored).
        "partnersPaid": 0,
        "totalUsdc": "0.000000",
        "eligibleSwaps": 0,
-       "skippedSwaps": 0
+       "skippedSwaps": 0,
+       "anomalousSwaps": 0
      },
      "partners": [
        {
@@ -138,11 +170,15 @@ Written to `payouts/` at repo root (add to `.gitignore` if not already ignored).
          "swapCount": 0,
          "volumeUsd": "0.00",
          "feesEarnedUsd": "0.000000",
+         "usdcAmount": "0",
          "included": true,
          "excludedReason": null
        }
      ],
-     "warnings": [ { "partnerCode": "...", "reason": "invalid receive address: ..." } ]
+     "warnings": [
+       { "type": "fee-anomaly", "partnerCode": "...", "swapId": "...", "reason": "on-chain fee ... deviates ...% from bps-implied ..." },
+       { "type": "address", "partnerCode": "...", "swapId": null, "reason": "invalid (non-EVM) payout address: ..." }
+     ]
    }
    ```
    This is the seam the future settlement-tracking feature builds on.
@@ -152,24 +188,39 @@ Written to `payouts/` at repo root (add to `.gitignore` if not already ignored).
 
 ## Module structure
 
-Single-file script is acceptable (mirrors `referral-rewards.ts`), but factor pure
-helpers so they are independently testable:
+Split into a pure, dependency-light lib (jest-testable) and a thin IO entry, because the
+swap-service fee math transitively imports ESM-only packages (`@shapeshiftoss/chain-adapters`
+→ `p-queue`) that jest won't transform. The lib never imports the app graph; the entry injects
+the real fee functions.
 
-- `resolveWindow(args): { start, end, label }` — UTC previous-month default + ISO override, end-exclusive.
-- `aggregateByPartner(swaps): Map<partnerCode, PartnerAccrual>` — pure; uses `calculateFeeForSwap` / `getPartnerFeeRate`.
-- `toCsv(rows): string` — pure; Safe format.
-- `formatUsdc(usd): string` — floor to 6 dp via BigNumber.
-- `isValidRecipient(addr): boolean` / `normalizeRecipient(addr): string`.
-- `main()` — wires Prisma query → aggregate → resolve addresses → validate → write artifacts → print summary; `prisma.$disconnect()` in `finally`.
+- **`scripts/affiliate-payouts-lib.ts`** — pure (only `bignumber.js` + `viem`):
+  - `resolveWindow(start?, end?, now?)` — UTC previous-month default + ISO override, end-exclusive.
+  - `aggregateByPartner(rows, deps, tolerance?)` — groups + accrues; `deps` injects
+    `{ toSwap, calculateFeeForSwap, getPartnerFeeRate }` so it's testable without the app graph.
+    Returns `{ partners, skippedSwaps, anomalies }`.
+  - `checkFeeAnomaly(row, fee, tolerance)` — the deviation guard; returns a `FeeAnomaly` or null.
+  - `formatUsdc(usd)` — floor to 6 dp via BigNumber, strip trailing zeros.
+  - `normalizeRecipient(addr)` — viem `isAddress` / `getAddress` checksum; null if invalid.
+  - `toCsv(rows)`, `buildPayouts(...)`, `buildRecord(...)`.
+- **`scripts/affiliate-payouts.ts`** — entry: `PrismaClient`, the real `toSwap` /
+  `calculateFeeForSwap` / `getPartnerFeeRate` from `apps/swap-service/src/swaps/utils`, plus
+  `printSummary` / `writeArtifacts` / `generate` / `main`; `prisma.$disconnect()` in `finally`.
+  Run via `ts-node --transpile-only` (Node 22 `require(esm)` handles the ESM deps at runtime).
+- **App change:** `calculateFeeForSwap` (in `swaps/utils.ts`) extended to also return
+  `actualFeeUsd` and `impliedFeeUsd` (additive, backward-compatible) so the guard can compare them.
 
 ## Testing
 
-- Unit-test the pure helpers (no DB): `resolveWindow` (default UTC month +
-  explicit override + exclusivity), `aggregateByPartner` (rate capping, skipped
-  unpriceable swaps, multi-swap accrual), `formatUsdc` (6-dp floor, no float
-  drift), `toCsv` (header + row shape + indices), address validation
-  (valid/invalid/checksum).
-- Test file: `scripts/affiliate-payouts.test.ts` (`*.test.ts` convention).
+- Unit-test the lib helpers (no DB, jest via `scripts/jest.config.ts`, `*.test.ts`):
+  `resolveWindow` (default UTC month + override + exclusivity + arg validation),
+  `aggregateByPartner` (rate capping, skipped unpriceable swaps, multi-swap accrual,
+  anomaly exclusion, partial-partner payout), `checkFeeAnomaly` (within/over tolerance,
+  no-actual, missing-implied), `formatUsdc` (6-dp floor), `toCsv` (header + indices),
+  `normalizeRecipient` (valid/invalid/checksum), `buildPayouts` (address exclusion + sort).
+  `aggregateByPartner` / `checkFeeAnomaly` use stub fee deps to stay off the app graph.
+- Test command: `yarn affiliate-payouts:test`.
+- Integration: verified end-to-end against a live DB snapshot for 2026-06 — the guard
+  excluded the Maya/`ssmaya` corrupt-fee swaps (total $29,265 → $0.05).
 
 ## Out of scope (next conversation)
 

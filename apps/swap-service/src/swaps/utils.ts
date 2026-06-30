@@ -136,7 +136,18 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
   return bnOrZero(amount).div(bnOrZero(10).pow(precision)).times(priceUsd).toNumber()
 }
 
-export const calculateFeeForSwap = (swap: Swap): { feeUsd: number; volumeUsd: number; verifiedBps: number } | null => {
+export const calculateFeeForSwap = (
+  swap: Swap,
+): {
+  feeUsd: number
+  volumeUsd: number
+  verifiedBps: number
+  // The on-chain collected fee (null when unavailable) and the bps-implied fee
+  // (volume × verifiedBps; null when volume can't be priced). Exposed so consumers
+  // can guard against on-chain fee amounts that don't align with the implied fee.
+  actualFeeUsd: number | null
+  impliedFeeUsd: number | null
+} | null => {
   const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps
   if (!verifiedBps) {
     logger.warn(`Verified swap ${swap.swapId} missing affiliate bps in verification details, skipping`)
@@ -162,8 +173,11 @@ export const calculateFeeForSwap = (swap: Swap): { feeUsd: number; volumeUsd: nu
     return null
   }
 
-  const feeUsd = actualFeeUsd ?? bnOrZero(sellAmountUsd).times(verifiedBps).div(BPS_DENOMINATOR).toNumber()
+  const impliedFeeUsd =
+    sellAmountUsd === null ? null : bnOrZero(sellAmountUsd).times(verifiedBps).div(BPS_DENOMINATOR).toNumber()
+
+  const feeUsd = actualFeeUsd ?? impliedFeeUsd ?? 0
   const volumeUsd = sellAmountUsd ?? bnOrZero(actualFeeUsd).times(BPS_DENOMINATOR).div(verifiedBps).toNumber()
 
-  return { feeUsd, volumeUsd, verifiedBps }
+  return { feeUsd, volumeUsd, verifiedBps, actualFeeUsd, impliedFeeUsd }
 }
