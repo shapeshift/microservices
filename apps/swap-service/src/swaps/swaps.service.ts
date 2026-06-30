@@ -80,10 +80,10 @@ export class SwapsService {
     try {
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
 
-      const [referralCode, prices, partnerAddress] = await Promise.all([
+      const [referralCode, prices, partner] = await Promise.all([
         this.getReferralCode(data.userId),
         fetchUsdPrices(data, affiliateFeeAssetId),
-        this.resolvePartnerAddress(data),
+        this.resolvePartner(data),
       ])
 
       const sellAmountUsd = computeSellAmountUsd(
@@ -115,7 +115,8 @@ export class SwapsService {
             sellAssetUsd: prices.sellAssetUsd,
             buyAssetUsd: prices.buyAssetUsd,
             affiliateAssetUsd: prices.affiliateAssetUsd,
-            partnerAddress,
+            partnerAddress: partner.partnerAddress,
+            partnerCode: partner.partnerCode,
             partnerBps: data.partnerBps,
             affiliateBps: data.affiliateBps,
             shapeshiftBps: data.shapeshiftBps,
@@ -129,7 +130,7 @@ export class SwapsService {
         [
           `Swap created: ${swap.swapId}`,
           referralCode && `referral ${referralCode}`,
-          partnerAddress && `partner ${partnerAddress}`,
+          (partner.partnerCode ?? partner.partnerAddress) && `partner ${partner.partnerCode ?? partner.partnerAddress}`,
           sellAmountUsd && `$${sellAmountUsd}`,
         ]
           .filter(Boolean)
@@ -148,21 +149,47 @@ export class SwapsService {
     return this.userServiceClient.getUserReferralCode(userId)
   }
 
-  private async resolvePartnerAddress(data: CreateSwapDto): Promise<string | null> {
-    if (data.partnerAddress) return data.partnerAddress
-    if (!data.partnerCode) return null
+  private async resolvePartner(
+    data: CreateSwapDto,
+  ): Promise<{ partnerCode: string | null; partnerAddress: string | null }> {
+    if (data.partnerCode) {
+      try {
+        const affiliate = await this.prisma.affiliate.findUnique({
+          where: { partnerCode: data.partnerCode },
+          select: { partnerCode: true, receiveAddress: true, walletAddress: true },
+        })
 
-    try {
-      const affiliate = await this.prisma.affiliate.findFirst({
-        where: { partnerCode: data.partnerCode },
-        select: { receiveAddress: true, walletAddress: true },
-      })
-
-      return affiliate?.receiveAddress ?? affiliate?.walletAddress ?? null
-    } catch (error) {
-      logger.warn(`Failed to resolve partner address for partner code ${data.partnerCode}:`, error)
-      return null
+        if (affiliate) {
+          return {
+            partnerCode: affiliate.partnerCode,
+            partnerAddress: affiliate.receiveAddress ?? affiliate.walletAddress,
+          }
+        }
+      } catch (error) {
+        logger.error(`Failed to resolve partner code ${data.partnerCode}:`, error)
+        throw error
+      }
     }
+
+    if (data.partnerAddress) {
+      try {
+        const matches = await this.prisma.affiliate.findMany({
+          where: { OR: [{ walletAddress: data.partnerAddress }, { receiveAddress: data.partnerAddress }] },
+          select: { partnerCode: true },
+          take: 2,
+        })
+
+        return {
+          partnerCode: matches.length === 1 ? matches[0].partnerCode : null,
+          partnerAddress: data.partnerAddress,
+        }
+      } catch (error) {
+        logger.error(`Failed to resolve partner address ${data.partnerAddress}:`, error)
+        throw error
+      }
+    }
+
+    return { partnerCode: null, partnerAddress: null }
   }
 
   async updateSwapStatus(data: UpdateSwapStatusDto): Promise<Swap> {
@@ -284,13 +311,13 @@ export class SwapsService {
     }
   }
 
-  async calculateAffiliateFees(address: string, startDate?: Date, endDate?: Date): Promise<Fees> {
+  async calculateAffiliateFeesByPartnerCode(partnerCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
     logger.log(
-      `Calculating affiliate fees for address: ${address}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
+      `Calculating affiliate fees for ${partnerCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
 
     const fees = await this.aggregateFees({
-      baseWhere: { partnerAddress: address, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
+      baseWhere: { partnerCode, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
       startDate,
       endDate,
       calcFee: (swap) => {
@@ -302,7 +329,7 @@ export class SwapsService {
     })
 
     logger.log(
-      `Affiliate fees for ${address}\n` +
+      `Affiliate fees for ${partnerCode}\n` +
         `  period:   ${fees.periodCount} swaps, $${fees.periodVolumeUsd.toFixed(2)} volume, $${fees.periodFeesUsd.toFixed(2)} fee\n` +
         `  all-time: ${fees.allTimeCount} swaps, $${fees.allTimeFeesUsd.toFixed(2)} fee`,
     )

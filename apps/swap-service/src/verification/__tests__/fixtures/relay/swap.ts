@@ -82,6 +82,7 @@ export default {
     verifiedSellAmountCryptoBaseUnit: '1000000000000000',
   },
   partnerAddress: null,
+  partnerCode: null,
   affiliateBps: 60,
   partnerBps: 0,
   origin: 'api',
