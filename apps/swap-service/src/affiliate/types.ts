@@ -14,13 +14,8 @@ export interface AffiliateStatsResult {
 }
 
 export class AffiliateStatsQueryDto {
-  @IsOptional()
-  @IsEthereumAddress()
-  address?: string
-
-  @IsOptional()
   @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
-  partnerCode?: string
+  partnerCode: string
 
   @IsOptional()
   @Type(() => Date)
@@ -34,13 +29,8 @@ export class AffiliateStatsQueryDto {
 }
 
 export class AffiliateSwapsQueryDto extends PaginationQueryDto {
-  @IsOptional()
-  @IsEthereumAddress()
-  address?: string
-
-  @IsOptional()
   @Matches(PARTNER_CODE_REGEX, { message: PARTNER_CODE_MESSAGE })
-  partnerCode?: string
+  partnerCode: string
 
   @IsOptional()
   @Type(() => Date)
