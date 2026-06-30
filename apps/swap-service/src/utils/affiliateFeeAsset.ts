@@ -1,5 +1,5 @@
 import type { AssetId } from '@shapeshiftoss/caip'
-import { thorchainAssetId } from '@shapeshiftoss/caip'
+import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
@@ -15,7 +15,7 @@ const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
   [SwapperName.Chainflip]: 'buy_asset',
   [SwapperName.CowSwap]: 'sell_asset',
   [SwapperName.Debridge]: 'sell_asset',
-  [SwapperName.Mayachain]: 'sell_asset',
+  [SwapperName.Mayachain]: mayachainAssetId,
   [SwapperName.NearIntents]: 'sell_asset',
   [SwapperName.Portals]: 'sell_asset',
   [SwapperName.Relay]: null,
