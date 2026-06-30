@@ -48,6 +48,6 @@ export class SwapsController {
     @Query('startDate', OptionalDatePipe) startDate?: Date,
     @Query('endDate', OptionalDatePipe) endDate?: Date,
   ) {
-    return this.swapsService.calculateAffiliateFeesByPartnerCode(partnerCode, startDate, endDate)
+    return this.swapsService.calculateAffiliateFees(partnerCode, startDate, endDate)
   }
 }
