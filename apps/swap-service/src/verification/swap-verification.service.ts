@@ -329,16 +329,22 @@ export class SwapVerificationService {
   }
 
   private verifyThorchain(swap: Swap): Promise<SwapVerificationResult> {
-    return this.verifyMidgardSwap(swap, { midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL, affiliate: 'ss' })
+    // Fee collected in RUNE (precision 8); Midgard reports in 1e8 so this is a no-op conversion.
+    return this.verifyMidgardSwap(swap, { midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL, affiliate: 'ss', feeAssetPrecision: 8 })
   }
 
   private verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
-    return this.verifyMidgardSwap(swap, { midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL, affiliate: 'ssmaya' })
+    // Fee collected in CACAO (precision 10); Midgard reports in 1e8, so scale up to native base units.
+    return this.verifyMidgardSwap(swap, {
+      midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
+      affiliate: 'ssmaya',
+      feeAssetPrecision: 10,
+    })
   }
 
   private async verifyMidgardSwap(
     swap: Swap,
-    config: { midgardUrl: string; affiliate: string },
+    config: { midgardUrl: string; affiliate: string; feeAssetPrecision: number },
   ): Promise<SwapVerificationResult> {
     const txHash = swap.sellTxHash?.replace(/^0x/, '')
     if (!txHash) return noAffiliateResult('FAILED', 'Missing sell txHash')
@@ -382,7 +388,10 @@ export class SwapVerificationService {
         swap.sellAsset.precision,
       ),
       actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(buyOut.coins[0].amount, swap.buyAsset.precision),
-      actualAffiliateFeeAmountCryptoBaseUnit: hasAffiliate ? feeOut?.coins[0].amount : undefined,
+      actualAffiliateFeeAmountCryptoBaseUnit:
+        hasAffiliate && feeOut
+          ? thorchainToNativePrecision(feeOut.coins[0].amount, config.feeAssetPrecision)
+          : undefined,
     }
   }
 

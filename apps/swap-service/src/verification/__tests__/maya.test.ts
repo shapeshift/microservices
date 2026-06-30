@@ -33,7 +33,8 @@ describe('verifyMaya', () => {
       affiliateAddress: 'ssmaya',
       verifiedSellAmountCryptoBaseUnit: '4000000000000000',
       actualBuyAmountCryptoBaseUnit: '7340228',
-      actualAffiliateFeeAmountCryptoBaseUnit: '4237779000',
+      // CACAO fee from Midgard (1e8) scaled to native precision 10: 4237779000 × 100
+      actualAffiliateFeeAmountCryptoBaseUnit: '423777900000',
     })
   })
 
