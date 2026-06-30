@@ -58,7 +58,7 @@ export class AffiliateService {
     return this.prisma.affiliate.update({ where: { walletAddress }, data: updateData })
   }
 
-  async getAffiliateStatsByPartnerCode(
+  async getAffiliateStats(
     partnerCode: string,
     options: { startDate?: Date; endDate?: Date },
   ): Promise<AffiliateStatsResult> {
@@ -104,7 +104,7 @@ export class AffiliateService {
     }
   }
 
-  async getAffiliateSwapsByPartnerCode(
+  async getAffiliateSwaps(
     partnerCode: string,
     options: { startDate?: Date; endDate?: Date; limit: number; cursor?: string },
   ): Promise<PaginatedSwaps> {

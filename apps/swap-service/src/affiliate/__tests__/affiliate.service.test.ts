@@ -97,11 +97,11 @@ describe('AffiliateService attribution reads', () => {
     return args.where
   }
 
-  it('getAffiliateSwapsByPartnerCode filters directly on partnerCode, with no join or address', async () => {
+  it('getAffiliateSwaps filters directly on partnerCode, with no join or address', async () => {
     const findMany = jest.fn().mockResolvedValue([])
     const service = new AffiliateService(makePrismaMock(undefined, findMany))
 
-    await service.getAffiliateSwapsByPartnerCode('goodcode', { limit: 50 })
+    await service.getAffiliateSwaps('goodcode', { limit: 50 })
 
     const where = whereOfFirstCall(findMany)
     expect(where).toMatchObject({ partnerCode: 'goodcode' })
@@ -109,11 +109,11 @@ describe('AffiliateService attribution reads', () => {
     expect(where).not.toHaveProperty('partnerAddress')
   })
 
-  it('getAffiliateStatsByPartnerCode filters directly on partnerCode, with no join or address', async () => {
+  it('getAffiliateStats filters directly on partnerCode, with no join or address', async () => {
     const findMany = jest.fn().mockResolvedValue([])
     const service = new AffiliateService(makePrismaMock(undefined, findMany))
 
-    const result = await service.getAffiliateStatsByPartnerCode('goodcode', {})
+    const result = await service.getAffiliateStats('goodcode', {})
 
     const where = whereOfFirstCall(findMany)
     expect(where).toMatchObject({ partnerCode: 'goodcode', status: 'SUCCESS', isAffiliateVerified: true })

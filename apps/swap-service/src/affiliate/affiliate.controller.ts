@@ -32,12 +32,12 @@ export class AffiliateController {
 
   @Get('swaps')
   async getSwaps(@Query() query: AffiliateSwapsQueryDto) {
-    return this.affiliateService.getAffiliateSwapsByPartnerCode(query.partnerCode, query)
+    return this.affiliateService.getAffiliateSwaps(query.partnerCode, query)
   }
 
   @Get('stats')
   async getStats(@Query() query: AffiliateStatsQueryDto) {
-    return this.affiliateService.getAffiliateStatsByPartnerCode(query.partnerCode, query)
+    return this.affiliateService.getAffiliateStats(query.partnerCode, query)
   }
 
   @Get(':address')
