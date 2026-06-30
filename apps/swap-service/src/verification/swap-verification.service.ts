@@ -329,12 +329,14 @@ export class SwapVerificationService {
   }
 
   private verifyThorchain(swap: Swap): Promise<SwapVerificationResult> {
-    // Fee collected in RUNE (precision 8); Midgard reports in 1e8 so this is a no-op conversion.
-    return this.verifyMidgardSwap(swap, { midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL, affiliate: 'ss', feeAssetPrecision: 8 })
+    return this.verifyMidgardSwap(swap, {
+      midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
+      affiliate: 'ss',
+      feeAssetPrecision: 8,
+    })
   }
 
   private verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
-    // Fee collected in CACAO (precision 10); Midgard reports in 1e8, so scale up to native base units.
     return this.verifyMidgardSwap(swap, {
       midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
       affiliate: 'ssmaya',

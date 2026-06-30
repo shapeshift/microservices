@@ -31,8 +31,7 @@
     "db:migrate:status": "prisma migrate status",
     "db:migrate:create": "prisma migrate dev --create-only --name",
     "db:studio": "prisma studio",
-    "referral-rewards": "ts-node scripts/referral-rewards.ts",
-    "backfill-maya-fee-asset": "ts-node --transpile-only scripts/backfill-maya-fee-asset.ts"
+    "referral-rewards": "ts-node scripts/referral-rewards.ts"
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",

@@ -12,6 +12,6 @@
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false
   },
-  "include": ["apps/**/*", "packages/**/*", "eslint.config.ts", "prisma.config.ts", "scripts/referral-rewards.ts", "scripts/backfill-maya-fee-asset.ts"],
+  "include": ["apps/**/*", "packages/**/*", "eslint.config.ts", "prisma.config.ts", "scripts/referral-rewards.ts"],
   "exclude": ["dist", "node_modules"]
 }
