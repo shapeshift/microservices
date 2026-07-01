@@ -391,7 +391,7 @@ export class SwapVerificationService {
       ),
       actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(buyOut.coins[0].amount, swap.buyAsset.precision),
       actualAffiliateFeeAmountCryptoBaseUnit:
-        hasAffiliate && feeOut
+        hasAffiliate && feeOut?.coins[0]?.amount
           ? thorchainToNativePrecision(feeOut.coins[0].amount, config.feeAssetPrecision)
           : undefined,
     }
