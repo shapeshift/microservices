@@ -3,6 +3,7 @@ import type { Swap as PrismaSwap } from '@prisma/client'
 
 import type { CreateSwapDto } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
+import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapperName, SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
@@ -14,6 +15,11 @@ import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices 
 const logger = new Logger('SwapsService')
 
 const BPS_DENOMINATOR = 10000
+
+// Native precisions of the THORChain/Maya native fee assets — the precision the affiliate fee
+// amount is stored in for these chains.
+const RUNE_PRECISION = 8
+const CACAO_PRECISION = 10
 
 // Historical rows may persist `{}` for affiliateVerificationDetails; coerce anything
 // that doesn't satisfy the tightened shape (requires `hasAffiliate`) to null.
@@ -119,16 +125,29 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
   let priceUsd: string | null
   let precision: number | null
 
-  if (swap.affiliateFeeAssetId === swap.sellAsset.assetId) {
-    priceUsd = swap.sellAssetUsd
-    precision = swap.sellAsset.precision
-  } else if (swap.affiliateFeeAssetId === swap.buyAsset.assetId) {
-    priceUsd = swap.buyAssetUsd
-    precision = swap.buyAsset.precision
-  } else {
-    priceUsd = swap.affiliateAssetUsd
-    // Fee asset is neither sell nor buy — precision unknown
-    precision = null
+  switch (swap.affiliateFeeAssetId) {
+    case swap.sellAsset.assetId:
+      priceUsd = swap.sellAssetUsd
+      precision = swap.sellAsset.precision
+      break
+    case swap.buyAsset.assetId:
+      priceUsd = swap.buyAssetUsd
+      precision = swap.buyAsset.precision
+      break
+    case thorchainAssetId:
+      // Thorchain collects the affiliate fee in RUNE.
+      priceUsd = swap.affiliateAssetUsd
+      precision = RUNE_PRECISION
+      break
+    case mayachainAssetId:
+      // Mayachain collects the affiliate fee in CACAO.
+      priceUsd = swap.affiliateAssetUsd
+      precision = CACAO_PRECISION
+      break
+    default:
+      priceUsd = swap.affiliateAssetUsd
+      // Fee asset is neither sell nor buy nor a known native fee asset — precision unknown
+      precision = null
   }
 
   if (!priceUsd || precision === null) return null
