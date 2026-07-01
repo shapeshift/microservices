@@ -311,7 +311,7 @@ export class SwapsService {
     }
   }
 
-  async calculateAffiliateFeesByPartnerCode(partnerCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
+  async calculateAffiliateFees(partnerCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
     logger.log(
       `Calculating affiliate fees for ${partnerCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
