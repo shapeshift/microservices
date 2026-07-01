@@ -7,13 +7,7 @@ import { PaginatedSwaps } from '../swaps/types'
 import { calculateFeeForSwap, getPartnerFeeRate, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
-import type {
-  AffiliateStatsQueryDto,
-  AffiliateStatsResult,
-  AffiliateSwapsQueryDto,
-  CreateAffiliateDto,
-  UpdateAffiliateDto,
-} from './types'
+import type { AffiliateStatsResult, CreateAffiliateDto, UpdateAffiliateDto } from './types'
 import { isReservedPartnerCode } from './utils'
 
 @Injectable()
@@ -64,50 +58,7 @@ export class AffiliateService {
     return this.prisma.affiliate.update({ where: { walletAddress }, data: updateData })
   }
 
-  async getAffiliateStatsByAddress(address: string, options: AffiliateStatsQueryDto): Promise<AffiliateStatsResult> {
-    const { startDate, endDate } = options
-
-    const items = await this.prisma.swap.findMany({
-      where: {
-        affiliate: { OR: [{ walletAddress: address }, { receiveAddress: address }] },
-        status: 'SUCCESS',
-        isAffiliateVerified: true,
-        ...(startDate || endDate
-          ? {
-              createdAt: {
-                ...(startDate && { gte: startDate }),
-                ...(endDate && { lte: endDate }),
-              },
-            }
-          : {}),
-      },
-    })
-
-    let totalSwaps = 0
-    let totalVolumeUsd = 0
-    let totalFeesEarnedUsd = 0
-
-    for (const item of items) {
-      const swap = toSwap(item)
-
-      const fee = calculateFeeForSwap(swap)
-      if (!fee) continue
-
-      const rate = getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)
-
-      totalSwaps++
-      totalVolumeUsd += fee.volumeUsd
-      totalFeesEarnedUsd += fee.feeUsd * rate
-    }
-
-    return {
-      totalSwaps,
-      totalVolumeUsd: totalVolumeUsd.toFixed(2),
-      totalFeesEarnedUsd: totalFeesEarnedUsd.toFixed(2),
-    }
-  }
-
-  async getAffiliateStatsByPartnerCode(
+  async getAffiliateStats(
     partnerCode: string,
     options: { startDate?: Date; endDate?: Date },
   ): Promise<AffiliateStatsResult> {
@@ -153,31 +104,7 @@ export class AffiliateService {
     }
   }
 
-  async getAffiliateSwapsByAddress(address: string, options: AffiliateSwapsQueryDto): Promise<PaginatedSwaps> {
-    const { startDate, endDate, limit, cursor } = options
-
-    const items = await this.prisma.swap.findMany({
-      ...swapCursorArgs(limit, cursor),
-      where: {
-        affiliate: { OR: [{ walletAddress: address }, { receiveAddress: address }] },
-        ...(startDate || endDate
-          ? {
-              createdAt: {
-                ...(startDate && { gte: startDate }),
-                ...(endDate && { lte: endDate }),
-              },
-            }
-          : {}),
-      },
-    })
-
-    return {
-      swaps: items.map(toSwap),
-      nextCursor: getNextCursor(items, limit),
-    }
-  }
-
-  async getAffiliateSwapsByPartnerCode(
+  async getAffiliateSwaps(
     partnerCode: string,
     options: { startDate?: Date; endDate?: Date; limit: number; cursor?: string },
   ): Promise<PaginatedSwaps> {
