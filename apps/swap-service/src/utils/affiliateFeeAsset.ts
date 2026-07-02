@@ -10,6 +10,7 @@ const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
   [SwapperName.ArbitrumBridge]: null,
   [SwapperName.Avnu]: 'sell_asset',
   [SwapperName.Bebop]: 'buy_asset',
+  [SwapperName.BobGateway]: null,
   [SwapperName.ButterSwap]: 'buy_asset',
   [SwapperName.Cetus]: 'buy_asset',
   [SwapperName.Chainflip]: 'buy_asset',

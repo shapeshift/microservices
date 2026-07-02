@@ -3,7 +3,7 @@
     "target": "ES2020",
     "module": "CommonJS",
     "lib": ["ES2020"],
-    "types": ["node"],
+    "types": ["node", "jest"],
     "skipLibCheck": true,
     "moduleResolution": "node",
     "resolveJsonModule": true,
@@ -12,6 +12,6 @@
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false
   },
-  "include": ["apps/**/*", "packages/**/*", "eslint.config.ts", "prisma.config.ts", "scripts/referral-rewards.ts"],
+  "include": ["apps/**/*", "packages/**/*", "eslint.config.ts", "prisma.config.ts", "scripts/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

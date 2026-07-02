@@ -4,6 +4,9 @@ node_modules
 .turbo
 /generated/prisma
 
+# Payout artifacts
+/payouts/
+
 # Yarn (Berry)
 .yarn/*
 !.yarn/patches
