@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { Affiliate, Prisma } from '@prisma/client'
+import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { SHAPESHIFT_BPS } from '../swaps/constants'
-import { calculateFeeForSwap, getPartnerFeeRate, getPartnerFeeUsd, toSwap } from '../swaps/utils'
+import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
 import type { AffiliateStatsResult, CreateAffiliateDto, UpdateAffiliateDto } from './types'
@@ -84,8 +85,8 @@ export class AffiliateService {
     })
 
     let totalSwaps = 0
-    let totalVolumeUsd = 0
-    let totalFeesEarnedUsd = 0
+    let totalVolumeUsd = bnOrZero(0)
+    let totalFeesEarnedUsd = bnOrZero(0)
 
     for (const item of items) {
       const swap = toSwap(item)
@@ -93,11 +94,9 @@ export class AffiliateService {
       const fee = calculateFeeForSwap(swap)
       if (!fee) continue
 
-      const rate = getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)
-
       totalSwaps++
-      totalVolumeUsd += fee.volumeUsd
-      totalFeesEarnedUsd += fee.feeUsd * rate
+      totalVolumeUsd = totalVolumeUsd.plus(fee.volumeUsd)
+      totalFeesEarnedUsd = totalFeesEarnedUsd.plus(getPartnerFeeUsd(fee.feeUsd, fee.verifiedBps, swap.partnerBps))
     }
 
     return {
