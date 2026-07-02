@@ -161,9 +161,6 @@ export const calculateFeeForSwap = (
   feeUsd: number
   volumeUsd: number
   verifiedBps: number
-  // The on-chain collected fee (null when unavailable) and the bps-implied fee
-  // (volume × verifiedBps; null when volume can't be priced). Exposed so consumers
-  // can guard against on-chain fee amounts that don't align with the implied fee.
   actualFeeUsd: number | null
   impliedFeeUsd: number | null
 } | null => {
@@ -189,9 +186,9 @@ export const calculateFeeForSwap = (
   const impliedFeeUsd =
     sellAmountUsd === null ? null : bnOrZero(sellAmountUsd).times(verifiedBps).div(BPS_DENOMINATOR).toNumber()
 
-  // Prefer the on-chain collected fee; fall back to the bps-implied fee. Null only when neither
-  // is available (no on-chain amount and unpriceable volume) — nothing to attribute, so skip.
+  // Prefer the on-chain collected fee; fall back to the bps-implied fee.
   const feeUsd = actualFeeUsd ?? impliedFeeUsd
+
   if (feeUsd === null) {
     logger.warn(`Unable to calculate fee for swap ${swap.swapId}, skipping`)
     return null

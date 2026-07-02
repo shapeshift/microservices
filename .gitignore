@@ -4,7 +4,7 @@ node_modules
 .turbo
 /generated/prisma
 
-# Payout artifacts (contain partner addresses + amounts)
+# Payout artifacts
 /payouts/
 
 # Yarn (Berry)
