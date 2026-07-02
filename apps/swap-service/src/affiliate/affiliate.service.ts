@@ -131,6 +131,11 @@ export class AffiliateService {
     }
   }
 
+  async listAffiliates(): Promise<{ partnerCode: string; bps: number; isActive: boolean }[]> {
+    const rows = await this.prisma.affiliate.findMany()
+    return rows.map(({ partnerCode, bps, isActive }) => ({ partnerCode, bps, isActive }))
+  }
+
   async resolvePartnerCode(partnerCode: string) {
     const affiliate = await this.getAffiliateByPartnerCode(partnerCode)
     if (!affiliate) return null

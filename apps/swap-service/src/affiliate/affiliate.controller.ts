@@ -40,6 +40,11 @@ export class AffiliateController {
     return this.affiliateService.getAffiliateStats(query.partnerCode, query)
   }
 
+  @Get()
+  async list() {
+    return this.affiliateService.listAffiliates()
+  }
+
   @Get(':address')
   async getAffiliate(@Param('address') address: string) {
     const affiliate = await this.affiliateService.getAffiliateByWalletAddress(address)
