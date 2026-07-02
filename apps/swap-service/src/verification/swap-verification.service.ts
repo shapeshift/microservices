@@ -94,6 +94,7 @@ export class SwapVerificationService {
             return await this.verifyStonfi(swap)
           case SwapperName.Across:
             return await this.verifyAcross(swap)
+          case SwapperName.BobGateway:
           case SwapperName.Debridge:
           case SwapperName.Test:
             return noAffiliateResult('SUCCESS', 'Verification not implemented')
