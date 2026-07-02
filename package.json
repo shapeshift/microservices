@@ -31,7 +31,9 @@
     "db:migrate:status": "prisma migrate status",
     "db:migrate:create": "prisma migrate dev --create-only --name",
     "db:studio": "prisma studio",
-    "referral-rewards": "ts-node scripts/referral-rewards.ts"
+    "referral-rewards": "ts-node scripts/referral-rewards.ts",
+    "affiliate-payouts": "ts-node --transpile-only scripts/affiliate-payouts/affiliate-payouts.ts",
+    "affiliate-payouts:test": "jest --config scripts/jest.config.ts"
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
@@ -93,23 +95,6 @@
   },
   "resolutions": {
     "google-protobuf": "3.15.7"
-  },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
   },
   "packageManager": "yarn@4.7.0"
 }
