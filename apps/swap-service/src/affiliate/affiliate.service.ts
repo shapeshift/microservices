@@ -131,11 +131,10 @@ export class AffiliateService {
     const swaps = items.map((item) => {
       const swap = toSwap(item)
       const fee = calculateFeeForSwap(swap)
-      const affiliateBps = fee?.verifiedBps ?? null
-      const feeUsd = fee?.feeUsd ?? null
-      const volumeUsd = fee?.volumeUsd ?? null
-      const partnerFeeUsd = fee ? fee.feeUsd * getPartnerFeeRate(fee.verifiedBps, swap.partnerBps) : null
-      return { ...swap, affiliateBps, feeUsd, partnerFeeUsd, volumeUsd }
+      const feeUsd = fee ? fee.feeUsd.toString() : null
+      const volumeUsd = fee ? fee.volumeUsd.toString() : null
+      const partnerFeeUsd = fee ? (fee.feeUsd * getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)).toString() : null
+      return { ...swap, feeUsd, partnerFeeUsd, volumeUsd }
     })
 
     return {

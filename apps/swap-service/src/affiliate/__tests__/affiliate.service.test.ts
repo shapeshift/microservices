@@ -132,7 +132,7 @@ describe('AffiliateService.getAffiliateSwaps fee-split enrichment', () => {
     buyTxHash: null,
     partnerBps: 50,
     shapeshiftBps: 10,
-    affiliateBps: 0,
+    affiliateBps: 55,
     status: 'SUCCESS',
     isAffiliateVerified: true,
     sellAsset: { precision: 8 },
@@ -153,18 +153,19 @@ describe('AffiliateService.getAffiliateSwaps fee-split enrichment', () => {
     ...over,
   })
 
-  it('derives affiliateBps/feeUsd/partnerFeeUsd/volumeUsd from the verified fee', async () => {
+  it('derives feeUsd/partnerFeeUsd/volumeUsd from the verified fee and preserves stored affiliateBps', async () => {
     const findMany = jest.fn().mockResolvedValue([swapRow()])
     const service = new AffiliateService(makePrismaMock(undefined, findMany))
 
     const { swaps } = await service.getAffiliateSwaps(undefined, { limit: 50 })
 
-    // verifiedBps 60, sell 1.0 unit @ $10 => feeUsd = 10 * 60/10000 = 0.06
-    // partner rate = partnerBps/verifiedBps = 50/60 => partnerFeeUsd = 0.06 * (50/60) = 0.05
-    expect(swaps[0].affiliateBps).toBe(60)
-    expect(swaps[0].feeUsd).toBeCloseTo(0.06, 6)
-    expect(swaps[0].partnerFeeUsd).toBeCloseTo(0.05, 6)
-    expect(swaps[0].volumeUsd).toBeCloseTo(10, 6)
+    // verifiedBps 60, sell 1.0 unit @ $10 => feeUsd = 10 * 60/10000 = 0.06 (full-precision string, no rounding)
+    // partner share = feeUsd * partnerBps/verifiedBps = 0.06 * 50/60 = 0.05
+    expect(swaps[0].feeUsd).toBe('0.06')
+    expect(swaps[0].partnerFeeUsd).toBe('0.05')
+    expect(swaps[0].volumeUsd).toBe('10')
+    // stored affiliateBps (55) passes through untouched — not overwritten with verifiedBps (60)
+    expect(swaps[0].affiliateBps).toBe(55)
   })
 
   it('nulls the fee fields when the swap is unpriceable (no verified fee)', async () => {
@@ -173,6 +174,8 @@ describe('AffiliateService.getAffiliateSwaps fee-split enrichment', () => {
 
     const { swaps } = await service.getAffiliateSwaps(undefined, { limit: 50 })
 
-    expect(swaps[0]).toMatchObject({ affiliateBps: null, feeUsd: null, partnerFeeUsd: null, volumeUsd: null })
+    expect(swaps[0]).toMatchObject({ feeUsd: null, partnerFeeUsd: null, volumeUsd: null })
+    // stored affiliateBps is untouched even when the fee can't be computed
+    expect(swaps[0].affiliateBps).toBe(55)
   })
 })
