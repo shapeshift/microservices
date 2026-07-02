@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 
-import { calculateFeeForSwap, getPartnerFeeRate, toSwap } from '../../apps/swap-service/src/swaps/utils'
+import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../../apps/swap-service/src/swaps/utils'
 
 import type { PartnerPayout, PayoutRecord } from './types'
 import { aggregateByPartner, buildPayouts, buildRecord, resolveWindow, toCsv } from './utils'
@@ -88,7 +88,7 @@ async function generate(monthArg: string | undefined, force: boolean): Promise<v
   console.log(`Found ${rows.length} successful swaps with a partner code`)
 
   const { partners, unpriceableSwaps, anomalies, unverified, noAffiliateFee, partnerBpsUnset, unresolvedFee } =
-    aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeRate })
+    aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
 
   const affiliates = await prisma.affiliate.findMany({
     where: { partnerCode: { in: Array.from(partners.keys()) } },

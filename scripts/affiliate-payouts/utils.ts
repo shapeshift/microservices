@@ -141,8 +141,7 @@ export function aggregateByPartner<S>(
       continue
     }
 
-    const rate = deps.getPartnerFeeRate(fee.verifiedBps, row.partnerBps)
-    if (rate <= 0) {
+    if (row.partnerBps <= 0) {
       partnerBpsUnset.push({
         swapId: row.swapId,
         partnerCode,
@@ -159,9 +158,10 @@ export function aggregateByPartner<S>(
       feesEarnedUsd: new BigNumber(0),
     }
 
+    // Pay only on the verified on-chain fee, via the shared exact partner-share helper.
     accrual.swapCount += 1
     accrual.volumeUsd = accrual.volumeUsd.plus(fee.volumeUsd)
-    accrual.feesEarnedUsd = accrual.feesEarnedUsd.plus(new BigNumber(fee.actualFeeUsd).times(rate))
+    accrual.feesEarnedUsd = accrual.feesEarnedUsd.plus(deps.getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, row.partnerBps))
 
     partners.set(partnerCode.toLowerCase(), accrual)
   }

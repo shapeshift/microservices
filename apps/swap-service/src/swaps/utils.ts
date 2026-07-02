@@ -56,9 +56,13 @@ export const formatAmount = (amount: string | number): string => {
     .replace(/\.?0+$/, '')
 }
 
-export const getPartnerFeeRate = (verifiedBps: number, partnerBps: number): number => {
-  if (verifiedBps <= 0) return 0
-  return Math.min(partnerBps / verifiedBps, 1)
+// The partner's share of the affiliate fee in USD, as an exact string. Multiplies before dividing
+// (feeUsd × partnerBps ÷ verifiedBps) so the result stays precise — computing a partnerBps/verifiedBps
+// rate first (e.g. 50/60) would introduce lossy-float artifacts. Capped at the whole fee.
+export const getPartnerFeeUsd = (feeUsd: number, verifiedBps: number, partnerBps: number): string => {
+  if (verifiedBps <= 0) return '0'
+  const share = bnOrZero(feeUsd).times(partnerBps).div(verifiedBps)
+  return (share.gt(feeUsd) ? bnOrZero(feeUsd) : share).toString()
 }
 
 export const computeSellAmountUsd = (

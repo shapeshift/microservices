@@ -36,7 +36,8 @@ const stubDeps: FeeDeps<PrismaSwap> = {
     if (r.priceable === false) return null
     return { feeUsd: 12, volumeUsd: 2000, verifiedBps: 60, actualFeeUsd: 12, impliedFeeUsd: 12, ...r.fee }
   },
-  getPartnerFeeRate: (verifiedBps, partnerBps) => (verifiedBps <= 0 ? 0 : Math.min(partnerBps / verifiedBps, 1)),
+  getPartnerFeeUsd: (feeUsd, verifiedBps, partnerBps) =>
+    verifiedBps <= 0 ? '0' : BigNumber.min(new BigNumber(feeUsd).times(partnerBps).div(verifiedBps), feeUsd).toString(),
 }
 
 const accrual = (over: Partial<PartnerAccrual> & Pick<PartnerAccrual, 'partnerCode'>): PartnerAccrual => ({
