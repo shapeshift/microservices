@@ -35,7 +35,6 @@ import {
   calculateFeeForSwap,
   computeSellAmountUsd,
   fetchUsdPrices,
-  getPartnerFeeRate,
   toSwap,
   toSwapperSwap,
 } from './utils'
@@ -297,39 +296,6 @@ export class SwapsService {
 
     logger.log(
       `Referral fees for ${referralCode}\n` +
-        `  period:   ${fees.periodCount} swaps, $${fees.periodVolumeUsd.toFixed(2)} volume, $${fees.periodFeesUsd.toFixed(2)} fee\n` +
-        `  all-time: ${fees.allTimeCount} swaps, $${fees.allTimeFeesUsd.toFixed(2)} fee`,
-    )
-
-    return {
-      swapCount: fees.periodCount,
-      periodVolumeUsd: fees.periodVolumeUsd.toFixed(2),
-      periodFeeUsd: fees.periodFeesUsd.toFixed(2),
-      allTimeFeeUsd: fees.allTimeFeesUsd.toFixed(2),
-      periodStart: startDate?.toISOString(),
-      periodEnd: endDate?.toISOString(),
-    }
-  }
-
-  async calculateAffiliateFees(partnerCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
-    logger.log(
-      `Calculating affiliate fees for ${partnerCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
-    )
-
-    const fees = await this.aggregateFees({
-      baseWhere: { partnerCode, isAffiliateVerified: true, status: 'SUCCESS', origin: 'api' },
-      startDate,
-      endDate,
-      calcFee: (swap) => {
-        const fee = calculateFeeForSwap(swap)
-        if (!fee) return null
-        const rate = getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)
-        return { feeUsd: fee.feeUsd * rate, volumeUsd: fee.volumeUsd }
-      },
-    })
-
-    logger.log(
-      `Affiliate fees for ${partnerCode}\n` +
         `  period:   ${fees.periodCount} swaps, $${fees.periodVolumeUsd.toFixed(2)} volume, $${fees.periodFeesUsd.toFixed(2)} fee\n` +
         `  all-time: ${fees.allTimeCount} swaps, $${fees.allTimeFeesUsd.toFixed(2)} fee`,
     )

@@ -41,13 +41,4 @@ export class SwapsController {
   ) {
     return this.swapsService.calculateReferralFees(referralCode, startDate, endDate)
   }
-
-  @Get('affiliate-fees/:partnerCode')
-  async getAffiliateFees(
-    @Param('partnerCode') partnerCode: string,
-    @Query('startDate', OptionalDatePipe) startDate?: Date,
-    @Query('endDate', OptionalDatePipe) endDate?: Date,
-  ) {
-    return this.swapsService.calculateAffiliateFees(partnerCode, startDate, endDate)
-  }
 }
