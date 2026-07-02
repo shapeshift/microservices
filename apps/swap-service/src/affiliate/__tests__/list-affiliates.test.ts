@@ -2,7 +2,7 @@ import type { PrismaService } from '../../prisma/prisma.service'
 import { AffiliateService } from '../affiliate.service'
 
 const prismaWith = (findMany: jest.Mock): PrismaService =>
-  ({ affiliate: { findMany }, swap: { findMany: jest.fn() } } as unknown as PrismaService)
+  ({ affiliate: { findMany }, swap: { findMany: jest.fn() } }) as unknown as PrismaService
 
 describe('AffiliateService.listAffiliates', () => {
   it('maps affiliates to { partnerCode, bps, isActive }', async () => {
