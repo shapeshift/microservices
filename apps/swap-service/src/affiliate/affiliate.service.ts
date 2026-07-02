@@ -3,7 +3,6 @@ import { Affiliate, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { SHAPESHIFT_BPS } from '../swaps/constants'
-import { PaginatedSwaps } from '../swaps/types'
 import { calculateFeeForSwap, getPartnerFeeRate, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
@@ -105,15 +104,15 @@ export class AffiliateService {
   }
 
   async getAffiliateSwaps(
-    partnerCode: string,
+    partnerCode: string | undefined,
     options: { startDate?: Date; endDate?: Date; limit: number; cursor?: string },
-  ): Promise<PaginatedSwaps> {
+  ) {
     const { startDate, endDate, limit, cursor } = options
 
     const items = await this.prisma.swap.findMany({
       ...swapCursorArgs(limit, cursor),
       where: {
-        partnerCode,
+        partnerCode: partnerCode ?? { not: null },
         ...(startDate || endDate
           ? {
               createdAt: {
@@ -125,8 +124,18 @@ export class AffiliateService {
       },
     })
 
+    const swaps = items.map((item) => {
+      const swap = toSwap(item)
+      const fee = calculateFeeForSwap(swap)
+      const affiliateBps = fee?.verifiedBps ?? null
+      const feeUsd = fee?.feeUsd ?? null
+      const volumeUsd = fee?.volumeUsd ?? null
+      const partnerFeeUsd = fee ? fee.feeUsd * getPartnerFeeRate(fee.verifiedBps, swap.partnerBps) : null
+      return { ...swap, affiliateBps, feeUsd, partnerFeeUsd, volumeUsd }
+    })
+
     return {
-      swaps: items.map(toSwap),
+      swaps,
       nextCursor: getNextCursor(items, limit),
     }
   }
