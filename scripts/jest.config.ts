@@ -3,7 +3,7 @@ import type { Config } from 'jest'
 const config: Config = {
   rootDir: '.',
   testRegex: '.*\\.test\\.ts$',
-  transform: { '^.+\\.ts$': ['ts-jest', { isolatedModules: true }] },
+  transform: { '^.+\\.ts$': 'ts-jest' },
   moduleFileExtensions: ['ts', 'js', 'json'],
   testEnvironment: 'node',
 }

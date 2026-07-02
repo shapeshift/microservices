@@ -32,7 +32,7 @@
     "db:migrate:create": "prisma migrate dev --create-only --name",
     "db:studio": "prisma studio",
     "referral-rewards": "ts-node scripts/referral-rewards.ts",
-    "affiliate-payouts": "ts-node --transpile-only scripts/affiliate-payouts.ts",
+    "affiliate-payouts": "ts-node --transpile-only scripts/affiliate-payouts/affiliate-payouts.ts",
     "affiliate-payouts:test": "jest --config scripts/jest.config.ts"
   },
   "dependencies": {
