@@ -74,7 +74,7 @@ export type AggregateResult = {
 export type FeeDeps<S> = {
   toSwap: (row: PrismaSwap) => S
   calculateFeeForSwap: (swap: S) => FeeResult | null
-  getPartnerFeeRate: (verifiedBps: number, partnerBps: number) => number
+  getPartnerFeeUsd: (feeUsd: number, verifiedBps: number, partnerBps: number) => string
 }
 
 export type PayoutWarning = {

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { Affiliate, Prisma } from '@prisma/client'
+
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
 import { PrismaService } from '../prisma/prisma.service'
