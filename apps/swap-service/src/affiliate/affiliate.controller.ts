@@ -41,8 +41,8 @@ export class AffiliateController {
   }
 
   @Get()
-  async list() {
-    return this.affiliateService.listAffiliates()
+  async getAffiliates() {
+    return this.affiliateService.getAffiliates()
   }
 
   @Get(':address')

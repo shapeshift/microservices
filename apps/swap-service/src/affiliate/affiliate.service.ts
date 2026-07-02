@@ -13,6 +13,10 @@ import { isReservedPartnerCode } from './utils'
 export class AffiliateService {
   constructor(private prisma: PrismaService) {}
 
+  async getAffiliates(): Promise<Affiliate[]> {
+    return this.prisma.affiliate.findMany()
+  }
+
   async getAffiliateByWalletAddress(walletAddress: string): Promise<Affiliate | null> {
     const affiliate = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
     if (!affiliate) return null
@@ -138,11 +142,6 @@ export class AffiliateService {
       swaps,
       nextCursor: getNextCursor(items, limit),
     }
-  }
-
-  async listAffiliates(): Promise<{ partnerCode: string; bps: number; isActive: boolean }[]> {
-    const rows = await this.prisma.affiliate.findMany()
-    return rows.map(({ partnerCode, bps, isActive }) => ({ partnerCode, bps, isActive }))
   }
 
   async resolvePartnerCode(partnerCode: string) {
