@@ -122,3 +122,60 @@ describe('AffiliateService attribution reads', () => {
     expect(result).toEqual({ totalSwaps: 0, totalVolumeUsd: '0.00', totalFeesEarnedUsd: '0.00' })
   })
 })
+
+describe('AffiliateService.getAffiliateSwaps fee-split enrichment', () => {
+  const swapRow = (over: Record<string, unknown> = {}) => ({
+    swapId: 's1',
+    partnerCode: 'alpha',
+    swapperName: 'THORChain',
+    sellTxHash: '0xAAA',
+    buyTxHash: null,
+    partnerBps: 50,
+    shapeshiftBps: 10,
+    affiliateBps: 55,
+    status: 'SUCCESS',
+    isAffiliateVerified: true,
+    sellAsset: { precision: 8 },
+    buyAsset: {},
+    metadata: {},
+    sellAmountCryptoBaseUnit: '100000000',
+    sellAssetUsd: '10',
+    actualAffiliateFeeAmountCryptoBaseUnit: null,
+    affiliateFeeAssetId: null,
+    affiliateAssetUsd: null,
+    affiliateVerificationDetails: {
+      hasAffiliate: true,
+      affiliateBps: 60,
+      verifiedSellAmountCryptoBaseUnit: '100000000',
+    },
+    createdAt: new Date('2026-06-01T12:00:00.000Z'),
+    updatedAt: new Date('2026-06-01T12:00:00.000Z'),
+    ...over,
+  })
+
+  it('derives feeUsd/partnerFeeUsd/volumeUsd from the verified fee and preserves stored affiliateBps', async () => {
+    const findMany = jest.fn().mockResolvedValue([swapRow()])
+    const service = new AffiliateService(makePrismaMock(undefined, findMany))
+
+    const { swaps } = await service.getAffiliateSwaps(undefined, { limit: 50 })
+
+    // verifiedBps 60, sell 1.0 unit @ $10 => feeUsd = 10 * 60/10000 = 0.06 (full-precision string, no rounding)
+    // partner share = feeUsd * partnerBps/verifiedBps = 0.06 * 50/60 = 0.05
+    expect(swaps[0].feeUsd).toBe('0.06')
+    expect(swaps[0].partnerFeeUsd).toBe('0.05')
+    expect(swaps[0].volumeUsd).toBe('10')
+    // stored affiliateBps (55) passes through untouched — not overwritten with verifiedBps (60)
+    expect(swaps[0].affiliateBps).toBe(55)
+  })
+
+  it('nulls the fee fields when the swap is unpriceable (no verified fee)', async () => {
+    const findMany = jest.fn().mockResolvedValue([swapRow({ affiliateVerificationDetails: null })])
+    const service = new AffiliateService(makePrismaMock(undefined, findMany))
+
+    const { swaps } = await service.getAffiliateSwaps(undefined, { limit: 50 })
+
+    expect(swaps[0]).toMatchObject({ feeUsd: null, partnerFeeUsd: null, volumeUsd: null })
+    // stored affiliateBps is untouched even when the fee can't be computed
+    expect(swaps[0].affiliateBps).toBe(55)
+  })
+})
