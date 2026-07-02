@@ -61,6 +61,15 @@ export const getPartnerFeeRate = (verifiedBps: number, partnerBps: number): numb
   return Math.min(partnerBps / verifiedBps, 1)
 }
 
+// The partner's share of the affiliate fee in USD, as an exact string. Multiplies before dividing
+// (feeUsd × partnerBps ÷ verifiedBps) so the result stays precise — unlike feeUsd × getPartnerFeeRate,
+// where the intermediate rate (e.g. 50/60) is a lossy float. Capped at the whole fee, matching the rate cap.
+export const getPartnerFeeUsd = (feeUsd: number, verifiedBps: number, partnerBps: number): string => {
+  if (verifiedBps <= 0) return '0'
+  const share = bnOrZero(feeUsd).times(partnerBps).div(verifiedBps)
+  return (share.gt(feeUsd) ? bnOrZero(feeUsd) : share).toString()
+}
+
 export const computeSellAmountUsd = (
   sellAmountCryptoBaseUnit: string,
   precision: number,

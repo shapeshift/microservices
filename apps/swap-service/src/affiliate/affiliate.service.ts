@@ -3,7 +3,7 @@ import { Affiliate, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { SHAPESHIFT_BPS } from '../swaps/constants'
-import { calculateFeeForSwap, getPartnerFeeRate, toSwap } from '../swaps/utils'
+import { calculateFeeForSwap, getPartnerFeeRate, getPartnerFeeUsd, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
 import type { AffiliateStatsResult, CreateAffiliateDto, UpdateAffiliateDto } from './types'
@@ -133,7 +133,7 @@ export class AffiliateService {
       const fee = calculateFeeForSwap(swap)
       const feeUsd = fee ? fee.feeUsd.toString() : null
       const volumeUsd = fee ? fee.volumeUsd.toString() : null
-      const partnerFeeUsd = fee ? (fee.feeUsd * getPartnerFeeRate(fee.verifiedBps, swap.partnerBps)).toString() : null
+      const partnerFeeUsd = fee ? getPartnerFeeUsd(fee.feeUsd, fee.verifiedBps, swap.partnerBps) : null
       return { ...swap, feeUsd, partnerFeeUsd, volumeUsd }
     })
 
