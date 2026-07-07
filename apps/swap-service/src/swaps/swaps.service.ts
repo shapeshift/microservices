@@ -423,7 +423,7 @@ export class SwapsService {
           verificationStatus: verificationResult.verificationStatus,
           isAffiliateVerified,
           affiliateFeeAssetId: verificationResult.actualAffiliateFeeAssetId,
-          affiliateAssetUsd: verificationResult.actualAffiliateFeeUsd,
+          affiliateAssetUsd: verificationResult.actualAffiliateAssetUsd,
           affiliateVerificationDetails: isAffiliateVerified ? affiliateVerificationDetails : Prisma.DbNull,
           actualBuyAmountCryptoBaseUnit: verificationResult.actualBuyAmountCryptoBaseUnit,
           actualAffiliateFeeAmountCryptoBaseUnit: verificationResult.actualAffiliateFeeAmountCryptoBaseUnit,

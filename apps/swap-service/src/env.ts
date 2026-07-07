@@ -119,6 +119,7 @@ export const env = Object.freeze({
   VITE_ACROSS_API_URL: 'https://app.across.to/api',
   VITE_BEBOP_API_URL: 'https://api.bebop.xyz',
   VITE_CHAINFLIP_API_URL: 'https://chainflip-broker.io',
+  VITE_CHAINFLIP_EXPLORER_URL: 'https://explorer-service-processor.chainflip.io/graphql',
   VITE_COWSWAP_BASE_URL: 'https://api.cow.fi',
   VITE_DEBRIDGE_API_URL: '',
   VITE_NEAR_FAST_API_URL: 'https://api.fastnear.com',

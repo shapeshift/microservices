@@ -1,0 +1,60 @@
+{
+    "data": {
+        "swapRequest": {
+            "executedSwaps": {
+                "aggregates": {
+                    "sum": {
+                        "swapInputAmount": "3199906"
+                    }
+                }
+            },
+            "egress": {
+                "amount": "1989934751"
+            },
+            "beneficiaries": {
+                "nodes": [
+                    {
+                        "type": "SUBMITTER",
+                        "brokerCommissionRateBps": 5,
+                        "commissions": {
+                            "groupedAggregates": [
+                                {
+                                    "asset": [
+                                        "Usdc"
+                                    ],
+                                    "sum": {
+                                        "amount": "1000896",
+                                        "valueUsd": "1.000686756100000000000000000000"
+                                    }
+                                }
+                            ]
+                        },
+                        "account": {
+                            "idSs58": "cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH"
+                        }
+                    },
+                    {
+                        "type": "AFFILIATE",
+                        "brokerCommissionRateBps": 60,
+                        "commissions": {
+                            "groupedAggregates": [
+                                {
+                                    "asset": [
+                                        "Usdc"
+                                    ],
+                                    "sum": {
+                                        "amount": "12010758",
+                                        "valueUsd": "12.008247071600000000000000000000"
+                                    }
+                                }
+                            ]
+                        },
+                        "account": {
+                            "idSs58": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}
