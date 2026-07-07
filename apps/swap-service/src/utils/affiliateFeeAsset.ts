@@ -1,5 +1,5 @@
 import type { AssetId } from '@shapeshiftoss/caip'
-import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
+import { mayachainAssetId, thorchainAssetId, usdcAssetId } from '@shapeshiftoss/caip'
 import { SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
@@ -13,7 +13,7 @@ const SWAPPER_FEE_STRATEGY: Record<SwapperName, FeeAssetStrategy> = {
   [SwapperName.BobGateway]: null,
   [SwapperName.ButterSwap]: 'buy_asset',
   [SwapperName.Cetus]: 'buy_asset',
-  [SwapperName.Chainflip]: 'buy_asset',
+  [SwapperName.Chainflip]: usdcAssetId,
   [SwapperName.CowSwap]: 'sell_asset',
   [SwapperName.Debridge]: 'sell_asset',
   [SwapperName.Mayachain]: mayachainAssetId,

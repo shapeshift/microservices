@@ -122,14 +122,50 @@ export interface PortalsOrderResponse {
   }
 }
 
-export interface ChainflipSwapResponse {
-  affiliate?: string
-  affiliateName?: string
-  affiliateBps?: string
-  affiliateFee?: string
-  depositAmount?: string
-  ingressAmount?: string
-  sourceAmount?: string
+// Shape of the (trimmed) Chainflip explorer `GetSwapByNativeId` response — see chainflip.query.ts.
+// Only the fields the verifier consumes are fetched and typed.
+export interface ChainflipCommissionAggregate {
+  // `keys` from groupBy: ASSET — a single-element array of the Chainflip asset symbol, e.g. ["Usdc"].
+  asset?: string[]
+  sum?: {
+    amount?: string
+    valueUsd?: string
+  }
+}
+
+export interface ChainflipBeneficiary {
+  type?: string
+  brokerCommissionRateBps?: number
+  commissions?: {
+    groupedAggregates?: ChainflipCommissionAggregate[]
+  }
+  account?: {
+    idSs58?: string
+  }
+}
+
+export interface ChainflipSwapRequest {
+  // Sum of the amounts actually swapped (excludes any refunded portion), in the source asset base unit.
+  executedSwaps?: {
+    aggregates?: {
+      sum?: {
+        swapInputAmount?: string
+      }
+    }
+  }
+  egress?: {
+    amount?: string
+  }
+  beneficiaries?: {
+    nodes?: ChainflipBeneficiary[]
+  }
+}
+
+export interface ChainflipExplorerResponse {
+  data?: {
+    swapRequest?: ChainflipSwapRequest | null
+  }
+  errors?: Array<{ message?: string }>
 }
 
 export interface ZrxTrade {

@@ -124,7 +124,7 @@ export interface SwapVerificationResult {
   actualBuyAmountCryptoBaseUnit: string | undefined
   actualAffiliateFeeAmountCryptoBaseUnit: string | undefined
   actualAffiliateFeeAssetId?: string
-  actualAffiliateFeeUsd?: string
+  actualAffiliateAssetUsd?: string
   noAffiliateReason?: string
 }
 

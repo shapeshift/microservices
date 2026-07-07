@@ -3,7 +3,7 @@ import type { Swap as PrismaSwap } from '@prisma/client'
 
 import type { CreateSwapDto } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
-import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
+import { mayachainAssetId, thorchainAssetId, usdcAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapperName, SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
@@ -16,10 +16,9 @@ const logger = new Logger('SwapsService')
 
 const BPS_DENOMINATOR = 10000
 
-// Native precisions of the THORChain/Maya native fee assets — the precision the affiliate fee
-// amount is stored in for these chains.
 const RUNE_PRECISION = 8
 const CACAO_PRECISION = 10
+const USDC_PRECISION = 6
 
 // Historical rows may persist `{}` for affiliateVerificationDetails; coerce anything
 // that doesn't satisfy the tightened shape (requires `hasAffiliate`) to null.
@@ -147,6 +146,11 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
       // Mayachain collects the affiliate fee in CACAO.
       priceUsd = swap.affiliateAssetUsd
       precision = CACAO_PRECISION
+      break
+    case usdcAssetId:
+      // Chainflip collects the affiliate fee in USDC.
+      priceUsd = swap.affiliateAssetUsd
+      precision = USDC_PRECISION
       break
     default:
       priceUsd = swap.affiliateAssetUsd

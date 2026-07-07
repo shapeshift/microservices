@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { firstValueFrom } from 'rxjs'
 
 import { SwapVerificationResult } from '@shapeshift/shared-types'
+import { usdcAssetId } from '@shapeshiftoss/caip'
 import {
   assertGetCowNetwork,
   getTreasuryAddressFromChainId,
@@ -15,12 +16,13 @@ import { env } from '../env'
 import type { Swap } from '../swaps/types'
 import { getAssetPriceUsd } from '../utils/pricing'
 
+import { GET_SWAP_BY_NATIVE_ID_OPERATION, GET_SWAP_BY_NATIVE_ID_QUERY } from './chainflip.query'
 import {
   AcrossDepositStatusResponse,
   BebopTrade,
   BebopTradesResponse,
   ButterBridgeInfoApiResponse,
-  ChainflipSwapResponse,
+  ChainflipExplorerResponse,
   CowSwapAppDataResponse,
   CowSwapDecodedAppData,
   CowSwapOrderResponse,
@@ -40,15 +42,12 @@ export class SwapVerificationService {
   private readonly shapeshift0xIntegrator = 'ShapeShift'
   private readonly shapeshiftBebopSource = 'shapeshift'
   private readonly shapeshiftButterswapEntrance = 'shapeshift'
-  private readonly shapeshiftChainflipAffiliate = 'shapeshift'
   private readonly shapeshiftCowswapAppCode = 'shapeshift'
 
   private readonly bebopApiKey = env.VITE_BEBOP_API_KEY
-  private readonly chainflipApiKey = env.VITE_CHAINFLIP_API_KEY
 
   private readonly acrossApiUrl = env.VITE_ACROSS_API_URL
   private readonly bebopApiUrl = env.VITE_BEBOP_API_URL
-  private readonly chainflipApiUrl = env.VITE_CHAINFLIP_API_URL
   private readonly cowswapApiUrl = env.VITE_COWSWAP_BASE_URL
   private readonly portalsApiUrl = env.VITE_PORTALS_BASE_URL
   private readonly zrxApiUrl = env.VITE_ZRX_BASE_URL
@@ -73,7 +72,7 @@ export class SwapVerificationService {
           case SwapperName.Thorchain:
             return await this.verifyThorchain(swap)
           case SwapperName.Mayachain:
-            return await this.verifyMaya(swap)
+            return await this.verifyMayachain(swap)
           case SwapperName.Chainflip:
             return await this.verifyChainflip(swap)
           case SwapperName.Zrx:
@@ -198,7 +197,7 @@ export class SwapVerificationService {
       }
     })()
 
-    const actualAffiliateFeeUsd = await (async () => {
+    const actualAffiliateAssetUsd = await (async () => {
       if (!actualAffiliateFeeAssetId) return
 
       if (actualAffiliateFeeAssetId === swap.sellAsset.assetId) return swap.sellAssetUsd
@@ -218,7 +217,7 @@ export class SwapVerificationService {
       actualBuyAmountCryptoBaseUnit: request.data.metadata?.currencyOut?.amount,
       actualAffiliateFeeAmountCryptoBaseUnit: shapeshiftFee?.amount,
       actualAffiliateFeeAssetId,
-      actualAffiliateFeeUsd: actualAffiliateFeeUsd ?? undefined,
+      actualAffiliateAssetUsd: actualAffiliateAssetUsd ?? undefined,
     }
   }
 
@@ -337,7 +336,7 @@ export class SwapVerificationService {
     })
   }
 
-  private verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
+  private verifyMayachain(swap: Swap): Promise<SwapVerificationResult> {
     return this.verifyMidgardSwap(swap, {
       midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
       affiliate: 'ssmaya',
@@ -400,42 +399,63 @@ export class SwapVerificationService {
 
   private async verifyChainflip(swap: Swap): Promise<SwapVerificationResult> {
     const metadata = swap.metadata as Record<string, any>
-    const chainflipSwapId = metadata?.chainflipSwapId as string | undefined
 
+    const chainflipSwapId = metadata?.chainflipSwapId as string | undefined
     if (!chainflipSwapId) return noAffiliateResult('FAILED', 'Missing chainflipSwapId in metadata')
 
-    const statusUrl = `${this.chainflipApiUrl}/swaps/${chainflipSwapId}`
+    const { data } = await firstValueFrom(
+      this.httpService.post<ChainflipExplorerResponse>(env.VITE_CHAINFLIP_EXPLORER_URL, {
+        operationName: GET_SWAP_BY_NATIVE_ID_OPERATION,
+        query: GET_SWAP_BY_NATIVE_ID_QUERY,
+        variables: { nativeId: chainflipSwapId },
+      }),
+    )
 
-    const headers: Record<string, string> = {}
-    if (this.chainflipApiKey) {
-      headers['Authorization'] = `Bearer ${this.chainflipApiKey}`
+    if (data?.errors?.length) {
+      this.logger.error(
+        `Chainflip explorer returned errors for swap ${chainflipSwapId}: ${JSON.stringify(data.errors)}`,
+      )
     }
 
-    const response = await firstValueFrom(this.httpService.get<ChainflipSwapResponse>(statusUrl, { headers }))
+    const swapRequest = data?.data?.swapRequest
+    if (!swapRequest) return noAffiliateResult('PENDING', 'No swap request found from Chainflip explorer')
 
-    const swapData = response.data
+    const affiliate = (swapRequest.beneficiaries?.nodes ?? []).find(
+      (beneficiary) =>
+        beneficiary.type === 'AFFILIATE' &&
+        beneficiary.account?.idSs58?.toLowerCase() ===
+          'cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi'.toLowerCase(),
+    )
 
-    if (!swapData) return noAffiliateResult('PENDING', 'No swap data found from Chainflip API')
+    const commissions = affiliate?.commissions?.groupedAggregates ?? []
+    const commission = commissions[0]
+    const commissionAsset = commission?.asset?.[0]
 
-    const affiliate = swapData.affiliate || swapData.affiliateName
-    const affiliateBps = swapData.affiliateBps || swapData.affiliateFee
+    const hasAffiliate = Boolean(affiliate)
 
-    const hasShapeshiftAffiliate = affiliate?.toLowerCase() === this.shapeshiftChainflipAffiliate.toLowerCase()
+    if (hasAffiliate) {
+      if (commissions.length === 0) {
+        return noAffiliateResult('PENDING', `Chainflip commission not yet indexed for swap ${chainflipSwapId}`)
+      }
 
-    const verifiedSellAmountCryptoBaseUnit = (
-      swapData.depositAmount ??
-      swapData.ingressAmount ??
-      swapData.sourceAmount
-    )?.toString()
+      if (commissions.length !== 1 || commissionAsset?.toLowerCase() !== 'usdc') {
+        return noAffiliateResult(
+          'FAILED',
+          `Unexpected Chainflip commission for swap ${chainflipSwapId}: ${commissions.length} group(s), asset "${commissionAsset ?? 'none'}"`,
+        )
+      }
+    }
 
     return {
       verificationStatus: 'SUCCESS',
-      hasAffiliate: hasShapeshiftAffiliate,
-      affiliateBps: hasShapeshiftAffiliate && affiliateBps ? parseInt(String(affiliateBps)) : undefined,
-      affiliateAddress: hasShapeshiftAffiliate ? this.shapeshiftChainflipAffiliate : undefined,
-      verifiedSellAmountCryptoBaseUnit,
-      actualBuyAmountCryptoBaseUnit: undefined,
-      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+      hasAffiliate,
+      affiliateBps: hasAffiliate ? affiliate?.brokerCommissionRateBps : undefined,
+      affiliateAddress: hasAffiliate ? affiliate?.account?.idSs58 : undefined,
+      // Amount actually swapped (excludes any refunded portion on partial FoK fills), not the gross deposit.
+      verifiedSellAmountCryptoBaseUnit: swapRequest.executedSwaps?.aggregates?.sum?.swapInputAmount,
+      actualBuyAmountCryptoBaseUnit: swapRequest.egress?.amount,
+      actualAffiliateFeeAmountCryptoBaseUnit: hasAffiliate ? commission?.sum?.amount : undefined,
+      actualAffiliateFeeAssetId: hasAffiliate ? usdcAssetId : undefined,
     }
   }
 

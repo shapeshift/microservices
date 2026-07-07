@@ -161,7 +161,9 @@ export function aggregateByPartner<S>(
     // Pay only on the verified on-chain fee, via the shared exact partner-share helper.
     accrual.swapCount += 1
     accrual.volumeUsd = accrual.volumeUsd.plus(fee.volumeUsd)
-    accrual.feesEarnedUsd = accrual.feesEarnedUsd.plus(deps.getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, row.partnerBps))
+    accrual.feesEarnedUsd = accrual.feesEarnedUsd.plus(
+      deps.getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, row.partnerBps),
+    )
 
     partners.set(partnerCode.toLowerCase(), accrual)
   }
