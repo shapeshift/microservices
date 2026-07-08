@@ -33,8 +33,8 @@ describe('verifyMaya', () => {
       affiliateAddress: 'ssmaya',
       verifiedSellAmountCryptoBaseUnit: '4000000000000000',
       actualBuyAmountCryptoBaseUnit: '7340228',
-      // CACAO fee from Midgard (1e8) scaled to native precision 10: 4237779000 × 100
-      actualAffiliateFeeAmountCryptoBaseUnit: '423777900000',
+      // Midgard reports CACAO in native 1e10 precision, so the raw affiliate out amount is used as-is.
+      actualAffiliateFeeAmountCryptoBaseUnit: '4237779000',
     })
   })
 
@@ -64,7 +64,7 @@ describe('verifyMaya', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('returns hasAffiliate=false when affiliateAddress is ssmaya but no fee was paid out', async () => {
+  it('attributes affiliate with no fee amount when affiliateAddress is ssmaya but no fee was paid out', async () => {
     const response = structuredClone(mayaResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !('affiliate' in out && out.affiliate))
 
@@ -72,10 +72,10 @@ describe('verifyMaya', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.hasAffiliate).toBe(false)
-    expect(result.affiliateAddress).toBeUndefined()
-    expect(result.affiliateBps).toBeUndefined()
-    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
+    expect(result.hasAffiliate).toBe(true)
+    expect(result.affiliateAddress).toBe('ssmaya')
+    expect(result.affiliateBps).toBe(60)
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('0')
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {

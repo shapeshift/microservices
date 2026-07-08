@@ -169,7 +169,7 @@ export const calculateFeeForSwap = (
   impliedFeeUsd: number | null
 } | null => {
   const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps
-  if (!verifiedBps) {
+  if (verifiedBps === undefined) {
     logger.warn(`Verified swap ${swap.swapId} missing affiliate bps in verification details, skipping`)
     return null
   }
