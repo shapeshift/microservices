@@ -4,17 +4,17 @@ import { of, throwError } from 'rxjs'
 import type { Swap } from '../../swaps/types'
 import { SwapVerificationService } from '../swap-verification.service'
 
-import mayaResponse from './fixtures/maya/response.json'
-import mayaSwap from './fixtures/maya/swap'
+import mayachainResponse from './fixtures/mayachain/response.json'
+import mayachainSwap from './fixtures/mayachain/swap'
 
-const swap = mayaSwap as unknown as Swap
+const swap = mayachainSwap as unknown as Swap
 
 const makeHttpMock = (response: unknown): HttpService => {
   const get = jest.fn().mockReturnValue(of({ data: response }))
   return { get } as unknown as HttpService
 }
 
-describe('verifyMaya', () => {
+describe('verifyMayachain', () => {
   let service: SwapVerificationService
 
   beforeEach(() => {
@@ -22,7 +22,7 @@ describe('verifyMaya', () => {
   })
 
   it('verifies a successful swap with shapeshift affiliate', async () => {
-    service = new SwapVerificationService(makeHttpMock(mayaResponse))
+    service = new SwapVerificationService(makeHttpMock(mayachainResponse))
 
     const result = await service.verifySwap(swap)
 
@@ -39,7 +39,7 @@ describe('verifyMaya', () => {
   })
 
   it('strips 0x prefix from sellTxHash before calling Midgard', async () => {
-    const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: mayaResponse }))
+    const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: mayachainResponse }))
     service = new SwapVerificationService({ get } as unknown as HttpService)
 
     await service.verifySwap(swap)
@@ -50,7 +50,7 @@ describe('verifyMaya', () => {
   })
 
   it('does not attribute affiliate fields when the action affiliate is not ssmaya', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].metadata.swap.affiliateAddress = 'other'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -65,7 +65,7 @@ describe('verifyMaya', () => {
   })
 
   it('attributes affiliate with no fee amount when affiliateAddress is ssmaya but no fee was paid out', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !('affiliate' in out && out.affiliate))
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -79,7 +79,7 @@ describe('verifyMaya', () => {
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {
-    service = new SwapVerificationService(makeHttpMock(mayaResponse))
+    service = new SwapVerificationService(makeHttpMock(mayachainResponse))
 
     const result = await service.verifySwap({ ...swap, sellTxHash: null } as Swap)
 
@@ -100,7 +100,7 @@ describe('verifyMaya', () => {
   })
 
   it('returns PENDING when the action is still pending', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].status = 'pending'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -112,7 +112,7 @@ describe('verifyMaya', () => {
   })
 
   it('returns FAILED when the action type is not swap', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].type = 'addLiquidity'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -124,7 +124,7 @@ describe('verifyMaya', () => {
   })
 
   it('returns FAILED when swap metadata is missing', async () => {
-    const response = structuredClone(mayaResponse) as {
+    const response = structuredClone(mayachainResponse) as {
       actions: Array<{ metadata: { swap?: unknown } }>
     }
     delete response.actions[0].metadata.swap
@@ -138,7 +138,7 @@ describe('verifyMaya', () => {
   })
 
   it('selects the buy out by memo destination rather than array position', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].out.reverse()
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -149,7 +149,7 @@ describe('verifyMaya', () => {
   })
 
   it('returns FAILED when no out matches the memo destination', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].out = response.actions[0].out.map((out) =>
       'affiliate' in out && out.affiliate ? out : { ...out, address: '0xdeadbeef' },
     )
@@ -163,7 +163,7 @@ describe('verifyMaya', () => {
   })
 
   it('returns FAILED when the action status is failed (refund)', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].status = 'failed'
 
     service = new SwapVerificationService(makeHttpMock(response))
@@ -175,7 +175,7 @@ describe('verifyMaya', () => {
   })
 
   it('returns FAILED when the memo has no destination address', async () => {
-    const response = structuredClone(mayaResponse)
+    const response = structuredClone(mayachainResponse)
     response.actions[0].metadata.swap.memo = ''
 
     service = new SwapVerificationService(makeHttpMock(response))

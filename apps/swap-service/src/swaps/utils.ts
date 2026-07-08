@@ -16,7 +16,7 @@ const logger = new Logger('SwapsService')
 
 const BPS_DENOMINATOR = 10000
 
-// Native precisions of the THORChain/Maya native fee assets — the precision the affiliate fee
+// Native precisions of the THORChain/MAYAChain native fee assets — the precision the affiliate fee
 // amount is stored in for these chains.
 const RUNE_PRECISION = 8
 const CACAO_PRECISION = 10

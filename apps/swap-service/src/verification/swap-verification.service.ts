@@ -73,7 +73,7 @@ export class SwapVerificationService {
           case SwapperName.Thorchain:
             return await this.verifyThorchain(swap)
           case SwapperName.Mayachain:
-            return await this.verifyMaya(swap)
+            return await this.verifyMayachain(swap)
           case SwapperName.Chainflip:
             return await this.verifyChainflip(swap)
           case SwapperName.Zrx:
@@ -336,7 +336,7 @@ export class SwapVerificationService {
     })
   }
 
-  private verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
+  private verifyMayachain(swap: Swap): Promise<SwapVerificationResult> {
     return this.verifyMidgardSwap(swap, {
       midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
       affiliate: 'ssmaya',
