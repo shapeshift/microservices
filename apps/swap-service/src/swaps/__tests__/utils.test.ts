@@ -10,6 +10,7 @@ import { calculateFeeForSwap } from '../utils'
 const makeSwap = (overrides: Partial<Swap> = {}): Swap =>
   ({
     swapId: 'test-swap',
+    isAffiliateVerified: true,
     sellAsset: { assetId: 'eip155:1/slip44:60', precision: 18 },
     buyAsset: { assetId: 'eip155:1/erc20:0xusdc', precision: 6 },
     sellAssetUsd: '2000',
@@ -29,6 +30,14 @@ const makeSwap = (overrides: Partial<Swap> = {}): Swap =>
 
 describe('calculateFeeForSwap volume reconstruction', () => {
   afterEach(() => jest.restoreAllMocks())
+
+  it('returns null without warning for a swap that is not affiliate-verified', () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+
+    // e.g. a failed / unverified swap surfaced by the partner swaps listing
+    expect(calculateFeeForSwap(makeSwap({ isAffiliateVerified: false, affiliateVerificationDetails: null }))).toBeNull()
+    expect(warn).not.toHaveBeenCalled()
+  })
 
   it('uses the sell-side USD as volume for a 0-bps swap when the sell price is present', () => {
     const result = calculateFeeForSwap(makeSwap())
