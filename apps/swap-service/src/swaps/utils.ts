@@ -168,9 +168,6 @@ export const calculateFeeForSwap = (
   actualFeeUsd: number | null
   impliedFeeUsd: number | null
 } | null => {
-  // Only affiliate-verified swaps can carry a fee. Failed / pending / no-affiliate swaps
-  // legitimately have none, and callers like the swaps listing pass them through — return
-  // quietly without warning. Past this point a missing field is genuinely unexpected.
   if (!swap.isAffiliateVerified) return null
 
   const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps

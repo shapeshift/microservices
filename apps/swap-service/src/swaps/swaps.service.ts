@@ -399,8 +399,11 @@ export class SwapsService {
       return toSwap(
         await this.prisma.swap.update({
           where: { swapId: swap.swapId },
-          // Clear any stale details so isAffiliateVerified=false always implies null details.
-        data: { verificationStatus: 'FAILED', isAffiliateVerified: false, affiliateVerificationDetails: Prisma.DbNull },
+          data: {
+            verificationStatus: 'FAILED',
+            isAffiliateVerified: false,
+            affiliateVerificationDetails: Prisma.DbNull,
+          },
         }),
       )
     }
