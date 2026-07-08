@@ -198,7 +198,14 @@ export const calculateFeeForSwap = (
     return null
   }
 
-  const volumeUsd = sellAmountUsd ?? bnOrZero(actualFeeUsd).times(BPS_DENOMINATOR).div(verifiedBps).toNumber()
+  const volumeUsd = (() => {
+    if (sellAmountUsd !== null) return sellAmountUsd
+    if (verifiedBps === 0) {
+      logger.warn(`Swap ${swap.swapId} has 0 bps and no sell price; volume unknown`)
+      return 0
+    }
+    return bnOrZero(actualFeeUsd).times(BPS_DENOMINATOR).div(verifiedBps).toNumber()
+  })()
 
   return { feeUsd, volumeUsd, verifiedBps, actualFeeUsd, impliedFeeUsd }
 }
