@@ -73,7 +73,7 @@ export class SwapVerificationService {
           case SwapperName.Thorchain:
             return await this.verifyThorchain(swap)
           case SwapperName.Mayachain:
-            return await this.verifyMaya(swap)
+            return await this.verifyMayachain(swap)
           case SwapperName.Chainflip:
             return await this.verifyChainflip(swap)
           case SwapperName.Zrx:
@@ -333,21 +333,19 @@ export class SwapVerificationService {
     return this.verifyMidgardSwap(swap, {
       midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
       affiliate: 'ss',
-      feeAssetPrecision: 8,
     })
   }
 
-  private verifyMaya(swap: Swap): Promise<SwapVerificationResult> {
+  private verifyMayachain(swap: Swap): Promise<SwapVerificationResult> {
     return this.verifyMidgardSwap(swap, {
       midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
       affiliate: 'ssmaya',
-      feeAssetPrecision: 10,
     })
   }
 
   private async verifyMidgardSwap(
     swap: Swap,
-    config: { midgardUrl: string; affiliate: string; feeAssetPrecision: number },
+    config: { midgardUrl: string; affiliate: string },
   ): Promise<SwapVerificationResult> {
     const txHash = swap.sellTxHash?.replace(/^0x/, '')
     if (!txHash) return noAffiliateResult('FAILED', 'Missing sell txHash')
@@ -379,7 +377,7 @@ export class SwapVerificationService {
     if (!buyOut) return noAffiliateResult('FAILED', 'No outbound matching memo destination')
 
     const feeOut = action.out.find((out) => out.affiliate)
-    const hasAffiliate = affiliateAddress === config.affiliate && !!feeOut
+    const hasAffiliate = affiliateAddress === config.affiliate
 
     return {
       verificationStatus: 'SUCCESS',
@@ -391,10 +389,7 @@ export class SwapVerificationService {
         swap.sellAsset.precision,
       ),
       actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(buyOut.coins[0].amount, swap.buyAsset.precision),
-      actualAffiliateFeeAmountCryptoBaseUnit:
-        hasAffiliate && feeOut?.coins[0]?.amount
-          ? thorchainToNativePrecision(feeOut.coins[0].amount, config.feeAssetPrecision)
-          : undefined,
+      actualAffiliateFeeAmountCryptoBaseUnit: hasAffiliate ? (feeOut?.coins[0]?.amount ?? '0') : undefined,
     }
   }
 

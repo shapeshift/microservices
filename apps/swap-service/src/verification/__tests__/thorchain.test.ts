@@ -63,7 +63,7 @@ describe('verifyThorchain', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('returns hasAffiliate=false when affiliateAddress is ss but no fee was paid out', async () => {
+  it('attributes affiliate with no fee amount when affiliateAddress is ss but no fee was paid out', async () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !out.affiliate)
 
@@ -71,10 +71,10 @@ describe('verifyThorchain', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.hasAffiliate).toBe(false)
-    expect(result.affiliateAddress).toBeUndefined()
-    expect(result.affiliateBps).toBeUndefined()
-    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
+    expect(result.hasAffiliate).toBe(true)
+    expect(result.affiliateAddress).toBe('ss')
+    expect(result.affiliateBps).toBe(60)
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('0')
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {

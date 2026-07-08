@@ -16,7 +16,7 @@ const logger = new Logger('SwapsService')
 
 const BPS_DENOMINATOR = 10000
 
-// Native precisions of the THORChain/Maya native fee assets — the precision the affiliate fee
+// Native precisions of the THORChain/MAYAChain native fee assets — the precision the affiliate fee
 // amount is stored in for these chains.
 const RUNE_PRECISION = 8
 const CACAO_PRECISION = 10
@@ -169,7 +169,7 @@ export const calculateFeeForSwap = (
   impliedFeeUsd: number | null
 } | null => {
   const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps
-  if (!verifiedBps) {
+  if (verifiedBps === undefined) {
     logger.warn(`Verified swap ${swap.swapId} missing affiliate bps in verification details, skipping`)
     return null
   }
@@ -198,7 +198,14 @@ export const calculateFeeForSwap = (
     return null
   }
 
-  const volumeUsd = sellAmountUsd ?? bnOrZero(actualFeeUsd).times(BPS_DENOMINATOR).div(verifiedBps).toNumber()
+  const volumeUsd = (() => {
+    if (sellAmountUsd !== null) return sellAmountUsd
+    if (verifiedBps === 0) {
+      logger.warn(`Swap ${swap.swapId} has 0 bps and no sell price; volume unknown`)
+      return 0
+    }
+    return bnOrZero(actualFeeUsd).times(BPS_DENOMINATOR).div(verifiedBps).toNumber()
+  })()
 
   return { feeUsd, volumeUsd, verifiedBps, actualFeeUsd, impliedFeeUsd }
 }
