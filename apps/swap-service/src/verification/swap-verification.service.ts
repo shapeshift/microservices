@@ -6,7 +6,6 @@ import { firstValueFrom } from 'rxjs'
 import { SwapVerificationResult } from '@shapeshift/shared-types'
 import {
   assertGetCowNetwork,
-  getSwapMetadata,
   getTreasuryAddressFromChainId,
   relayTokenToAssetId,
   SwapperName,
@@ -32,7 +31,13 @@ import {
   ZrxApiResponse,
   ZrxTrade,
 } from './types'
-import { applyBps, midgardToNativePrecision, noAffiliateResult } from './utils'
+import {
+  applyBps,
+  getLegacySwapMetadata,
+  midgardToNativePrecision,
+  noAffiliateResult,
+  tryGetSwapMetadata,
+} from './utils'
 
 @Injectable()
 export class SwapVerificationService {
@@ -128,7 +133,9 @@ export class SwapVerificationService {
   private async verifyNearIntents(swap: Swap): Promise<SwapVerificationResult> {
     const { metadata } = swap
 
-    const depositAddress = getSwapMetadata(metadata.swapperMetadata, 'nearIntents')?.depositAddress
+    const depositAddress =
+      tryGetSwapMetadata(metadata, 'nearIntents')?.depositAddress ??
+      getLegacySwapMetadata(metadata).nearIntentsSpecific?.depositAddress
     if (!depositAddress) return noAffiliateResult('FAILED', 'Missing depositAddress in nearIntents metadata')
 
     const status = await OneClickService.getExecutionStatus(depositAddress)
@@ -161,7 +168,9 @@ export class SwapVerificationService {
   private async verifyRelay(swap: Swap): Promise<SwapVerificationResult> {
     const { metadata } = swap
 
-    const relayId = getSwapMetadata(metadata.swapperMetadata, 'relay')?.relayId
+    const relayId =
+      tryGetSwapMetadata(metadata, 'relay')?.relayId ??
+      getLegacySwapMetadata(metadata).relayTransactionMetadata?.relayId
     if (!relayId) return noAffiliateResult('FAILED', 'Missing relayId in relay metadata')
 
     const { data } = await firstValueFrom(
@@ -392,7 +401,8 @@ export class SwapVerificationService {
   }
 
   private async verifyChainflip(swap: Swap): Promise<SwapVerificationResult> {
-    const chainflipSwapId = getSwapMetadata(swap.metadata.swapperMetadata, 'chainflip')?.swapId
+    const chainflipSwapId =
+      tryGetSwapMetadata(swap.metadata, 'chainflip')?.swapId ?? getLegacySwapMetadata(swap.metadata).chainflipSwapId
 
     if (!chainflipSwapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
 
