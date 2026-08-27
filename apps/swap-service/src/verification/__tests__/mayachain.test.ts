@@ -38,6 +38,39 @@ describe('verifyMayachain', () => {
     })
   })
 
+  // Midgard normalizes every coin to 1e8 — except MAYAChain's native CACAO, which it reports at its
+  // native 1e10. Amounts from these two cases are taken verbatim from mainnet actions
+  // 8F9B6692…30D (CACAO -> ETH.USDT) and DA174E41…A57 (BTC.BTC -> CACAO).
+  const cacaoAsset = {
+    symbol: 'CACAO',
+    assetId: 'cosmos:mayachain-mainnet-v1/slip44:931',
+    chainId: 'cosmos:mayachain-mainnet-v1',
+    precision: 10,
+  }
+
+  it('does not shift the sell amount when the sell leg is native CACAO', async () => {
+    const response = structuredClone(mayachainResponse)
+    response.actions[0].in[0].coins[0] = { amount: '241570000000000', asset: 'MAYA.CACAO' }
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap({ ...swap, sellAsset: cacaoAsset } as Swap)
+
+    expect(result.verifiedSellAmountCryptoBaseUnit).toBe('241570000000000')
+  })
+
+  it('does not shift the buy amount when the buy leg is native CACAO', async () => {
+    const response = structuredClone(mayachainResponse)
+    const buyOut = response.actions[0].out.find((out) => !('affiliate' in out && out.affiliate))
+    buyOut.coins[0] = { amount: '84513804751580', asset: 'MAYA.CACAO' }
+
+    service = new SwapVerificationService(makeHttpMock(response))
+
+    const result = await service.verifySwap({ ...swap, buyAsset: cacaoAsset } as Swap)
+
+    expect(result.actualBuyAmountCryptoBaseUnit).toBe('84513804751580')
+  })
+
   it('strips 0x prefix from sellTxHash before calling Midgard', async () => {
     const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: mayachainResponse }))
     service = new SwapVerificationService({ get } as unknown as HttpService)

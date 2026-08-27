@@ -31,7 +31,7 @@ import {
   ZrxApiResponse,
   ZrxTrade,
 } from './types'
-import { applyBps, noAffiliateResult, thorchainToNativePrecision } from './utils'
+import { applyBps, midgardToNativePrecision, noAffiliateResult } from './utils'
 
 @Injectable()
 export class SwapVerificationService {
@@ -384,11 +384,8 @@ export class SwapVerificationService {
       hasAffiliate,
       affiliateBps: hasAffiliate ? parseInt(swapMetadata.affiliateFee) : undefined,
       affiliateAddress: hasAffiliate ? affiliateAddress : undefined,
-      verifiedSellAmountCryptoBaseUnit: thorchainToNativePrecision(
-        action.in[0].coins[0].amount,
-        swap.sellAsset.precision,
-      ),
-      actualBuyAmountCryptoBaseUnit: thorchainToNativePrecision(buyOut.coins[0].amount, swap.buyAsset.precision),
+      verifiedSellAmountCryptoBaseUnit: midgardToNativePrecision(action.in[0].coins[0], swap.sellAsset.precision),
+      actualBuyAmountCryptoBaseUnit: midgardToNativePrecision(buyOut.coins[0], swap.buyAsset.precision),
       actualAffiliateFeeAmountCryptoBaseUnit: hasAffiliate ? (feeOut?.coins[0]?.amount ?? '0') : undefined,
     }
   }
