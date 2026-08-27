@@ -2,13 +2,10 @@ import type { CreateSwapDto } from '@shapeshift/shared-types'
 
 import { SwapsService } from '../swaps.service'
 
-// swaps.service.ts transitively imports the unchained-client ESM bundle, which this
-// project's ts-jest transform does not process. Partner resolution only touches Prisma,
-// so none of that surface is exercised here — stub it to keep the module loadable.
-// (ts-jest hoists this above the imports at compile time.)
+// unchained-client is ESM; ts-jest can't transform it and nothing here uses it.
 jest.mock('@shapeshiftoss/unchained-client', () => ({ TxStatus: {} }))
 
-// The service constructor eagerly builds its HTTP clients, which demand these at runtime.
+// The constructor eagerly builds HTTP clients that require these.
 process.env.NOTIFICATIONS_SERVICE_URL ??= 'http://notifications.test'
 process.env.USER_SERVICE_URL ??= 'http://user.test'
 process.env.SERVICE_API_KEY ??= 'test-api-key'
@@ -32,8 +29,7 @@ const asset = {
   precision: 18,
 }
 
-// userId is deliberately omitted: getReferralCode short-circuits on it, which keeps the
-// user-service client out of the test without having to stub it.
+// No userId: getReferralCode short-circuits, so the user-service client stays out.
 const swapRequest = (overrides: Partial<CreateSwapDto> = {}): CreateSwapDto =>
   ({
     swapId: 'swap-1',
@@ -69,7 +65,7 @@ const buildService = (affiliate: AffiliateRow | null, addressMatches: { partnerC
       },
     },
     swap: {
-      // echo the row back so toSwap has something to spread; the assertions read createCalls
+      // echoed back for toSwap to spread; assertions read createCalls
       create: (args: CreateArgs): Promise<Record<string, unknown>> => {
         createCalls.push(args)
         return Promise.resolve({ ...args.data, createdAt: new Date(0), updatedAt: new Date(0) })
@@ -103,7 +99,7 @@ describe('createSwap partner attribution', () => {
 
     await service.createSwap(swapRequest({ partnerCode: 'acme' }))
 
-    // partnerAddress comes from the registry, never from the caller
+    // partnerAddress comes from the registry, never the caller
     expect(createCalls[0]?.data).toMatchObject({ partnerCode: 'acme', partnerAddress: '0xreceive' })
     expect(findUniqueCalls[0]?.where?.partnerCode).toBe('acme')
   })
@@ -126,8 +122,7 @@ describe('createSwap partner attribution', () => {
     expect(findManyCalls).toHaveLength(0)
   })
 
-  // The address path filters in Postgres, so a mocked client can only assert that the filter
-  // was *requested*. Proving it is applied needs an integration test against a real database.
+  // Postgres does the filtering; this only asserts the filter was requested.
   it('requests only active affiliates when resolving by partner address', async () => {
     const { service, findManyCalls } = buildService(null, [{ partnerCode: 'acme' }])
 
