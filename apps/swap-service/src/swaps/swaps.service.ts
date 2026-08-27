@@ -155,10 +155,14 @@ export class SwapsService {
       try {
         const affiliate = await this.prisma.affiliate.findUnique({
           where: { partnerCode: data.partnerCode },
-          select: { partnerCode: true, receiveAddress: true, walletAddress: true },
+          select: { partnerCode: true, receiveAddress: true, walletAddress: true, isActive: true },
         })
 
-        if (affiliate) {
+        if (affiliate && !affiliate.isActive) {
+          logger.warn(`Refusing to attribute swap to deactivated partner ${data.partnerCode}`)
+        }
+
+        if (affiliate?.isActive) {
           return {
             partnerCode: affiliate.partnerCode,
             partnerAddress: affiliate.receiveAddress ?? affiliate.walletAddress,
@@ -173,7 +177,10 @@ export class SwapsService {
     if (data.partnerAddress) {
       try {
         const matches = await this.prisma.affiliate.findMany({
-          where: { OR: [{ walletAddress: data.partnerAddress }, { receiveAddress: data.partnerAddress }] },
+          where: {
+            isActive: true,
+            OR: [{ walletAddress: data.partnerAddress }, { receiveAddress: data.partnerAddress }],
+          },
           select: { partnerCode: true },
           take: 2,
         })
