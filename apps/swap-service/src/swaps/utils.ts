@@ -5,7 +5,7 @@ import type { CreateSwapDto } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
 import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
-import type { Swap as SwapperSwap, SwapperName, SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
+import type { Swap as SwapperSwap, SwapMetadata, SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
 import { getAssetPriceUsd } from '../utils/pricing'
@@ -37,7 +37,7 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   swapperName: swap.swapperName as SwapperName,
   sellAsset: swap.sellAsset as Asset,
   buyAsset: swap.buyAsset as Asset,
-  metadata: swap.metadata as SwapperSpecificMetadata,
+  metadata: swap.metadata as SwapMetadata,
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
 

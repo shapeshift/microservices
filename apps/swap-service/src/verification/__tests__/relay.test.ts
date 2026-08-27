@@ -1,7 +1,7 @@
 import type { HttpService } from '@nestjs/axios'
 import { of, throwError } from 'rxjs'
 
-import type { SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
+import type { SwapMetadata } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../swaps/types'
 import { SwapVerificationService } from '../swap-verification.service'
@@ -183,8 +183,8 @@ describe('verifyRelay', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('999')
   })
 
-  it('returns FAILED when relayTransactionMetadata.relayId is missing', async () => {
-    const swapWithoutMetadata = { ...swap, metadata: {} as SwapperSpecificMetadata } as Swap
+  it('returns FAILED when relay metadata is missing', async () => {
+    const swapWithoutMetadata = { ...swap, metadata: {} as SwapMetadata } as Swap
 
     service = new SwapVerificationService(makeHttpMock(relayResponse))
 
@@ -193,7 +193,7 @@ describe('verifyRelay', () => {
     expect(result).toMatchObject({
       verificationStatus: 'FAILED',
       hasAffiliate: false,
-      noAffiliateReason: 'Missing relayId in relayTransactionMetadata',
+      noAffiliateReason: 'Missing relayId in relay metadata',
     })
   })
 

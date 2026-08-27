@@ -13,6 +13,7 @@ import type { TronChainAdapterService } from '../lib/chain-adapters/tron.service
 import type { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
 
 export const getSwapperConfig = (): SwapperConfig => ({
+  VITE_ACROSS_API_KEY: '',
   VITE_ACROSS_API_URL: env.VITE_ACROSS_API_URL,
   VITE_ACROSS_INTEGRATOR_ID: '',
   VITE_BEBOP_API_KEY: env.VITE_BEBOP_API_KEY,
@@ -28,11 +29,9 @@ export const getSwapperConfig = (): SwapperConfig => ({
   VITE_MAYACHAIN_NODE_URL: env.VITE_MAYACHAIN_NODE_URL,
   VITE_NEAR_INTENTS_API_KEY: env.VITE_NEAR_INTENTS_API_KEY,
   VITE_PORTALS_BASE_URL: env.VITE_PORTALS_BASE_URL,
+  VITE_RELAY_API_KEY: '',
   VITE_RELAY_API_URL: env.VITE_RELAY_API_URL,
   VITE_SUI_NODE_URL: env.VITE_SUI_NODE_URL,
-  VITE_TENDERLY_ACCOUNT_SLUG: '',
-  VITE_TENDERLY_API_KEY: '',
-  VITE_TENDERLY_PROJECT_SLUG: '',
   VITE_THORCHAIN_MIDGARD_URL: env.VITE_THORCHAIN_MIDGARD_URL,
   VITE_THORCHAIN_NODE_URL: env.VITE_THORCHAIN_NODE_URL,
   VITE_TRON_GRID_API_KEY: '',

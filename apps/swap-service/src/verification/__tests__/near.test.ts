@@ -1,7 +1,7 @@
 import { OneClickService } from '@defuse-protocol/one-click-sdk-typescript'
 import type { HttpService } from '@nestjs/axios'
 
-import type { SwapperSpecificMetadata } from '@shapeshiftoss/swapper'
+import type { SwapMetadata } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../swaps/types'
 import { SwapVerificationService } from '../swap-verification.service'
@@ -104,15 +104,15 @@ describe('verifyNearIntents', () => {
     expect(result.verifiedSellAmountCryptoBaseUnit).toBe(response.quoteResponse.quote.amountIn)
   })
 
-  it('returns FAILED when nearIntentsSpecific.depositAddress is missing', async () => {
-    const swapWithoutMetadata = { ...swap, metadata: {} as SwapperSpecificMetadata } as Swap
+  it('returns FAILED when nearIntents metadata is missing', async () => {
+    const swapWithoutMetadata = { ...swap, metadata: {} as SwapMetadata } as Swap
 
     const result = await service.verifySwap(swapWithoutMetadata)
 
     expect(result).toMatchObject({
       verificationStatus: 'FAILED',
       hasAffiliate: false,
-      noAffiliateReason: 'Missing depositAddress in nearIntentsSpecific metadata',
+      noAffiliateReason: 'Missing depositAddress in nearIntents metadata',
     })
   })
 

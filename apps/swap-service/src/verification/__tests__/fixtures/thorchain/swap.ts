@@ -57,13 +57,10 @@ export default {
   metadata: {
     quoteId: 'ca88e6ef-ca09-4848-98a6-1bd18e36fc81',
     stepIndex: 0,
-    acrossTransactionMetadata: undefined,
-    chainflipSwapId: undefined,
-    debridgeTransactionMetadata: undefined,
-    relayerExplorerTxLink: undefined,
-    relayerTxHash: undefined,
-    relayTransactionMetadata: undefined,
-    streamingSwapMetadata: undefined,
+    swapperMetadata: {
+      name: 'thorchain',
+      maxStreamingQuantity: undefined,
+    },
   },
   userId: 'api',
   referralCode: null,

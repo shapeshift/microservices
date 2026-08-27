@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs'
 import { SwapVerificationResult } from '@shapeshift/shared-types'
 import {
   assertGetCowNetwork,
+  getSwapMetadata,
   getTreasuryAddressFromChainId,
   relayTokenToAssetId,
   SwapperName,
@@ -127,8 +128,8 @@ export class SwapVerificationService {
   private async verifyNearIntents(swap: Swap): Promise<SwapVerificationResult> {
     const { metadata } = swap
 
-    const depositAddress = metadata.nearIntentsSpecific?.depositAddress
-    if (!depositAddress) return noAffiliateResult('FAILED', 'Missing depositAddress in nearIntentsSpecific metadata')
+    const depositAddress = getSwapMetadata(metadata.swapperMetadata, 'nearIntents')?.depositAddress
+    if (!depositAddress) return noAffiliateResult('FAILED', 'Missing depositAddress in nearIntents metadata')
 
     const status = await OneClickService.getExecutionStatus(depositAddress)
 
@@ -160,8 +161,8 @@ export class SwapVerificationService {
   private async verifyRelay(swap: Swap): Promise<SwapVerificationResult> {
     const { metadata } = swap
 
-    const relayId = metadata.relayTransactionMetadata?.relayId
-    if (!relayId) return noAffiliateResult('FAILED', 'Missing relayId in relayTransactionMetadata')
+    const relayId = getSwapMetadata(metadata.swapperMetadata, 'relay')?.relayId
+    if (!relayId) return noAffiliateResult('FAILED', 'Missing relayId in relay metadata')
 
     const { data } = await firstValueFrom(
       this.httpService.get<RelayRequestsResponse>(`${env.VITE_RELAY_API_URL}/requests/v2?id=${relayId}`),
@@ -391,10 +392,9 @@ export class SwapVerificationService {
   }
 
   private async verifyChainflip(swap: Swap): Promise<SwapVerificationResult> {
-    const metadata = swap.metadata as Record<string, any>
-    const chainflipSwapId = metadata?.chainflipSwapId as string | undefined
+    const chainflipSwapId = getSwapMetadata(swap.metadata.swapperMetadata, 'chainflip')?.swapId
 
-    if (!chainflipSwapId) return noAffiliateResult('FAILED', 'Missing chainflipSwapId in metadata')
+    if (!chainflipSwapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
 
     const statusUrl = `${this.chainflipApiUrl}/swaps/${chainflipSwapId}`
 
