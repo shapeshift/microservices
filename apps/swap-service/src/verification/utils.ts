@@ -1,34 +1,20 @@
 import type { SwapVerificationResult } from '@shapeshift/shared-types'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { SwapMetadata, SwapperMetadata } from '@shapeshiftoss/swapper'
-import { getSwapMetadata } from '@shapeshiftoss/swapper'
+import * as swapper from '@shapeshiftoss/swapper'
 
 import type { MidgardCoin } from './types'
 
-// Rows written before the swapperMetadata migration carry these flat keys instead.
-type LegacySwapMetadata = {
-  relayTransactionMetadata?: { relayId?: string }
-  nearIntentsSpecific?: { depositAddress?: string }
-  chainflipSwapId?: string | number
-}
-
-// getSwapMetadata throws on a discriminator mismatch, and verifySwap turns any throw into a
-// retryable PENDING. Metadata never appears later, so narrow without throwing to keep FAILED.
-export const tryGetSwapMetadata = <T extends SwapperMetadata['name']>(
+export const getSwapMetadata = <T extends SwapperMetadata['name']>(
   metadata: SwapMetadata,
   name: T,
 ): Extract<SwapperMetadata, { name: T }> | undefined => {
   try {
-    return getSwapMetadata(metadata.swapperMetadata, name)
+    return swapper.getSwapMetadata(metadata.swapperMetadata, name)
   } catch {
-    return undefined
+    return
   }
 }
-
-// Pre-migration rows are terminal today, so nothing re-reads them — but a re-verification
-// backfill would wipe their affiliate data without this.
-export const getLegacySwapMetadata = (metadata: SwapMetadata): LegacySwapMetadata =>
-  metadata as unknown as LegacySwapMetadata
 
 export const BPS_DENOMINATOR = 10000n
 export const MIDGARD_PRECISION = 8
