@@ -51,18 +51,10 @@ export default {
   metadata: {
     quoteId: '6785cf2e-683b-4335-9050-eab792045af6',
     stepIndex: 0,
-    nearIntentsSpecific: {
-      deadline: '2026-04-28T17:52:55.658Z',
-      timeEstimate: 52,
+    swapperMetadata: {
+      name: 'nearIntents',
       depositAddress: '0xE08B3621624e6CA17B8F19a854fc5D6f14CAa120',
     },
-    acrossTransactionMetadata: undefined,
-    chainflipSwapId: undefined,
-    debridgeTransactionMetadata: undefined,
-    relayerExplorerTxLink: undefined,
-    relayerTxHash: undefined,
-    relayTransactionMetadata: undefined,
-    streamingSwapMetadata: undefined,
   },
   userId: 'api',
   referralCode: null,

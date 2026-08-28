@@ -17,6 +17,8 @@ const schema = z.object({
   VITE_BEBOP_API_KEY: z.string().min(1),
   VITE_NEAR_INTENTS_API_KEY: z.string().min(1),
   VITE_CHAINFLIP_API_KEY: z.string().min(1),
+  VITE_RELAY_API_KEY: z.string().min(1),
+  VITE_ACROSS_API_KEY: z.string().min(1),
 
   // Database
   DATABASE_URL: z.string().min(1),

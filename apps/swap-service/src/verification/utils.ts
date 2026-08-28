@@ -1,7 +1,20 @@
 import type { SwapVerificationResult } from '@shapeshift/shared-types'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
+import type { SwapMetadata, SwapperMetadata } from '@shapeshiftoss/swapper'
+import * as swapper from '@shapeshiftoss/swapper'
 
 import type { MidgardCoin } from './types'
+
+export const getSwapMetadata = <T extends SwapperMetadata['name']>(
+  metadata: SwapMetadata,
+  name: T,
+): Extract<SwapperMetadata, { name: T }> | undefined => {
+  try {
+    return swapper.getSwapMetadata(metadata.swapperMetadata, name)
+  } catch {
+    return
+  }
+}
 
 export const BPS_DENOMINATOR = 10000n
 export const MIDGARD_PRECISION = 8

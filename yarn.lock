@@ -2431,9 +2431,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@gobob/bob-sdk@npm:5.6.0":
-  version: 5.6.0
-  resolution: "@gobob/bob-sdk@npm:5.6.0"
+"@gobob/bob-sdk@npm:5.8.1":
+  version: 5.8.1
+  resolution: "@gobob/bob-sdk@npm:5.8.1"
   dependencies:
     "@bitcoinerlab/secp256k1": "npm:^1.2.0"
     "@eslint/eslintrc": "npm:^3.3.5"
@@ -2448,7 +2448,7 @@ __metadata:
     global: "npm:^4.4.0"
     globals: "npm:^17.4.0"
     viem: "npm:^2.33.2"
-  checksum: 10/dd285ad42b6579bcfd1c42d9bacff4878a84f212db6d4ddcff42c26a004fe60b72d1b6c51a661b95ec97ae2208e01f222f2338d7a241a3b1491d4138948d52d3
+  checksum: 10/fbc578125223d11695957981627a73efad876e7785cd6f6156fecec1e9e9c7f986bd0e2cf22fab8764397608c43b562059270d964b72d492479e2961e275fdc8
   languageName: node
   linkType: hard
 
@@ -5538,7 +5538,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@shapeshiftoss/caip@npm:8.16.9, @shapeshiftoss/caip@npm:^8.16.9":
+"@shapeshiftoss/caip@npm:8.16.10, @shapeshiftoss/caip@npm:^8.16.10":
+  version: 8.16.10
+  resolution: "@shapeshiftoss/caip@npm:8.16.10"
+  dependencies:
+    axios: "npm:^1.13.5"
+  checksum: 10/ad0e91258519fabf96b0b4c36f171156a8031d5b35d3508ebfbb26665ab00cecb85b0bc2e889f59bcc0c96643c57c1460607ea6b9c991499535533b442bafc99
+  languageName: node
+  linkType: hard
+
+"@shapeshiftoss/caip@npm:^8.16.9":
   version: 8.16.9
   resolution: "@shapeshiftoss/caip@npm:8.16.9"
   dependencies:
@@ -5547,19 +5556,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@shapeshiftoss/chain-adapters@npm:11.4.0, @shapeshiftoss/chain-adapters@npm:^11.4.0":
-  version: 11.4.0
-  resolution: "@shapeshiftoss/chain-adapters@npm:11.4.0"
+"@shapeshiftoss/chain-adapters@npm:11.5.1, @shapeshiftoss/chain-adapters@npm:^11.5.1":
+  version: 11.5.1
+  resolution: "@shapeshiftoss/chain-adapters@npm:11.5.1"
   dependencies:
     "@mysten/sui": "npm:1.45.0"
     "@near-js/crypto": "npm:^2.5.1"
     "@near-js/providers": "npm:^2.5.1"
     "@near-js/transactions": "npm:^2.5.1"
     "@near-js/utils": "npm:^2.5.1"
-    "@shapeshiftoss/caip": "npm:^8.16.9"
+    "@shapeshiftoss/caip": "npm:^8.16.10"
     "@shapeshiftoss/hdwallet-core": "npm:^1.62.41"
     "@shapeshiftoss/hdwallet-ledger": "npm:^1.62.41"
-    "@shapeshiftoss/types": "npm:^8.6.8"
+    "@shapeshiftoss/types": "npm:^9.0.0"
     "@shapeshiftoss/unchained-client": "npm:^10.14.11"
     "@shapeshiftoss/utils": "npm:^1.1.0"
     "@solana/spl-token": "npm:^0.4.9"
@@ -5576,8 +5585,8 @@ __metadata:
     multicoin-address-validator: "npm:^0.5.12"
     node-polyglot: "npm:^2.4.0"
     p-queue: "npm:^8.0.1"
-    viem: "npm:2.43.5"
-  checksum: 10/d88e6a69106f19200b5acbea0f6e403a502be653bedd9d740580510c67167f00744e33029ef144d361b4aa4447b6887640687e58cbf3726546b510a8d0ca5f11
+    viem: "npm:2.55.11"
+  checksum: 10/9a5f0e60da0238f90504dc5fb5876c50da91192b306c9b35d97f2d7f1e35150d57600fc8c5aae475d007b38f634e0a6525e27f86fc6576498cef9dc95d06b8ff
   languageName: node
   linkType: hard
 
@@ -5689,9 +5698,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@shapeshiftoss/swapper@npm:17.8.0":
-  version: 17.8.0
-  resolution: "@shapeshiftoss/swapper@npm:17.8.0"
+"@shapeshiftoss/swapper@npm:20.0.0":
+  version: 20.0.0
+  resolution: "@shapeshiftoss/swapper@npm:20.0.0"
   dependencies:
     "@arbitrum/sdk": "npm:^4.0.1"
     "@avnu/avnu-sdk": "npm:^4.0.1"
@@ -5700,14 +5709,14 @@ __metadata:
     "@coral-xyz/anchor": "npm:0.29.0"
     "@cowprotocol/app-data": "npm:^2.3.0"
     "@defuse-protocol/one-click-sdk-typescript": "npm:^0.1.1-0.2"
-    "@gobob/bob-sdk": "npm:5.6.0"
+    "@gobob/bob-sdk": "npm:5.8.1"
     "@mysten/sui": "npm:^1.45.2"
     "@shapeshiftoss/bitcoinjs-lib": "npm:7.0.0-shapeshift.0"
-    "@shapeshiftoss/caip": "npm:^8.16.9"
-    "@shapeshiftoss/chain-adapters": "npm:^11.4.0"
+    "@shapeshiftoss/caip": "npm:^8.16.10"
+    "@shapeshiftoss/chain-adapters": "npm:^11.5.1"
     "@shapeshiftoss/contracts": "npm:^1.0.7"
     "@shapeshiftoss/hdwallet-core": "npm:^1.62.41"
-    "@shapeshiftoss/types": "npm:^8.6.8"
+    "@shapeshiftoss/types": "npm:^9.0.0"
     "@shapeshiftoss/unchained-client": "npm:^10.14.11"
     "@shapeshiftoss/utils": "npm:^1.1.0"
     "@sniptt/monads": "npm:^0.5.10"
@@ -5728,12 +5737,24 @@ __metadata:
     qs: "npm:^6.14.2"
     retry-axios: "npm:^2.6.0"
     uuid: "npm:^9.0.0"
-    viem: "npm:2.43.5"
-  checksum: 10/f631917c1f2e35557d9283a02d42db3fbe7cddf47b6f0b251a03a1c136aa07d2729612d7e1a707405994ef1a3c5dbcc32e119d2e4ddba5db1a5d0b9d78aed4ee
+    viem: "npm:2.55.11"
+  checksum: 10/567b2be0e19ee1fb32a8f74fa42393c468af31c54551e3fffeb0254185144c4c156e098cfbe3b34ee0d36ec56e01c13a3f1759bd50ecab59cd8dcc29061d2197
   languageName: node
   linkType: hard
 
-"@shapeshiftoss/types@npm:8.6.8, @shapeshiftoss/types@npm:^8.6.8":
+"@shapeshiftoss/types@npm:9.0.0, @shapeshiftoss/types@npm:^9.0.0":
+  version: 9.0.0
+  resolution: "@shapeshiftoss/types@npm:9.0.0"
+  dependencies:
+    "@cowprotocol/app-data": "npm:^2.3.0"
+    "@shapeshiftoss/caip": "npm:^8.16.10"
+    ethers5: "npm:ethers@5.7.2"
+    viem: "npm:2.43.5"
+  checksum: 10/93dd436bf49d1f75e1748dace687244792e8991ef059a6735fbbd46b905ac71e6e83cee6e8f35939154a7125a56dc1f1bddadb0e1028ab623a6c187308383876
+  languageName: node
+  linkType: hard
+
+"@shapeshiftoss/types@npm:^8.6.8":
   version: 8.6.8
   resolution: "@shapeshiftoss/types@npm:8.6.8"
   dependencies:
@@ -15925,6 +15946,27 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ox@npm:0.14.33":
+  version: 0.14.33
+  resolution: "ox@npm:0.14.33"
+  dependencies:
+    "@adraffy/ens-normalize": "npm:^1.11.0"
+    "@noble/ciphers": "npm:^1.3.0"
+    "@noble/curves": "npm:1.9.1"
+    "@noble/hashes": "npm:^1.8.0"
+    "@scure/bip32": "npm:^1.7.0"
+    "@scure/bip39": "npm:^1.6.0"
+    abitype: "npm:^1.2.3"
+    eventemitter3: "npm:5.0.1"
+  peerDependencies:
+    typescript: ">=5.4.0"
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10/8a1390fa4799fc8629ea64c00b49fe4c5c93417c92033bad7599a1861842af202303ea1cdc85023f19145192563ebe9085609d84b0a3d0145ed1b61e579a2052
+  languageName: node
+  linkType: hard
+
 "ox@npm:^0.4.4":
   version: 0.4.4
   resolution: "ox@npm:0.4.4"
@@ -17538,10 +17580,10 @@ __metadata:
     "@prisma/client": "npm:6.13.0"
     "@pulumi/kubernetes": "npm:4.23.0"
     "@pulumi/pulumi": "npm:3.160.0"
-    "@shapeshiftoss/caip": "npm:8.16.9"
-    "@shapeshiftoss/chain-adapters": "npm:11.4.0"
-    "@shapeshiftoss/swapper": "npm:17.8.0"
-    "@shapeshiftoss/types": "npm:8.6.8"
+    "@shapeshiftoss/caip": "npm:8.16.10"
+    "@shapeshiftoss/chain-adapters": "npm:11.5.1"
+    "@shapeshiftoss/swapper": "npm:20.0.0"
+    "@shapeshiftoss/types": "npm:9.0.0"
     "@shapeshiftoss/unchained-client": "npm:10.14.11"
     "@shapeshiftoss/unchained-pulumi": "npm:1.0.2"
     "@types/express": "npm:^5.0.5"
@@ -19481,6 +19523,27 @@ __metadata:
     typescript:
       optional: true
   checksum: 10/b57102cd885e57d43360371b5ce6807cf2d5a3f12f23b09f30a18408833b0f0470053b3d70b5905db1f28488dca88eeadd06ab1cb568e6e23315514a225c08e6
+  languageName: node
+  linkType: hard
+
+"viem@npm:2.55.11":
+  version: 2.55.11
+  resolution: "viem@npm:2.55.11"
+  dependencies:
+    "@noble/curves": "npm:1.9.1"
+    "@noble/hashes": "npm:1.8.0"
+    "@scure/bip32": "npm:1.7.0"
+    "@scure/bip39": "npm:1.6.0"
+    abitype: "npm:1.2.3"
+    isows: "npm:1.0.7"
+    ox: "npm:0.14.33"
+    ws: "npm:8.21.0"
+  peerDependencies:
+    typescript: ">=5.0.4"
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10/de0a6e4937c3f979803a6c550dfa9477aa30f0e26262ddb98f0d195d384c0546395e369cc5e7ac47409fdcbfb8c854676b53506acc883735d4778cf25a973163
   languageName: node
   linkType: hard
 

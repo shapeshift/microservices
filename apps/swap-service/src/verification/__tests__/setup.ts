@@ -59,6 +59,10 @@ jest.mock('@shapeshiftoss/swapper', () => ({
     Debridge: 'deBridge',
   },
   assertGetCowNetwork: jest.fn(),
+  getSwapMetadata: (metadata: { name?: string } | undefined, name: string) => {
+    if (metadata?.name !== name) throw new Error(`Expected ${name} swap metadata`)
+    return metadata
+  },
   getTreasuryAddressFromChainId: jest.fn(),
   relayTokenToAssetId: (token: { chainId: number; address: string }) => {
     const isNative = token.address.toLowerCase() === '0x0000000000000000000000000000000000000000'

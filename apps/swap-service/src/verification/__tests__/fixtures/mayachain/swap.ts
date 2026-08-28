@@ -57,13 +57,10 @@ export default {
   metadata: {
     quoteId: '562f173c-1515-4a4e-bf6b-cd1b35a9db1f',
     stepIndex: 0,
-    acrossTransactionMetadata: undefined,
-    chainflipSwapId: undefined,
-    debridgeTransactionMetadata: undefined,
-    relayerExplorerTxLink: undefined,
-    relayerTxHash: undefined,
-    relayTransactionMetadata: undefined,
-    streamingSwapMetadata: undefined,
+    swapperMetadata: {
+      name: 'mayachain',
+      maxStreamingQuantity: undefined,
+    },
   },
   userId: 'api',
   referralCode: null,
