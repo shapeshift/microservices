@@ -34,6 +34,7 @@ import {
   buildStatusNotification,
   calculateFeeForSwap,
   computeSellAmountUsd,
+  describeError,
   fetchUsdPrices,
   toSwap,
   toSwapperSwap,
@@ -360,8 +361,6 @@ export class SwapsService {
   }
 
   async checkSwapStatus(swapId: string): Promise<SwapStatusResponse> {
-    logger.log(`Checking status for swap: ${swapId}`)
-
     const prismaSwap = await this.prisma.swap.findUnique({ where: { swapId } })
     if (!prismaSwap) throw new NotFoundException(`Swap not found: ${swapId}`)
 
@@ -393,10 +392,13 @@ export class SwapsService {
         statusMessage: typeof statusMessage === 'string' ? statusMessage : '',
       }
     } catch (error) {
-      logger.error(`Failed to check swap status for ${swapId}:`, error)
+      const reason = describeError(error)
+
+      logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
+
       return {
         status: 'PENDING',
-        statusMessage: `Error polling status: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        statusMessage: `Error polling status: ${reason}`,
       }
     }
   }

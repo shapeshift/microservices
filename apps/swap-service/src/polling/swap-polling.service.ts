@@ -7,6 +7,8 @@ import { WebsocketGateway } from '../websocket/websocket.gateway'
 
 const POLL_CONCURRENCY = 10
 
+const swapIds = (swaps: Swap[]): string => swaps.map((swap) => swap.swapId).join(', ')
+
 @Injectable()
 export class SwapPollingService {
   private readonly logger = new Logger(SwapPollingService.name)
@@ -28,7 +30,7 @@ export class SwapPollingService {
       const swaps = await this.swapsService.getPendingTxSwaps()
       if (swaps.length === 0) return
 
-      this.logger.log(`Polling tx status for ${swaps.length} swaps`)
+      this.logger.log(`Polling tx status for ${swaps.length} swaps (${swapIds(swaps)})`)
       await this.runWorkers(swaps, (swap) => this.pollTxStatus(swap))
     } catch (err) {
       this.logger.error('Failed to poll pending tx status:', err)
@@ -46,7 +48,7 @@ export class SwapPollingService {
       const swaps = await this.swapsService.getPendingVerificationSwaps()
       if (swaps.length === 0) return
 
-      this.logger.log(`Polling verification for ${swaps.length} swaps`)
+      this.logger.log(`Polling verification for ${swaps.length} swaps (${swapIds(swaps)})`)
       await this.runWorkers(swaps, (swap) => this.pollVerification(swap))
     } catch (err) {
       this.logger.error('Failed to poll pending verification:', err)

@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
-import { calculateFeeForSwap } from '../utils'
+import { calculateFeeForSwap, describeError } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
 // '0' fee amount resolves to actualFeeUsd = 0 (the real 0-bps case this branch introduced).
@@ -78,5 +78,58 @@ describe('calculateFeeForSwap volume reconstruction', () => {
     expect(result?.feeUsd).toBe(1)
     // fee $1 / 1% = $100 volume
     expect(result?.volumeUsd).toBe(100)
+  })
+})
+
+describe('describeError', () => {
+  // Shaped like a real AxiosError: isAxiosError is the flag axios.isAxiosError checks.
+  const axiosError = (status: number | undefined, data?: unknown, message = 'Request failed with status code 500') =>
+    Object.assign(new Error(message), {
+      isAxiosError: true,
+      response: status === undefined ? undefined : { status, data },
+    })
+
+  it('prefers the message the server sent over the generic axios message', () => {
+    expect(describeError(axiosError(404, { message: 'tx not found' }))).toBe('tx not found')
+  })
+
+  it('reads an error key when the body has no message', () => {
+    expect(describeError(axiosError(429, { error: 'rate limited' }))).toBe('rate limited')
+  })
+
+  it('serialises a message or error that is not a string', () => {
+    expect(describeError(axiosError(400, { error: { message: 'nested' } }))).toBe('{"message":"nested"}')
+  })
+
+  it('falls back when the body has neither key', () => {
+    const reason = describeError(
+      axiosError(400, { errors: { amount: ['too small'] } }, 'Request failed with status code 400'),
+    )
+
+    expect(reason).toBe('Request failed with status code 400')
+  })
+
+  it('ignores a string body so an error page never reaches the log', () => {
+    const reason = describeError(axiosError(403, '<html>'.padEnd(5000, 'x'), 'Request failed with status code 403'))
+
+    expect(reason).toBe('Request failed with status code 403')
+  })
+
+  it('falls back to the message for an axios error that never got a response', () => {
+    expect(describeError(axiosError(undefined, undefined, 'connect ETIMEDOUT'))).toBe('connect ETIMEDOUT')
+  })
+
+  it('returns the message for a plain error', () => {
+    expect(describeError(new Error('Non-JSON response: HTTP 403 Forbidden'))).toBe(
+      'Non-JSON response: HTTP 403 Forbidden',
+    )
+  })
+
+  it('handles a thrown string', () => {
+    expect(describeError('boom')).toBe('boom')
+  })
+
+  it('does not stringify a thrown object as [object Object]', () => {
+    expect(describeError({ nope: true })).toBe('Unknown error')
   })
 })
