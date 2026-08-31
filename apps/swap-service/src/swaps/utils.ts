@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common'
 import type { Swap as PrismaSwap } from '@prisma/client'
+import axios from 'axios'
 
 import type { CreateSwapDto } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
@@ -48,6 +49,25 @@ export const toSwapperSwap = (swap: Swap): SwapperSwap =>
     createdAt: swap.createdAt.getTime(),
     updatedAt: swap.updatedAt.getTime(),
   }) as unknown as SwapperSwap
+
+const responseDetail = (data: unknown): string | undefined => {
+  if (!data || typeof data !== 'object') return
+
+  const { message, error } = data as { message?: unknown; error?: unknown }
+  const detail = message ?? error
+
+  if (detail === undefined || detail === null) return
+
+  return typeof detail === 'string' ? detail : JSON.stringify(detail)
+}
+
+export const describeError = (error: unknown): string => {
+  if (axios.isAxiosError(error)) return responseDetail(error.response?.data) ?? error.message
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+
+  return 'Unknown error'
+}
 
 // formatAmount up to 8 decimals, no trailing zeros
 export const formatAmount = (amount: string | number): string => {

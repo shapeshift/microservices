@@ -19,7 +19,6 @@ const schema = z.object({
   VITE_CHAINFLIP_API_KEY: z.string().min(1),
   VITE_RELAY_API_KEY: z.string().min(1),
   VITE_ACROSS_API_KEY: z.string().min(1),
-  VITE_BOB_GATEWAY_API_KEY: z.string().length(32),
 
   // Database
   DATABASE_URL: z.string().min(1),
