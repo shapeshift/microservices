@@ -36,6 +36,7 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
+  toQuotedAt,
   toSwap,
   toSwapperSwap,
 } from './utils'
@@ -121,6 +122,7 @@ export class SwapsService {
             affiliateBps: data.affiliateBps,
             shapeshiftBps: data.shapeshiftBps,
             origin: data.origin ?? null,
+            quotedAt: toQuotedAt(data.quotedAt),
             affiliateFeeAssetId,
           },
         }),

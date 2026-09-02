@@ -78,4 +78,8 @@ export default {
   affiliateFeeAssetId: 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
   actualAffiliateFeeAmountCryptoBaseUnit: '6000000000000',
   shapeshiftBps: 60,
+  quotedAt: null,
+  attributionStatus: 'PENDING',
+  attributionResolvedAt: null,
+  attributionDetails: null,
 } satisfies Swap

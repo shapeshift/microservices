@@ -82,6 +82,7 @@ export interface CreateSwapDto {
   partnerBps?: number
   partnerCode?: string
   origin?: 'web' | 'api'
+  quotedAt?: string
 }
 
 export interface UpdateSwapStatusDto {
