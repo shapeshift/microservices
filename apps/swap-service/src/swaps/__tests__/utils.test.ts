@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
+import { UNREACHABLE_TIMEOUT_MS } from '../constants'
 import { calculateFeeForSwap, describeError, resolveStalledSwap } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
@@ -157,6 +158,26 @@ describe('resolveStalledSwap', () => {
       status: 'PENDING',
       statusMessage: 'waiting',
     })
+  })
+
+  // an unreachable swapper is no evidence the swap is dead, so a blip must not fail a settled one
+  it('holds a swap the swapper could not be reached for at the short timeout', () => {
+    const twoDaysOld = new Date(Date.now() - 48 * 60 * 60 * 1000)
+
+    expect(
+      resolveStalledSwap('PENDING', twoDaysOld, 'Error polling status: timeout', UNREACHABLE_TIMEOUT_MS).status,
+    ).toBe('PENDING')
+  })
+
+  it('fails a swap the swapper has been unreachable for past the long timeout', () => {
+    const eightDaysOld = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+
+    expect(resolveStalledSwap('PENDING', eightDaysOld, 'Error polling status: timeout', UNREACHABLE_TIMEOUT_MS)).toEqual(
+      {
+        status: 'FAILED',
+        statusMessage: 'Abandoned: unsettled 7d after registration (last swapper status: Error polling status: timeout)',
+      },
+    )
   })
 
   it('never overrides a terminal status, however old the swap', () => {

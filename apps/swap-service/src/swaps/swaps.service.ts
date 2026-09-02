@@ -26,7 +26,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { REFERRER_FEE_RATE } from './constants'
+import { REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
@@ -399,10 +399,7 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return {
-        status: 'PENDING',
-        statusMessage: `Error polling status: ${reason}`,
-      }
+      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`, UNREACHABLE_TIMEOUT_MS)
     }
   }
 
