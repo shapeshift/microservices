@@ -15,7 +15,6 @@ model Affiliate {
 }
 
 model Swap {
-  // api-origin rows register under the public-api quote id, so this doubles as the quote reference
   swapId                                 String             @id
   sellAsset                              Json
   buyAsset                               Json
