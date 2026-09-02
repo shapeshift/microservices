@@ -36,6 +36,7 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
+  resolveStalledSwap,
   toQuotedAt,
   toSwap,
   toSwapperSwap,
@@ -386,12 +387,12 @@ export class SwapsService {
       })
 
       const statusMessage = Array.isArray(message) ? message[0] : message
+      const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
-        status: status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING',
+        ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
         sellTxHash: swap.sellTxHash,
         buyTxHash,
-        statusMessage: typeof statusMessage === 'string' ? statusMessage : '',
       }
     } catch (error) {
       const reason = describeError(error)

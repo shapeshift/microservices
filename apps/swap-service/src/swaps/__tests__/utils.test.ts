@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
-import { calculateFeeForSwap, describeError } from '../utils'
+import { calculateFeeForSwap, describeError, resolveStalledSwap } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
 // '0' fee amount resolves to actualFeeUsd = 0 (the real 0-bps case this branch introduced).
@@ -131,5 +131,37 @@ describe('describeError', () => {
 
   it('does not stringify a thrown object as [object Object]', () => {
     expect(describeError({ nope: true })).toBe('Unknown error')
+  })
+})
+
+describe('resolveStalledSwap', () => {
+  const justNow = new Date(Date.now() - 60_000)
+  const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
+
+  it('fails a swap the swapper still cannot settle past the timeout', () => {
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting')).toEqual({
+      status: 'FAILED',
+      statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: waiting)',
+    })
+  })
+
+  // the swapper reports nothing for an unmined source tx, so the message must still say why
+  it('records why it failed when the swapper reported no status', () => {
+    expect(resolveStalledSwap('PENDING', longAgo, '').statusMessage).toBe(
+      'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
+    )
+  })
+
+  it('leaves a swap pending inside the timeout', () => {
+    expect(resolveStalledSwap('PENDING', justNow, 'waiting')).toEqual({
+      status: 'PENDING',
+      statusMessage: 'waiting',
+    })
+  })
+
+  // a slow settle is still a settle - only PENDING is abandoned
+  it('never overrides a terminal status, however old the swap', () => {
+    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete').status).toBe('SUCCESS')
+    expect(resolveStalledSwap('FAILED', longAgo, 'reverted').status).toBe('FAILED')
   })
 })
