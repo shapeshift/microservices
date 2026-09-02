@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common'
 import type { Swap as PrismaSwap } from '@prisma/client'
 import axios from 'axios'
 
-import type { CreateSwapDto } from '@shapeshift/shared-types'
+import type { CreateSwapDto, SwapStatus } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
 import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
@@ -11,6 +11,7 @@ import type { Asset } from '@shapeshiftoss/types'
 
 import { getAssetPriceUsd } from '../utils/pricing'
 
+import { PENDING_TIMEOUT_MS } from './constants'
 import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -41,6 +42,22 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   metadata: swap.metadata as SwapMetadata,
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
+
+export const resolveStalledSwap = (
+  status: SwapStatus,
+  createdAt: Date,
+  statusMessage: string,
+): { status: SwapStatus; statusMessage: string } => {
+  if (status !== 'PENDING') return { status, statusMessage }
+  if (Date.now() - createdAt.getTime() < PENDING_TIMEOUT_MS) return { status, statusMessage }
+
+  const last = statusMessage || 'none reported'
+
+  return {
+    status: 'FAILED',
+    statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})`,
+  }
+}
 
 export const toQuotedAt = (value: string | undefined): Date | null => {
   if (typeof value !== 'string') return null
