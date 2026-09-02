@@ -42,6 +42,14 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
 
+export const toQuotedAt = (value: string | undefined): Date | null => {
+  if (typeof value !== 'string') return null
+
+  const parsed = new Date(value)
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export const toSwapperSwap = (swap: Swap): SwapperSwap =>
   ({
     ...swap,

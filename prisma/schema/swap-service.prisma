@@ -52,14 +52,26 @@ model Swap {
   affiliateFeeAssetId                    String?
   actualAffiliateFeeAmountCryptoBaseUnit String?
   verificationStatus                     VerificationStatus @default(PENDING)
+  quotedAt                               DateTime?
+  attributionStatus                      AttributionStatus  @default(PENDING)
+  attributionResolvedAt                  DateTime?
+  attributionDetails                     Json?
 
   @@index([referralCode])
   @@index([partnerAddress])
   @@index([partnerCode])
   @@index([status, sellTxHash])
+  @@index([sellTxHash])
   @@index([verificationStatus, status])
   @@index([userId])
   @@map("swaps")
+}
+
+enum AttributionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  DISPUTED
 }
 
 enum VerificationStatus {

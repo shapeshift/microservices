@@ -131,3 +131,41 @@ describe('createSwap partner attribution', () => {
     expect(findManyCalls[0]?.where?.isActive).toBe(true)
   })
 })
+
+describe('createSwap quote provenance', () => {
+  it('persists the quote mint time carried by the registration payload', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest({ quotedAt: '2026-09-01T12:00:00.000Z' }))
+
+    expect(createCalls[0]?.data).toMatchObject({
+      quotedAt: new Date('2026-09-01T12:00:00.000Z'),
+    })
+  })
+
+  // null rather than a default now(): the resolver would trust a fabricated quote time
+  it('stores a null quote time when the payload carries none', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest())
+
+    expect(createCalls[0]?.data).toMatchObject({ quotedAt: null })
+  })
+
+  it('drops a malformed quote timestamp rather than failing registration', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest({ quotedAt: 'not-a-date' }))
+
+    expect(createCalls[0]?.data).toMatchObject({ quotedAt: null })
+  })
+
+  // the route has no runtime validation, and epoch millis would otherwise parse as a valid date
+  it('rejects a non-string quote timestamp', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest({ quotedAt: 1756729200000 as unknown as string }))
+
+    expect(createCalls[0]?.data).toMatchObject({ quotedAt: null })
+  })
+})
