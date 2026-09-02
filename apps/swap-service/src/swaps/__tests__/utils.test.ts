@@ -192,7 +192,7 @@ describe('resolveQuoteBinding', () => {
   const at = (offsetMs: number) => new Date(blockTime + offsetMs)
 
   it('accepts a quote minted before its transaction was mined', () => {
-    const { status, details } = resolveQuoteBinding(found, at(-60_000), 0)
+    const { status, details } = resolveQuoteBinding(found, at(-60_000))
 
     expect(status).toBe('ACCEPTED')
     expect(details).toMatchObject({ checked: true, reason: 'quote-precedes-tx', blockTime })
@@ -200,16 +200,14 @@ describe('resolveQuoteBinding', () => {
 
   // the harvest attack: the txid cannot be known until it exists, so the claim's quote is younger
   it('rejects a quote minted after its transaction was mined', () => {
-    const { status, details } = resolveQuoteBinding(found, at(1000), 0)
+    const { status, details } = resolveQuoteBinding(found, at(1000))
 
     expect(status).toBe('REJECTED')
     expect(details).toMatchObject({ checked: true, reason: 'quote-postdates-tx' })
   })
 
-  // a tolerance is a window to claim an already-mined tx, so it must never be applied loosely
-  it('applies a tolerance only up to its exact bound', () => {
-    expect(resolveQuoteBinding(found, at(1000), 1000).status).toBe('ACCEPTED')
-    expect(resolveQuoteBinding(found, at(1001), 1000).status).toBe('REJECTED')
+  it('accepts a quote minted in the same instant as its block', () => {
+    expect(resolveQuoteBinding(found, at(0)).status).toBe('ACCEPTED')
   })
 
   // absence of evidence is never evidence - none of these may reject
@@ -218,14 +216,14 @@ describe('resolveQuoteBinding', () => {
     ['a transaction it cannot see', { outcome: 'not-found' } as const, 'tx-not-found'],
     ['a failed lookup', { outcome: 'error', reason: 'timeout' } as const, 'lookup-failed'],
   ])('holds on %s rather than deciding', (_label, lookup, reason) => {
-    const { status, details } = resolveQuoteBinding(lookup, at(-60_000), 0)
+    const { status, details } = resolveQuoteBinding(lookup, at(-60_000))
 
     expect(status).toBe('PENDING')
     expect(details).toMatchObject({ checked: false, reason })
   })
 
   it('holds a row with no quote time, which cannot be checked at all', () => {
-    expect(resolveQuoteBinding(found, null, 0)).toMatchObject({
+    expect(resolveQuoteBinding(found, null)).toMatchObject({
       status: 'PENDING',
       details: { checked: false, reason: 'no-quoted-at' },
     })

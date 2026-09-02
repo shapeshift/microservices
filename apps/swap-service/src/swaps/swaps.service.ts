@@ -21,19 +21,13 @@ import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service'
 import { TonChainAdapterService } from '../lib/chain-adapters/ton.service'
 import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
+import { TxLookupService } from '../lib/tx-lookup.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
-import { TxLookupService } from '../lib/tx-lookup.service'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import {
-  ATTRIBUTION_RETRY_MS,
-  ATTRIBUTION_TOLERANCE_MS,
-  PENDING_TIMEOUT_MS,
-  REFERRER_FEE_RATE,
-  UNREACHABLE_TIMEOUT_MS,
-} from './constants'
+import { ATTRIBUTION_RETRY_MS, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
@@ -301,12 +295,11 @@ export class SwapsService {
     return swaps.map(toSwap)
   }
 
-  // shadow mode: the verdict is recorded, nothing is stripped
   async checkQuoteBinding(swap: Swap): Promise<Swap> {
     if (!swap.sellTxHash) return swap
 
     const lookup = await this.txLookupService.getTimestamp(swap.sellAsset.chainId, swap.sellTxHash)
-    const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt, ATTRIBUTION_TOLERANCE_MS)
+    const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt)
 
     return toSwap(
       await this.prisma.swap.update({

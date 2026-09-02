@@ -67,7 +67,6 @@ export const resolveStalledSwap = (
 export const resolveQuoteBinding = (
   lookup: TxLookup,
   quotedAt: Date | null,
-  toleranceMs: number,
 ): { status: AttributionStatus; details: Prisma.InputJsonValue } => {
   if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
 
@@ -84,7 +83,7 @@ export const resolveQuoteBinding = (
       const quoted = quotedAt.getTime()
       const checked = { checked: true, blockTime, quotedAt: quoted }
 
-      if (quoted <= blockTime + toleranceMs) return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+      if (quoted <= blockTime) return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
 
       return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
     }

@@ -80,28 +80,43 @@ export class TxLookupService {
 
     for (const [chainId, basePath] of utxoNodes) {
       const api = new unchained.bitcoin.V1Api(new unchained.bitcoin.Configuration({ basePath }))
-      this.fetchers.set(chainId, unchainedFetcher((req) => api.getTransaction(req)))
+      this.fetchers.set(
+        chainId,
+        unchainedFetcher((req) => api.getTransaction(req)),
+      )
     }
 
     const thorchain = new unchained.thorchain.V1Api(
       new unchained.thorchain.Configuration({ basePath: env.VITE_UNCHAINED_THORCHAIN_HTTP_URL }),
     )
-    this.fetchers.set(caip.thorchainChainId, unchainedFetcher((req) => thorchain.getTx(req)))
+    this.fetchers.set(
+      caip.thorchainChainId,
+      unchainedFetcher((req) => thorchain.getTx(req)),
+    )
 
     const mayachain = new unchained.mayachain.V1Api(
       new unchained.mayachain.Configuration({ basePath: env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL }),
     )
-    this.fetchers.set(caip.mayachainChainId, unchainedFetcher((req) => mayachain.getTx(req)))
+    this.fetchers.set(
+      caip.mayachainChainId,
+      unchainedFetcher((req) => mayachain.getTx(req)),
+    )
 
     const cosmos = new unchained.cosmos.V1Api(
       new unchained.cosmos.Configuration({ basePath: env.VITE_UNCHAINED_COSMOS_HTTP_URL }),
     )
-    this.fetchers.set(caip.cosmosChainId, unchainedFetcher((req) => cosmos.getTx(req)))
+    this.fetchers.set(
+      caip.cosmosChainId,
+      unchainedFetcher((req) => cosmos.getTx(req)),
+    )
 
     const solana = new unchained.solana.V1Api(
       new unchained.solana.Configuration({ basePath: env.VITE_UNCHAINED_SOLANA_HTTP_URL }),
     )
-    this.fetchers.set(caip.solanaChainId, unchainedFetcher((req) => solana.getTransaction(req)))
+    this.fetchers.set(
+      caip.solanaChainId,
+      unchainedFetcher((req) => solana.getTransaction(req)),
+    )
   }
 
   supports(chainId: ChainId): boolean {
