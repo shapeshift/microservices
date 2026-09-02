@@ -212,9 +212,9 @@ describe('resolveQuoteBinding', () => {
 
   // absence of evidence is never evidence - none of these may reject
   it.each([
-    ['unsupported chain', { outcome: 'unsupported' } as const, 'unsupported-chain'],
-    ['a transaction it cannot see', { outcome: 'not-found' } as const, 'tx-not-found'],
-    ['a failed lookup', { outcome: 'error', reason: 'timeout' } as const, 'lookup-failed'],
+    ['unsupported chain', { outcome: 'unsupported' } as const, 'unsupported'],
+    ['a transaction it cannot see', { outcome: 'not-found' } as const, 'not-found'],
+    ['a failed lookup', { outcome: 'error' } as const, 'error'],
   ])('holds on %s rather than deciding', (_label, lookup, reason) => {
     const { status, details } = resolveQuoteBinding(lookup, at(-60_000))
 

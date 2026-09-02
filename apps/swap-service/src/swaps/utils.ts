@@ -70,24 +70,16 @@ export const resolveQuoteBinding = (
 ): { status: AttributionStatus; details: Prisma.InputJsonValue } => {
   if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
 
-  switch (lookup.outcome) {
-    case 'unsupported':
-      return { status: 'PENDING', details: { checked: false, reason: 'unsupported-chain' } }
-    case 'not-found':
-      return { status: 'PENDING', details: { checked: false, reason: 'tx-not-found' } }
-    case 'error':
-      return { status: 'PENDING', details: { checked: false, reason: 'lookup-failed' } }
-    case 'found': {
-      // unchained reports seconds
-      const blockTime = lookup.timestamp * 1000
-      const quoted = quotedAt.getTime()
-      const checked = { checked: true, blockTime, quotedAt: quoted }
+  if (lookup.outcome !== 'found') return { status: 'PENDING', details: { checked: false, reason: lookup.outcome } }
 
-      if (quoted <= blockTime) return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+  // unchained reports seconds
+  const blockTime = lookup.timestamp * 1000
+  const quoted = quotedAt.getTime()
+  const checked = { checked: true, blockTime, quotedAt: quoted }
 
-      return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
-    }
-  }
+  if (quoted <= blockTime) return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+
+  return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
 }
 
 export const toQuotedAt = (value: string | undefined): Date | null => {

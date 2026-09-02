@@ -8,11 +8,7 @@ import * as unchained from '@shapeshiftoss/unchained-client'
 
 import { env } from '../env'
 
-export type TxLookup =
-  | { outcome: 'found'; timestamp: number }
-  | { outcome: 'not-found' }
-  | { outcome: 'unsupported' }
-  | { outcome: 'error'; reason: string }
+export type TxLookup = { outcome: 'found'; timestamp: number } | { outcome: 'unsupported' | 'not-found' | 'error' }
 
 type Fetcher = (txid: string) => Promise<TxLookup>
 
@@ -135,10 +131,9 @@ export class TxLookupService {
         return { outcome: 'not-found' }
       }
 
-      const reason = error instanceof Error ? error.message : String(error)
-      this.logger.warn(`Tx lookup failed for ${txid} on ${chainId}: ${reason}`)
+      this.logger.warn(`Tx lookup failed for ${txid} on ${chainId}: ${error instanceof Error ? error.message : error}`)
 
-      return { outcome: 'error', reason }
+      return { outcome: 'error' }
     }
   }
 }
