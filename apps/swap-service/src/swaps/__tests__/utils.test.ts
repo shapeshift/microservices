@@ -145,7 +145,7 @@ describe('resolveStalledSwap', () => {
     })
   })
 
-  // the swapper reports nothing for an unmined source tx, so the message must still say why
+  // an unmined source tx leaves the swapper with nothing to report
   it('records why it failed when the swapper reported no status', () => {
     expect(resolveStalledSwap('PENDING', longAgo, '').statusMessage).toBe(
       'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
@@ -159,7 +159,6 @@ describe('resolveStalledSwap', () => {
     })
   })
 
-  // a slow settle is still a settle - only PENDING is abandoned
   it('never overrides a terminal status, however old the swap', () => {
     expect(resolveStalledSwap('SUCCESS', longAgo, 'complete').status).toBe('SUCCESS')
     expect(resolveStalledSwap('FAILED', longAgo, 'reverted').status).toBe('FAILED')

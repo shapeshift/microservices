@@ -12,7 +12,6 @@ import type { Asset } from '@shapeshiftoss/types'
 import { getAssetPriceUsd } from '../utils/pricing'
 
 import { PENDING_TIMEOUT_MS } from './constants'
-
 import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -44,8 +43,6 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
 
-// a swap the swapper still cannot settle after the timeout is abandoned, not in flight - without this
-// it polls forever, and nothing else inspects the source tx to terminate it
 export const resolveStalledSwap = (
   status: SwapStatus,
   createdAt: Date,
@@ -56,7 +53,10 @@ export const resolveStalledSwap = (
 
   const last = statusMessage || 'none reported'
 
-  return { status: 'FAILED', statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})` }
+  return {
+    status: 'FAILED',
+    statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})`,
+  }
 }
 
 export const toQuotedAt = (value: string | undefined): Date | null => {
