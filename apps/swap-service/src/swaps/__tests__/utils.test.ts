@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
-import { UNREACHABLE_TIMEOUT_MS } from '../constants'
+import { PENDING_TIMEOUT_MS, UNREACHABLE_TIMEOUT_MS } from '../constants'
 import { calculateFeeForSwap, describeError, resolveStalledSwap } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
@@ -140,7 +140,7 @@ describe('resolveStalledSwap', () => {
   const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
 
   it('fails a swap the swapper still cannot settle past the timeout', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
       status: 'FAILED',
       statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: waiting)',
     })
@@ -148,13 +148,13 @@ describe('resolveStalledSwap', () => {
 
   // an unmined source tx leaves the swapper with nothing to report
   it('records why it failed when the swapper reported no status', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, '').statusMessage).toBe(
+    expect(resolveStalledSwap('PENDING', longAgo, '', PENDING_TIMEOUT_MS).statusMessage).toBe(
       'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
     )
   })
 
   it('leaves a swap pending inside the timeout', () => {
-    expect(resolveStalledSwap('PENDING', justNow, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', justNow, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
       status: 'PENDING',
       statusMessage: 'waiting',
     })
@@ -181,7 +181,7 @@ describe('resolveStalledSwap', () => {
   })
 
   it('never overrides a terminal status, however old the swap', () => {
-    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete').status).toBe('SUCCESS')
-    expect(resolveStalledSwap('FAILED', longAgo, 'reverted').status).toBe('FAILED')
+    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', PENDING_TIMEOUT_MS).status).toBe('SUCCESS')
+    expect(resolveStalledSwap('FAILED', longAgo, 'reverted', PENDING_TIMEOUT_MS).status).toBe('FAILED')
   })
 })

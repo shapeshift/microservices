@@ -11,7 +11,6 @@ import type { Asset } from '@shapeshiftoss/types'
 
 import { getAssetPriceUsd } from '../utils/pricing'
 
-import { PENDING_TIMEOUT_MS } from './constants'
 import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -47,7 +46,7 @@ export const resolveStalledSwap = (
   status: SwapStatus,
   createdAt: Date,
   statusMessage: string,
-  timeoutMs: number = PENDING_TIMEOUT_MS,
+  timeoutMs: number,
 ): { status: SwapStatus; statusMessage: string } => {
   if (status !== 'PENDING') return { status, statusMessage }
   if (Date.now() - createdAt.getTime() < timeoutMs) return { status, statusMessage }
