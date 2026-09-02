@@ -26,7 +26,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { REFERRER_FEE_RATE } from './constants'
+import { PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
@@ -390,7 +390,12 @@ export class SwapsService {
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
-        ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
+        ...resolveStalledSwap(
+          swapStatus,
+          swap.createdAt,
+          typeof statusMessage === 'string' ? statusMessage : '',
+          PENDING_TIMEOUT_MS,
+        ),
         sellTxHash: swap.sellTxHash,
         buyTxHash,
       }
@@ -399,10 +404,7 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return {
-        status: 'PENDING',
-        statusMessage: `Error polling status: ${reason}`,
-      }
+      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`, UNREACHABLE_TIMEOUT_MS)
     }
   }
 
