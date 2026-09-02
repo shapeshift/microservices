@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common'
-import type { Swap as PrismaSwap } from '@prisma/client'
+import type { AttributionStatus, Prisma, Swap as PrismaSwap } from '@prisma/client'
 import axios from 'axios'
 
 import type { CreateSwapDto, SwapStatus } from '@shapeshift/shared-types'
@@ -9,6 +9,7 @@ import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapMetadata, SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
+import type { TxLookup } from '../lib/tx-lookup.service'
 import { getAssetPriceUsd } from '../utils/pricing'
 
 import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
@@ -58,6 +59,35 @@ export const resolveStalledSwap = (
   return {
     status: 'FAILED',
     statusMessage: `Abandoned: unsettled ${window} after registration (last swapper status: ${last})`,
+  }
+}
+
+// a harvested tx is broadcast before the quote minted to claim it exists, so only a quote that
+// predates its own transaction can be the one that authorised it
+export const resolveQuoteBinding = (
+  lookup: TxLookup,
+  quotedAt: Date | null,
+  toleranceMs: number,
+): { status: AttributionStatus; details: Prisma.InputJsonValue } => {
+  if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
+
+  switch (lookup.outcome) {
+    case 'unsupported':
+      return { status: 'PENDING', details: { checked: false, reason: 'unsupported-chain' } }
+    case 'not-found':
+      return { status: 'PENDING', details: { checked: false, reason: 'tx-not-found' } }
+    case 'error':
+      return { status: 'PENDING', details: { checked: false, reason: 'lookup-failed' } }
+    case 'found': {
+      // unchained reports seconds
+      const blockTime = lookup.timestamp * 1000
+      const quoted = quotedAt.getTime()
+      const checked = { checked: true, blockTime, quotedAt: quoted }
+
+      if (quoted <= blockTime + toleranceMs) return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+
+      return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
+    }
   }
 }
 

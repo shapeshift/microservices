@@ -74,7 +74,7 @@ const buildService = (affiliate: AffiliateRow | null, addressMatches: { partnerC
   }
 
   const stub = {} as never
-  const service = new SwapsService(prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub)
+  const service = new SwapsService(prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub)
 
   return { service, findUniqueCalls, findManyCalls, createCalls }
 }

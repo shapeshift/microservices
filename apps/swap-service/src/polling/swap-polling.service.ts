@@ -15,6 +15,7 @@ export class SwapPollingService {
 
   private isPollingTx = false
   private isPollingVerification = false
+  private isPollingAttribution = false
 
   constructor(
     private swapsService: SwapsService,
@@ -57,6 +58,24 @@ export class SwapPollingService {
     }
   }
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async pollPendingAttribution() {
+    if (this.isPollingAttribution) return
+    this.isPollingAttribution = true
+
+    try {
+      const swaps = await this.swapsService.getPendingAttributionSwaps()
+      if (swaps.length === 0) return
+
+      this.logger.log(`Polling attribution for ${swaps.length} swaps (${swapIds(swaps)})`)
+      await this.runWorkers(swaps, (swap) => this.pollAttribution(swap))
+    } catch (err) {
+      this.logger.error('Failed to poll pending attribution:', err)
+    } finally {
+      this.isPollingAttribution = false
+    }
+  }
+
   private async runWorkers(swaps: Swap[], handler: (swap: Swap) => Promise<void>): Promise<void> {
     const queue = [...swaps]
     const workers = Array.from({ length: Math.min(POLL_CONCURRENCY, queue.length) }, async () => {
@@ -87,6 +106,19 @@ export class SwapPollingService {
       this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
     } catch (err) {
       this.logger.error(`Failed to poll tx status for swap ${swap.swapId}:`, err)
+    }
+  }
+
+  private async pollAttribution(swap: Swap): Promise<void> {
+    try {
+      const updated = await this.swapsService.checkQuoteBinding(swap)
+      if (updated.attributionStatus !== swap.attributionStatus) {
+        this.logger.log(
+          `Attribution resolved for swap ${swap.swapId}: ${updated.attributionStatus} ${JSON.stringify(updated.attributionDetails)}`,
+        )
+      }
+    } catch (err) {
+      this.logger.error(`Failed to check attribution for swap ${swap.swapId}:`, err)
     }
   }
 

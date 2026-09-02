@@ -4,7 +4,7 @@ import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import { PENDING_TIMEOUT_MS, UNREACHABLE_TIMEOUT_MS } from '../constants'
 import type { Swap } from '../types'
-import { calculateFeeForSwap, describeError, resolveStalledSwap } from '../utils'
+import { calculateFeeForSwap, describeError, resolveQuoteBinding, resolveStalledSwap } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
 // '0' fee amount resolves to actualFeeUsd = 0 (the real 0-bps case this branch introduced).
@@ -183,5 +183,51 @@ describe('resolveStalledSwap', () => {
   it('never overrides a terminal status, however old the swap', () => {
     expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', PENDING_TIMEOUT_MS).status).toBe('SUCCESS')
     expect(resolveStalledSwap('FAILED', longAgo, 'reverted', PENDING_TIMEOUT_MS).status).toBe('FAILED')
+  })
+})
+
+describe('resolveQuoteBinding', () => {
+  const blockTime = Date.UTC(2026, 8, 1, 12, 0, 0)
+  const found = { outcome: 'found', timestamp: blockTime / 1000 } as const
+  const at = (offsetMs: number) => new Date(blockTime + offsetMs)
+
+  it('accepts a quote minted before its transaction was mined', () => {
+    const { status, details } = resolveQuoteBinding(found, at(-60_000), 0)
+
+    expect(status).toBe('ACCEPTED')
+    expect(details).toMatchObject({ checked: true, reason: 'quote-precedes-tx', blockTime })
+  })
+
+  // the harvest attack: the txid cannot be known until it exists, so the claim's quote is younger
+  it('rejects a quote minted after its transaction was mined', () => {
+    const { status, details } = resolveQuoteBinding(found, at(1000), 0)
+
+    expect(status).toBe('REJECTED')
+    expect(details).toMatchObject({ checked: true, reason: 'quote-postdates-tx' })
+  })
+
+  // a tolerance is a window to claim an already-mined tx, so it must never be applied loosely
+  it('applies a tolerance only up to its exact bound', () => {
+    expect(resolveQuoteBinding(found, at(1000), 1000).status).toBe('ACCEPTED')
+    expect(resolveQuoteBinding(found, at(1001), 1000).status).toBe('REJECTED')
+  })
+
+  // absence of evidence is never evidence - none of these may reject
+  it.each([
+    ['unsupported chain', { outcome: 'unsupported' } as const, 'unsupported-chain'],
+    ['a transaction it cannot see', { outcome: 'not-found' } as const, 'tx-not-found'],
+    ['a failed lookup', { outcome: 'error', reason: 'timeout' } as const, 'lookup-failed'],
+  ])('holds on %s rather than deciding', (_label, lookup, reason) => {
+    const { status, details } = resolveQuoteBinding(lookup, at(-60_000), 0)
+
+    expect(status).toBe('PENDING')
+    expect(details).toMatchObject({ checked: false, reason })
+  })
+
+  it('holds a row with no quote time, which cannot be checked at all', () => {
+    expect(resolveQuoteBinding(found, null, 0)).toMatchObject({
+      status: 'PENDING',
+      details: { checked: false, reason: 'no-quoted-at' },
+    })
   })
 })
