@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common'
 
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
+import { PENDING_TIMEOUT_MS, UNREACHABLE_TIMEOUT_MS } from '../constants'
 import type { Swap } from '../types'
 import { calculateFeeForSwap, describeError, resolveStalledSwap } from '../utils'
 
@@ -139,7 +140,7 @@ describe('resolveStalledSwap', () => {
   const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
 
   it('fails a swap the swapper still cannot settle past the timeout', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
       status: 'FAILED',
       statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: waiting)',
     })
@@ -147,20 +148,40 @@ describe('resolveStalledSwap', () => {
 
   // an unmined source tx leaves the swapper with nothing to report
   it('records why it failed when the swapper reported no status', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, '').statusMessage).toBe(
+    expect(resolveStalledSwap('PENDING', longAgo, '', PENDING_TIMEOUT_MS).statusMessage).toBe(
       'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
     )
   })
 
   it('leaves a swap pending inside the timeout', () => {
-    expect(resolveStalledSwap('PENDING', justNow, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', justNow, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
       status: 'PENDING',
       statusMessage: 'waiting',
     })
   })
 
+  // an unreachable swapper is no evidence the swap is dead, so a blip must not fail a settled one
+  it('holds a swap the swapper could not be reached for at the short timeout', () => {
+    const twoDaysOld = new Date(Date.now() - 48 * 60 * 60 * 1000)
+
+    expect(
+      resolveStalledSwap('PENDING', twoDaysOld, 'Error polling status: timeout', UNREACHABLE_TIMEOUT_MS).status,
+    ).toBe('PENDING')
+  })
+
+  it('fails a swap the swapper has been unreachable for past the long timeout', () => {
+    const eightDaysOld = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+
+    expect(
+      resolveStalledSwap('PENDING', eightDaysOld, 'Error polling status: timeout', UNREACHABLE_TIMEOUT_MS),
+    ).toEqual({
+      status: 'FAILED',
+      statusMessage: 'Abandoned: unsettled 7d after registration (last swapper status: Error polling status: timeout)',
+    })
+  })
+
   it('never overrides a terminal status, however old the swap', () => {
-    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete').status).toBe('SUCCESS')
-    expect(resolveStalledSwap('FAILED', longAgo, 'reverted').status).toBe('FAILED')
+    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', PENDING_TIMEOUT_MS).status).toBe('SUCCESS')
+    expect(resolveStalledSwap('FAILED', longAgo, 'reverted', PENDING_TIMEOUT_MS).status).toBe('FAILED')
   })
 })
