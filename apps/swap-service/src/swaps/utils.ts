@@ -70,7 +70,7 @@ export const resolveQuoteBinding = (
 ): { status: AttributionStatus; details: Prisma.InputJsonValue } => {
   if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
 
-  if (lookup.outcome !== 'found') return { status: 'PENDING', details: { checked: false, reason: lookup.outcome } }
+  if ('unavailable' in lookup) return { status: 'PENDING', details: { checked: false, reason: lookup.unavailable } }
 
   const blockTime = lookup.blockTime * 1000
   const quoted = quotedAt.getTime()

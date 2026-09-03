@@ -10,16 +10,11 @@ import * as unchained from '@shapeshiftoss/unchained-client'
 
 import { env } from '../env'
 
-// seconds, as every chain reports it
-export type BlockTimeLookup =
-  | { outcome: 'found'; blockTime: number }
-  | { outcome: 'unsupported' | 'not-found' | 'error' }
+export type BlockTimeLookup = { blockTime: number } | { unavailable: 'unsupported' | 'not-found' | 'error' }
 
 type ChainLookup = (txid: string) => Promise<BlockTimeLookup>
-
 type GetTx = (req: { txid: string }) => Promise<{ timestamp: number }>
 
-// a transaction carries the block it landed in but not that block's time, so the block is a second hop
 const viemLookup =
   (client: PublicClient): ChainLookup =>
   async (txid) => {
@@ -27,14 +22,14 @@ const viemLookup =
       const tx = await client.getTransaction({ hash: txid as `0x${string}` })
 
       // seen but still unmined, which says nothing about when it was broadcast
-      if (tx.blockNumber === null) return { outcome: 'not-found' }
+      if (tx.blockNumber === null) return { unavailable: 'not-found' }
 
       const block = await client.getBlock({ blockNumber: tx.blockNumber })
 
-      return { outcome: 'found', blockTime: Number(block.timestamp) }
+      return { blockTime: Number(block.timestamp) }
     } catch (error) {
       if (error instanceof TransactionNotFoundError || error instanceof BlockNotFoundError) {
-        return { outcome: 'not-found' }
+        return { unavailable: 'not-found' }
       }
 
       throw error
@@ -47,9 +42,9 @@ const unchainedLookup =
     try {
       const { timestamp } = await getTx({ txid })
 
-      return { outcome: 'found', blockTime: timestamp }
+      return { blockTime: timestamp }
     } catch (error) {
-      if (error instanceof unchained.ResponseError && error.response.status === 404) return { outcome: 'not-found' }
+      if (error instanceof unchained.ResponseError && error.response.status === 404) return { unavailable: 'not-found' }
 
       throw error
     }
@@ -112,14 +107,16 @@ export class BlockTimeService {
 
   async lookup(chainId: ChainId, txid: string): Promise<BlockTimeLookup> {
     const chainLookup = this.lookups.get(chainId)
-    if (!chainLookup) return { outcome: 'unsupported' }
+    if (!chainLookup) return { unavailable: 'unsupported' }
 
     try {
       return await chainLookup(txid)
     } catch (error) {
-      this.logger.warn(`Block time lookup failed for ${txid} on ${chainId}: ${error instanceof Error ? error.message : error}`)
+      this.logger.warn(
+        `Block time lookup failed for ${txid} on ${chainId}: ${error instanceof Error ? error.message : error}`,
+      )
 
-      return { outcome: 'error' }
+      return { unavailable: 'error' }
     }
   }
 }

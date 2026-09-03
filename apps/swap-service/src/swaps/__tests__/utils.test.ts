@@ -188,7 +188,7 @@ describe('resolveStalledSwap', () => {
 
 describe('resolveQuoteBinding', () => {
   const blockTime = Date.UTC(2026, 8, 1, 12, 0, 0)
-  const found = { outcome: 'found', blockTime: blockTime / 1000 } as const
+  const found = { blockTime: blockTime / 1000 } as const
   const at = (offsetMs: number) => new Date(blockTime + offsetMs)
 
   it('accepts a quote minted before its transaction was mined', () => {
@@ -212,9 +212,9 @@ describe('resolveQuoteBinding', () => {
 
   // absence of evidence is never evidence - none of these may reject
   it.each([
-    ['unsupported chain', { outcome: 'unsupported' } as const, 'unsupported'],
-    ['a transaction it cannot see', { outcome: 'not-found' } as const, 'not-found'],
-    ['a failed lookup', { outcome: 'error' } as const, 'error'],
+    ['unsupported chain', { unavailable: 'unsupported' } as const, 'unsupported'],
+    ['a transaction it cannot see', { unavailable: 'not-found' } as const, 'not-found'],
+    ['a failed lookup', { unavailable: 'error' } as const, 'error'],
   ])('holds on %s rather than deciding', (_label, lookup, reason) => {
     const { status, details } = resolveQuoteBinding(lookup, at(-60_000))
 
