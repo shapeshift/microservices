@@ -12,6 +12,7 @@ import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/share
 import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
+import { BlockTimeService } from '../lib/block-time.service'
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service'
 import { EvmChainAdapterService } from '../lib/chain-adapters/evm.service'
 import { NearChainAdapterService } from '../lib/chain-adapters/near.service'
@@ -21,13 +22,12 @@ import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service'
 import { TonChainAdapterService } from '../lib/chain-adapters/ton.service'
 import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
-import { BlockTimeService } from '../lib/block-time.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
@@ -282,7 +282,9 @@ export class SwapsService {
 
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      where: { sellTxHash: { not: null }, attributionStatus: 'PENDING' },
+      where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      take: ATTRIBUTION_BATCH_SIZE,
     })
 
     return swaps.map(toSwap)
@@ -293,6 +295,9 @@ export class SwapsService {
 
     const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
     const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt)
+
+    // still pending is the common case and writing it back would churn updatedAt on every pass
+    if (status === swap.attributionStatus) return swap
 
     return toSwap(
       await this.prisma.swap.update({

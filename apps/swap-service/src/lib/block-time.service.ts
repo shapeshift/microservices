@@ -1,6 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common'
-import type { PublicClient } from 'viem'
-import { BlockNotFoundError, TransactionNotFoundError } from 'viem'
 
 import type { ChainId } from '@shapeshiftoss/caip'
 import { viemClientByChainId } from '@shapeshiftoss/contracts'
@@ -13,24 +11,32 @@ import { env } from '../env'
 export type BlockTimeLookup = { blockTime: number } | { unavailable: 'unsupported' | 'not-found' | 'error' }
 
 type ChainLookup = (txid: string) => Promise<BlockTimeLookup>
-type GetTx = (req: { txid: string }) => Promise<{ timestamp: number }>
+type GetTx = (req: { txid: string }) => Promise<{ timestamp: number; blockHeight: number }>
+
+type ViemClient = {
+  getTransaction(args: { hash: `0x${string}` }): Promise<{ blockNumber: bigint | null }>
+  getBlock(args: { blockNumber: bigint }): Promise<{ timestamp: bigint }>
+}
+
+const isNotFound = (error: unknown): boolean => {
+  const { name, response } = (error ?? {}) as { name?: string; response?: { status?: number } }
+
+  return name === 'TransactionNotFoundError' || name === 'BlockNotFoundError' || response?.status === 404
+}
 
 const viemLookup =
-  (client: PublicClient): ChainLookup =>
+  (client: ViemClient): ChainLookup =>
   async (txid) => {
     try {
       const tx = await client.getTransaction({ hash: txid as `0x${string}` })
 
-      // seen but still unmined, which says nothing about when it was broadcast
       if (tx.blockNumber === null) return { unavailable: 'not-found' }
 
       const block = await client.getBlock({ blockNumber: tx.blockNumber })
 
       return { blockTime: Number(block.timestamp) }
     } catch (error) {
-      if (error instanceof TransactionNotFoundError || error instanceof BlockNotFoundError) {
-        return { unavailable: 'not-found' }
-      }
+      if (isNotFound(error)) return { unavailable: 'not-found' }
 
       throw error
     }
@@ -40,11 +46,13 @@ const unchainedLookup =
   (getTx: GetTx): ChainLookup =>
   async (txid) => {
     try {
-      const { timestamp } = await getTx({ txid })
+      const { timestamp, blockHeight } = await getTx({ txid })
+
+      if (blockHeight <= 0) return { unavailable: 'not-found' }
 
       return { blockTime: timestamp }
     } catch (error) {
-      if (error instanceof unchained.ResponseError && error.response.status === 404) return { unavailable: 'not-found' }
+      if (isNotFound(error)) return { unavailable: 'not-found' }
 
       throw error
     }
@@ -55,7 +63,6 @@ const unchainedApi = <C, A>(
   basePath: string,
 ): A => new namespace.V1Api(new namespace.Configuration({ basePath }))
 
-// keyed by the chain-id unions, so a chain added to either family fails to compile until it is served here
 const UTXO_URLS: Record<UtxoChainId, string> = {
   [KnownChainIds.BitcoinMainnet]: env.VITE_UNCHAINED_BITCOIN_HTTP_URL,
   [KnownChainIds.BitcoinCashMainnet]: env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL,

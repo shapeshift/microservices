@@ -62,8 +62,6 @@ export const resolveStalledSwap = (
   }
 }
 
-// a harvested tx is broadcast before the quote minted to claim it exists, so only a quote that
-// predates its own transaction can be the one that authorised it
 export const resolveQuoteBinding = (
   lookup: BlockTimeLookup,
   quotedAt: Date | null,

@@ -16,10 +16,9 @@
   "dependencies": {
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
+    "@shapeshiftoss/contracts": "^1.0.7",
     "jsonwebtoken": "^9.0.3",
-    "siwe": "^3.0.0",
-    "viem": "^2.43.5",
-    "@shapeshiftoss/contracts": "^1.0.7"
+    "siwe": "^3.0.0"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10"
