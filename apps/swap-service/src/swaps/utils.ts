@@ -12,6 +12,7 @@ import type { Asset } from '@shapeshiftoss/types'
 import type { BlockTimeLookup } from '../lib/block-time.service'
 import { getAssetPriceUsd } from '../utils/pricing'
 
+import { PENDING_TIMEOUT_MS } from './constants'
 import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -47,18 +48,15 @@ export const resolveStalledSwap = (
   status: SwapStatus,
   createdAt: Date,
   statusMessage: string,
-  timeoutMs: number,
 ): { status: SwapStatus; statusMessage: string } => {
   if (status !== 'PENDING') return { status, statusMessage }
-  if (Date.now() - createdAt.getTime() < timeoutMs) return { status, statusMessage }
+  if (Date.now() - createdAt.getTime() < PENDING_TIMEOUT_MS) return { status, statusMessage }
 
   const last = statusMessage || 'none reported'
-  const hours = timeoutMs / (60 * 60 * 1000)
-  const window = hours >= 48 ? `${hours / 24}d` : `${hours}h`
 
   return {
     status: 'FAILED',
-    statusMessage: `Abandoned: unsettled ${window} after registration (last swapper status: ${last})`,
+    statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})`,
   }
 }
 

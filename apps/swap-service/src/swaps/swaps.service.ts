@@ -27,7 +27,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_BATCH_SIZE, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
@@ -282,7 +282,13 @@ export class SwapsService {
 
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
+      // a failed swap cannot be paid, so its attribution is moot and would otherwise poll forever
+      where: {
+        sellTxHash: { not: null },
+        quotedAt: { not: null },
+        attributionStatus: 'PENDING',
+        status: { not: 'FAILED' },
+      },
       orderBy: { createdAt: 'asc' },
       take: ATTRIBUTION_BATCH_SIZE,
     })
@@ -296,8 +302,11 @@ export class SwapsService {
     const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
     const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt)
 
-    // still pending is the common case and writing it back would churn updatedAt on every pass
-    if (status === swap.attributionStatus) return swap
+    // a repeat of the same verdict would only churn updatedAt, but the first one records why
+    const unchanged =
+      status === swap.attributionStatus && JSON.stringify(details) === JSON.stringify(swap.attributionDetails)
+
+    if (unchanged) return swap
 
     return toSwap(
       await this.prisma.swap.update({
@@ -424,12 +433,7 @@ export class SwapsService {
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
-        ...resolveStalledSwap(
-          swapStatus,
-          swap.createdAt,
-          typeof statusMessage === 'string' ? statusMessage : '',
-          PENDING_TIMEOUT_MS,
-        ),
+        ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
         sellTxHash: swap.sellTxHash,
         buyTxHash,
       }
@@ -438,7 +442,8 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`, UNREACHABLE_TIMEOUT_MS)
+      // a swapper we could not reach has told us nothing about the swap, so there is nothing to conclude
+      return { status: 'PENDING', statusMessage: `Error polling status: ${reason}` }
     }
   }
 
