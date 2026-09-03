@@ -29,7 +29,14 @@ import { SwapVerificationService } from '../verification/swap-verification.servi
 
 import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
-import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
+import type {
+  AffiliateVerificationDetails,
+  AggregateFeesParams,
+  AttributionDetails,
+  FeeTotals,
+  PaginatedSwaps,
+  Swap,
+} from './types'
 import { PaginationQueryDto } from './types'
 import {
   buildStatusNotification,
@@ -300,8 +307,8 @@ export class SwapsService {
     })
 
     // a repeat of the same verdict would only churn updatedAt, but the first one records why
-    const unchanged =
-      status === swap.attributionStatus && JSON.stringify(details) === JSON.stringify(swap.attributionDetails)
+    const previous = swap.attributionDetails as AttributionDetails | null
+    const unchanged = status === swap.attributionStatus && details.reason === previous?.reason
 
     if (unchanged) return swap
 

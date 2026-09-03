@@ -62,7 +62,7 @@ model Swap {
   @@index([partnerCode])
   @@index([status, sellTxHash])
   @@index([sellTxHash])
-  @@index([attributionStatus])
+  @@index([attributionStatus, createdAt])
   @@index([verificationStatus, status])
   @@index([userId])
   @@map("swaps")

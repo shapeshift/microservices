@@ -1,2 +1,2 @@
--- the attribution pass selects on this every cycle and the composite indexes all lead with another column
-CREATE INDEX "swaps_attributionStatus_idx" ON "swaps"("attributionStatus");
+-- the attribution pass filters on status and takes the oldest rows, so the index carries both
+CREATE INDEX "swaps_attributionStatus_createdAt_idx" ON "swaps"("attributionStatus", "createdAt");

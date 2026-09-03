@@ -8,7 +8,7 @@ import * as unchained from '@shapeshiftoss/unchained-client'
 
 import { env } from '../env'
 
-export type BlockTimeLookup = { blockTime: number } | { unavailable: 'unsupported' | 'not-found' | 'error' }
+export type BlockTimeLookup = { blockTime: number } | { unavailable: 'unsupported' | 'not-found' | 'unmined' | 'error' }
 
 type ChainLookup = (txid: string) => Promise<BlockTimeLookup>
 type GetTx = (req: { txid: string }) => Promise<{ timestamp: number; blockHeight: number }>
@@ -18,10 +18,12 @@ type ViemClient = {
   getBlock(args: { blockNumber: bigint }): Promise<{ timestamp: bigint }>
 }
 
+// only the chain answering that it has no such transaction counts, since not-found is the one outcome
+// that can end in rejection - a block we cannot read is a node problem and falls through to error
 const isNotFound = (error: unknown): boolean => {
   const { name, response } = (error ?? {}) as { name?: string; response?: { status?: number } }
 
-  return name === 'TransactionNotFoundError' || name === 'BlockNotFoundError' || response?.status === 404
+  return name === 'TransactionNotFoundError' || response?.status === 404
 }
 
 const viemLookup =
@@ -30,7 +32,8 @@ const viemLookup =
     try {
       const tx = await client.getTransaction({ hash: txid as `0x${string}` })
 
-      if (tx.blockNumber === null) return { unavailable: 'not-found' }
+      // the node has the transaction, it just is not in a block yet
+      if (tx.blockNumber === null) return { unavailable: 'unmined' }
 
       const block = await client.getBlock({ blockNumber: tx.blockNumber })
 
@@ -48,7 +51,8 @@ const unchainedLookup =
     try {
       const { timestamp, blockHeight } = await getTx({ txid })
 
-      if (blockHeight <= 0) return { unavailable: 'not-found' }
+      // the node has the transaction, it just is not in a block yet
+      if (blockHeight <= 0) return { unavailable: 'unmined' }
 
       return { blockTime: timestamp }
     } catch (error) {

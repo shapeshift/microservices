@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common'
-import type { AttributionStatus, Prisma, Swap as PrismaSwap } from '@prisma/client'
+import type { AttributionStatus, Swap as PrismaSwap } from '@prisma/client'
 import axios from 'axios'
 
 import type { CreateSwapDto, SwapStatus } from '@shapeshift/shared-types'
@@ -13,7 +13,7 @@ import type { BlockTimeLookup } from '../lib/block-time.service'
 import { getAssetPriceUsd } from '../utils/pricing'
 
 import { PENDING_TIMEOUT_MS } from './constants'
-import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
+import type { AffiliateVerificationDetails, AttributionDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
 
@@ -64,7 +64,7 @@ export const resolveQuoteBinding = (
   lookup: BlockTimeLookup,
   quotedAt: Date | null,
   swap: { status: SwapStatus; createdAt: Date },
-): { status: AttributionStatus; details: Prisma.InputJsonValue } => {
+): { status: AttributionStatus; details: AttributionDetails } => {
   if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
 
   if ('unavailable' in lookup) {

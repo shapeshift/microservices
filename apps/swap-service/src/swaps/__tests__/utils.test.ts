@@ -196,6 +196,7 @@ describe('resolveQuoteBinding', () => {
   it.each([
     ['unsupported chain', { unavailable: 'unsupported' } as const, 'unsupported'],
     ['a transaction it cannot see', { unavailable: 'not-found' } as const, 'not-found'],
+    ['a transaction still in the mempool', { unavailable: 'unmined' } as const, 'unmined'],
     ['a failed lookup', { unavailable: 'error' } as const, 'error'],
   ])('holds on %s rather than deciding', (_label, lookup, reason) => {
     const { status, details } = resolveQuoteBinding(lookup, at(-60_000), live)
@@ -217,10 +218,11 @@ describe('resolveQuoteBinding', () => {
     expect(resolveQuoteBinding({ unavailable: 'not-found' }, at(-60_000), justFailed).status).toBe('PENDING')
   })
 
-  // being unable to ask stays inconclusive however dead the swap is
-  it('still holds a failed swap when the chain could not be reached', () => {
+  // only the chain disowning the transaction can reject; a stuck one still exists and may yet mine
+  it('still holds a failed swap that was not answered with a denial', () => {
     expect(resolveQuoteBinding({ unavailable: 'error' }, at(-60_000), abandoned).status).toBe('PENDING')
     expect(resolveQuoteBinding({ unavailable: 'unsupported' }, at(-60_000), abandoned).status).toBe('PENDING')
+    expect(resolveQuoteBinding({ unavailable: 'unmined' }, at(-60_000), abandoned).status).toBe('PENDING')
   })
 
   // a failed swap whose transaction is real is still attributable, it simply cannot be paid

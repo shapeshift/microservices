@@ -16,6 +16,13 @@ export type Swap = Omit<
   affiliateVerificationDetails: AffiliateVerificationDetails | null
 }
 
+export type AttributionDetails = {
+  checked: boolean
+  reason: string
+  blockTime?: number
+  quotedAt?: number
+}
+
 export type AffiliateVerificationDetails = {
   affiliateBps?: number
   affiliateAddress?: string
