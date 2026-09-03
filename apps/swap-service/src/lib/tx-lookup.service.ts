@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common'
-import axios from 'axios'
 
 import type { ChainId } from '@shapeshiftoss/caip'
 import * as caip from '@shapeshiftoss/caip'
 import { KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
+import { BlockNotFoundError, createPublicClient, http, TransactionNotFoundError } from 'viem'
 
 import { env } from '../env'
 
@@ -12,27 +12,21 @@ export type TxLookup = { outcome: 'found'; timestamp: number } | { outcome: 'uns
 
 type Fetcher = (txid: string) => Promise<TxLookup>
 
-const rpc = async <T>(url: string, method: string, params: unknown[]): Promise<T> => {
-  const { data } = await axios.post(url, { jsonrpc: '2.0', id: 1, method, params }, { timeout: 10_000 })
-  if (data.error) throw new Error(`${method}: ${data.error.message ?? JSON.stringify(data.error)}`)
+// a transaction carries the block it landed in but not that block's time, so the block is a second hop
+const evmFetcher = (url: string): Fetcher => {
+  const client = createPublicClient({ transport: http(url, { timeout: 10_000 }) })
 
-  return data.result as T
-}
+  return async (txid) => {
+    const tx = await client.getTransaction({ hash: txid as `0x${string}` })
 
-// eth_getTransactionByHash carries the block number but not its time, so the block is a second hop
-const evmFetcher =
-  (url: string): Fetcher =>
-  async (txid) => {
-    const tx = await rpc<{ blockNumber: string | null } | null>(url, 'eth_getTransactionByHash', [txid])
+    // seen but still unmined, which says nothing about when it was broadcast
+    if (tx.blockNumber === null) return { outcome: 'not-found' }
 
-    // absent, or seen but still unmined - neither tells us when it was broadcast
-    if (!tx?.blockNumber) return { outcome: 'not-found' }
+    const block = await client.getBlock({ blockNumber: tx.blockNumber })
 
-    const block = await rpc<{ timestamp: string } | null>(url, 'eth_getBlockByNumber', [tx.blockNumber, false])
-    if (!block) return { outcome: 'not-found' }
-
-    return { outcome: 'found', timestamp: parseInt(block.timestamp, 16) }
+    return { outcome: 'found', timestamp: Number(block.timestamp) }
   }
+}
 
 const unchainedFetcher =
   (getTx: (req: { txid: string }) => Promise<{ timestamp: number }>): Fetcher =>
@@ -126,7 +120,11 @@ export class TxLookupService {
     try {
       return await fetcher(txid)
     } catch (error) {
-      // a 404 means the chain answered and does not have it, which is not the same as being unable to ask
+      // the chain answered and does not have it, which is not the same as being unable to ask
+      if (error instanceof TransactionNotFoundError || error instanceof BlockNotFoundError) {
+        return { outcome: 'not-found' }
+      }
+
       if (error instanceof unchained.ResponseError && error.response.status === 404) {
         return { outcome: 'not-found' }
       }
