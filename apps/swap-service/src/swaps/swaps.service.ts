@@ -27,7 +27,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_RETRY_MS, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
+import { PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
 import { PaginationQueryDto } from './types'
@@ -282,14 +282,7 @@ export class SwapsService {
 
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      where: {
-        sellTxHash: { not: null },
-        attributionStatus: 'PENDING',
-        OR: [
-          { attributionResolvedAt: null },
-          { attributionResolvedAt: { lt: new Date(Date.now() - ATTRIBUTION_RETRY_MS) } },
-        ],
-      },
+      where: { sellTxHash: { not: null }, attributionStatus: 'PENDING' },
     })
 
     return swaps.map(toSwap)
@@ -304,7 +297,11 @@ export class SwapsService {
     return toSwap(
       await this.prisma.swap.update({
         where: { swapId: swap.swapId },
-        data: { attributionStatus: status, attributionResolvedAt: new Date(), attributionDetails: details },
+        data: {
+          attributionStatus: status,
+          attributionDetails: details,
+          ...(status !== 'PENDING' && { attributionResolvedAt: new Date() }),
+        },
       }),
     )
   }

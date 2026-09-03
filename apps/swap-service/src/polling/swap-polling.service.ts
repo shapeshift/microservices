@@ -58,7 +58,7 @@ export class SwapPollingService {
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async pollPendingAttribution() {
     if (this.isPollingAttribution) return
     this.isPollingAttribution = true
