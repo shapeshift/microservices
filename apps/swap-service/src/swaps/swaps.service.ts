@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 
-import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
+import { CreateSwapDto, Fees, SwapStatus, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
 import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
@@ -282,13 +282,7 @@ export class SwapsService {
 
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      // a failed swap cannot be paid, so its attribution is moot and would otherwise poll forever
-      where: {
-        sellTxHash: { not: null },
-        quotedAt: { not: null },
-        attributionStatus: 'PENDING',
-        status: { not: 'FAILED' },
-      },
+      where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
       orderBy: { createdAt: 'asc' },
       take: ATTRIBUTION_BATCH_SIZE,
     })
@@ -300,7 +294,10 @@ export class SwapsService {
     if (!swap.sellTxHash) return swap
 
     const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
-    const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt)
+    const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt, {
+      status: swap.status as SwapStatus,
+      createdAt: swap.createdAt,
+    })
 
     // a repeat of the same verdict would only churn updatedAt, but the first one records why
     const unchanged =

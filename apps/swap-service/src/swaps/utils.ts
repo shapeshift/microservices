@@ -63,10 +63,21 @@ export const resolveStalledSwap = (
 export const resolveQuoteBinding = (
   lookup: BlockTimeLookup,
   quotedAt: Date | null,
+  swap: { status: SwapStatus; createdAt: Date },
 ): { status: AttributionStatus; details: Prisma.InputJsonValue } => {
   if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
 
-  if ('unavailable' in lookup) return { status: 'PENDING', details: { checked: false, reason: lookup.unavailable } }
+  if ('unavailable' in lookup) {
+    // rejection cannot be walked back, and a node briefly behind also reports not-found, so this waits
+    // until the swap is both abandoned and old enough that a real transaction would have been indexed
+    const abandoned = swap.status === 'FAILED' && Date.now() - swap.createdAt.getTime() > PENDING_TIMEOUT_MS
+
+    if (lookup.unavailable === 'not-found' && abandoned) {
+      return { status: 'REJECTED', details: { checked: true, reason: 'tx-not-found' } }
+    }
+
+    return { status: 'PENDING', details: { checked: false, reason: lookup.unavailable } }
+  }
 
   const blockTime = lookup.blockTime * 1000
   const quoted = quotedAt.getTime()
