@@ -21,7 +21,7 @@ import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service'
 import { TonChainAdapterService } from '../lib/chain-adapters/ton.service'
 import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
-import { TxLookupService } from '../lib/tx-lookup.service'
+import { BlockTimeService } from '../lib/block-time.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
@@ -64,7 +64,7 @@ export class SwapsService {
     nearChainAdapterService: NearChainAdapterService,
     starknetChainAdapterService: StarknetChainAdapterService,
     tonChainAdapterService: TonChainAdapterService,
-    private txLookupService: TxLookupService,
+    private blockTimeService: BlockTimeService,
   ) {
     this.notificationsClient = new NotificationsServiceClient()
     this.userServiceClient = new UserServiceClient()
@@ -291,7 +291,7 @@ export class SwapsService {
   async checkQuoteBinding(swap: Swap): Promise<Swap> {
     if (!swap.sellTxHash) return swap
 
-    const lookup = await this.txLookupService.getTimestamp(swap.sellAsset.chainId, swap.sellTxHash)
+    const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
     const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt)
 
     return toSwap(

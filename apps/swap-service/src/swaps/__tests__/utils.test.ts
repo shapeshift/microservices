@@ -188,7 +188,7 @@ describe('resolveStalledSwap', () => {
 
 describe('resolveQuoteBinding', () => {
   const blockTime = Date.UTC(2026, 8, 1, 12, 0, 0)
-  const found = { outcome: 'found', timestamp: blockTime / 1000 } as const
+  const found = { outcome: 'found', blockTime: blockTime / 1000 } as const
   const at = (offsetMs: number) => new Date(blockTime + offsetMs)
 
   it('accepts a quote minted before its transaction was mined', () => {

@@ -9,7 +9,7 @@ import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapMetadata, SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
-import type { TxLookup } from '../lib/tx-lookup.service'
+import type { BlockTimeLookup } from '../lib/block-time.service'
 import { getAssetPriceUsd } from '../utils/pricing'
 
 import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
@@ -65,15 +65,14 @@ export const resolveStalledSwap = (
 // a harvested tx is broadcast before the quote minted to claim it exists, so only a quote that
 // predates its own transaction can be the one that authorised it
 export const resolveQuoteBinding = (
-  lookup: TxLookup,
+  lookup: BlockTimeLookup,
   quotedAt: Date | null,
 ): { status: AttributionStatus; details: Prisma.InputJsonValue } => {
   if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
 
   if (lookup.outcome !== 'found') return { status: 'PENDING', details: { checked: false, reason: lookup.outcome } }
 
-  // unchained reports seconds
-  const blockTime = lookup.timestamp * 1000
+  const blockTime = lookup.blockTime * 1000
   const quoted = quotedAt.getTime()
   const checked = { checked: true, blockTime, quotedAt: quoted }
 
