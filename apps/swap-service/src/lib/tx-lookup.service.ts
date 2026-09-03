@@ -2,9 +2,10 @@ import { Injectable, Logger } from '@nestjs/common'
 
 import type { ChainId } from '@shapeshiftoss/caip'
 import * as caip from '@shapeshiftoss/caip'
-import { KnownChainIds } from '@shapeshiftoss/types'
+import { viemClientByChainId } from '@shapeshiftoss/contracts'
 import * as unchained from '@shapeshiftoss/unchained-client'
-import { BlockNotFoundError, createPublicClient, http, TransactionNotFoundError } from 'viem'
+import type { PublicClient } from 'viem'
+import { BlockNotFoundError, TransactionNotFoundError } from 'viem'
 
 import { env } from '../env'
 
@@ -13,10 +14,9 @@ export type TxLookup = { outcome: 'found'; timestamp: number } | { outcome: 'uns
 type Fetcher = (txid: string) => Promise<TxLookup>
 
 // a transaction carries the block it landed in but not that block's time, so the block is a second hop
-const evmFetcher = (url: string): Fetcher => {
-  const client = createPublicClient({ transport: http(url, { timeout: 10_000 }) })
-
-  return async (txid) => {
+const evmFetcher =
+  (client: PublicClient): Fetcher =>
+  async (txid) => {
     const tx = await client.getTransaction({ hash: txid as `0x${string}` })
 
     // seen but still unmined, which says nothing about when it was broadcast
@@ -26,7 +26,6 @@ const evmFetcher = (url: string): Fetcher => {
 
     return { outcome: 'found', timestamp: Number(block.timestamp) }
   }
-}
 
 const unchainedFetcher =
   (getTx: (req: { txid: string }) => Promise<{ timestamp: number }>): Fetcher =>
@@ -42,23 +41,9 @@ export class TxLookupService {
   private readonly fetchers = new Map<ChainId, Fetcher>()
 
   constructor() {
-    const evmNodes: [ChainId, string][] = [
-      [caip.ethChainId, env.VITE_ETHEREUM_NODE_URL],
-      [caip.avalancheChainId, env.VITE_AVALANCHE_NODE_URL],
-      [caip.optimismChainId, env.VITE_OPTIMISM_NODE_URL],
-      [caip.bscChainId, env.VITE_BNBSMARTCHAIN_NODE_URL],
-      [caip.polygonChainId, env.VITE_POLYGON_NODE_URL],
-      [caip.gnosisChainId, env.VITE_GNOSIS_NODE_URL],
-      [caip.arbitrumChainId, env.VITE_ARBITRUM_NODE_URL],
-      [caip.baseChainId, env.VITE_BASE_NODE_URL],
-      [caip.monadChainId, env.VITE_MONAD_NODE_URL],
-      [caip.hyperEvmChainId, env.VITE_HYPEREVM_NODE_URL],
-      [caip.plasmaChainId, env.VITE_PLASMA_NODE_URL],
-      [caip.katanaChainId, env.VITE_KATANA_NODE_URL],
-      [KnownChainIds.MegaEthMainnet, env.VITE_MEGAETH_NODE_URL],
-    ]
-
-    for (const [chainId, url] of evmNodes) this.fetchers.set(chainId, evmFetcher(url))
+    for (const [chainId, client] of Object.entries(viemClientByChainId)) {
+      this.fetchers.set(chainId, evmFetcher(client))
+    }
 
     // no rpc node urls exist for these, so unchained is the only route
     const utxoNodes: [ChainId, string][] = [

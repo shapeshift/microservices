@@ -7,6 +7,8 @@ const config: Config = {
   moduleFileExtensions: ['ts', 'js', 'json'],
   testEnvironment: 'node',
   setupFiles: ['<rootDir>/verification/__tests__/setup.ts'],
+  // @shapeshiftoss/contracts reaches lodash-es, which ships esm that ts-jest will not transform
+  moduleNameMapper: { '^lodash-es$': 'lodash', '^lodash-es/(.*)$': 'lodash/$1' },
 }
 
 export default config
