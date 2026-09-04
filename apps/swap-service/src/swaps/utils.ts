@@ -12,7 +12,7 @@ import type { Asset } from '@shapeshiftoss/types'
 import type { BlockTimeLookup } from '../lib/block-time.service'
 import { getAssetPriceUsd } from '../utils/pricing'
 
-import { PENDING_TIMEOUT_MS } from './constants'
+import { BLOCK_TIME_TOLERANCE_MS, PENDING_TIMEOUT_MS } from './constants'
 import type { AffiliateVerificationDetails, AttributionDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -83,7 +83,9 @@ export const resolveQuoteBinding = (
   const quoted = quotedAt.getTime()
   const checked = { checked: true, blockTime, quotedAt: quoted }
 
-  if (quoted <= blockTime) return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+  if (quoted <= blockTime + BLOCK_TIME_TOLERANCE_MS) {
+    return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+  }
 
   return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
 }

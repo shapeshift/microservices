@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common'
 
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
+import { BLOCK_TIME_TOLERANCE_MS } from '../constants'
 import type { Swap } from '../types'
 import { calculateFeeForSwap, describeError, resolveQuoteBinding, resolveStalledSwap } from '../utils'
 
@@ -182,7 +183,7 @@ describe('resolveQuoteBinding', () => {
 
   // the harvest attack: the txid cannot be known until it exists, so the claim's quote is younger
   it('rejects a quote minted after its transaction was mined', () => {
-    const { status, details } = resolveQuoteBinding(found, at(1000), live)
+    const { status, details } = resolveQuoteBinding(found, at(BLOCK_TIME_TOLERANCE_MS + 1000), live)
 
     expect(status).toBe('REJECTED')
     expect(details).toMatchObject({ checked: true, reason: 'quote-postdates-tx' })
@@ -190,6 +191,11 @@ describe('resolveQuoteBinding', () => {
 
   it('accepts a quote minted in the same instant as its block', () => {
     expect(resolveQuoteBinding(found, at(0), live).status).toBe('ACCEPTED')
+  })
+
+  // a block declaring a time behind the broadcast that filled it must not cost an honest quote
+  it('accepts a quote the block only appears to predate', () => {
+    expect(resolveQuoteBinding(found, at(BLOCK_TIME_TOLERANCE_MS), live).status).toBe('ACCEPTED')
   })
 
   // absence of evidence is never evidence - none of these may reject
