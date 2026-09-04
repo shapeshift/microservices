@@ -18,25 +18,6 @@ type ViemClient = {
   getBlock(args: { blockNumber: bigint }): Promise<{ timestamp: bigint }>
 }
 
-// viem raises this only when the node itself answered with no transaction
-const isTxNotFound = (error: unknown): boolean =>
-  (error as { name?: string } | null)?.name === 'TransactionNotFoundError'
-
-// unchained reports a missing transaction as a 4xx or 5xx that says so in the body, while a bare 404 is
-// the route being wrong - which says nothing about the transaction, and must never end in a rejection
-const isMissingTx = async (error: unknown): Promise<boolean> => {
-  const { response } = (error ?? {}) as { response?: Response }
-  if (!response || response.status === 404) return false
-
-  try {
-    const { message } = (await response.clone().json()) as { message?: unknown }
-
-    return typeof message === 'string' && message.toLowerCase().includes('not found')
-  } catch {
-    return false
-  }
-}
-
 const viemLookup =
   (client: ViemClient): ChainLookup =>
   async (txid) => {
@@ -49,7 +30,9 @@ const viemLookup =
 
       return { blockTime: Number(block.timestamp) }
     } catch (error) {
-      if (isTxNotFound(error)) return { unavailable: 'not-found' }
+      if ((error as { name?: string } | null)?.name === 'TransactionNotFoundError') {
+        return { unavailable: 'not-found' }
+      }
 
       throw error
     }
@@ -65,7 +48,20 @@ const unchainedLookup =
 
       return { blockTime: timestamp }
     } catch (error) {
-      if (await isMissingTx(error)) return { unavailable: 'not-found' }
+      const { response } = (error ?? {}) as { response?: Response }
+
+      if (response && response.status !== 404) {
+        const body = await response
+          .clone()
+          .json()
+          .catch(() => null)
+
+        const { message } = (body ?? {}) as { message?: unknown }
+
+        if (typeof message === 'string' && message.toLowerCase().includes('not found')) {
+          return { unavailable: 'not-found' }
+        }
+      }
 
       throw error
     }
