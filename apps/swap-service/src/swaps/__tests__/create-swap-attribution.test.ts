@@ -5,6 +5,9 @@ import { SwapsService } from '../swaps.service'
 // unchained-client is ESM; ts-jest can't transform it and nothing here uses it.
 jest.mock('@shapeshiftoss/unchained-client', () => ({ TxStatus: {} }))
 
+// contracts reaches lodash-es, which is ESM for the same reason, and only the block time lookup needs it.
+jest.mock('@shapeshiftoss/contracts', () => ({ viemClientByChainId: {} }))
+
 // The constructor eagerly builds HTTP clients that require these.
 process.env.NOTIFICATIONS_SERVICE_URL ??= 'http://notifications.test'
 process.env.USER_SERVICE_URL ??= 'http://user.test'
