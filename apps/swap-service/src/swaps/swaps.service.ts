@@ -7,11 +7,12 @@ import {
 } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 
-import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
+import { CreateSwapDto, Fees, SwapStatus, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
 import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
+import { BlockTimeService } from '../lib/block-time.service'
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service'
 import { EvmChainAdapterService } from '../lib/chain-adapters/evm.service'
 import { NearChainAdapterService } from '../lib/chain-adapters/near.service'
@@ -26,9 +27,16 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { PENDING_TIMEOUT_MS, REFERRER_FEE_RATE, UNREACHABLE_TIMEOUT_MS } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
-import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
+import type {
+  AffiliateVerificationDetails,
+  AggregateFeesParams,
+  AttributionDetails,
+  FeeTotals,
+  PaginatedSwaps,
+  Swap,
+} from './types'
 import { PaginationQueryDto } from './types'
 import {
   buildStatusNotification,
@@ -36,6 +44,7 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
+  resolveQuoteBinding,
   resolveStalledSwap,
   toQuotedAt,
   toSwap,
@@ -62,6 +71,7 @@ export class SwapsService {
     nearChainAdapterService: NearChainAdapterService,
     starknetChainAdapterService: StarknetChainAdapterService,
     tonChainAdapterService: TonChainAdapterService,
+    private blockTimeService: BlockTimeService,
   ) {
     this.notificationsClient = new NotificationsServiceClient()
     this.userServiceClient = new UserServiceClient()
@@ -277,6 +287,42 @@ export class SwapsService {
     return swaps.map(toSwap)
   }
 
+  async getPendingAttributionSwaps(): Promise<Swap[]> {
+    const swaps = await this.prisma.swap.findMany({
+      where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      take: ATTRIBUTION_BATCH_SIZE,
+    })
+
+    return swaps.map(toSwap)
+  }
+
+  async checkQuoteBinding(swap: Swap): Promise<Swap> {
+    if (!swap.sellTxHash) return swap
+
+    const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
+    const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt, {
+      status: swap.status as SwapStatus,
+      createdAt: swap.createdAt,
+    })
+
+    const previous = swap.attributionDetails as AttributionDetails | null
+    const unchanged = status === swap.attributionStatus && details.reason === previous?.reason
+
+    if (unchanged) return swap
+
+    return toSwap(
+      await this.prisma.swap.update({
+        where: { swapId: swap.swapId },
+        data: {
+          attributionStatus: status,
+          attributionDetails: details,
+          ...(status !== 'PENDING' && { attributionResolvedAt: new Date() }),
+        },
+      }),
+    )
+  }
+
   async getPendingVerificationSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
@@ -390,12 +436,7 @@ export class SwapsService {
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
-        ...resolveStalledSwap(
-          swapStatus,
-          swap.createdAt,
-          typeof statusMessage === 'string' ? statusMessage : '',
-          PENDING_TIMEOUT_MS,
-        ),
+        ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
         sellTxHash: swap.sellTxHash,
         buyTxHash,
       }
@@ -404,7 +445,7 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`, UNREACHABLE_TIMEOUT_MS)
+      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`)
     }
   }
 

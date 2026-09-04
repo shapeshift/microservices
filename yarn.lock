@@ -5484,6 +5484,7 @@ __metadata:
   dependencies:
     "@shapeshift/shared-types": "workspace:*"
     "@shapeshift/shared-utils": "workspace:*"
+    "@shapeshiftoss/contracts": "npm:^1.0.7"
     "@types/jsonwebtoken": "npm:^9.0.10"
     jsonwebtoken: "npm:^9.0.3"
     siwe: "npm:^3.0.0"

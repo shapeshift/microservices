@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common'
-import type { Swap as PrismaSwap } from '@prisma/client'
+import type { AttributionStatus, Swap as PrismaSwap } from '@prisma/client'
 import axios from 'axios'
 
 import type { CreateSwapDto, SwapStatus } from '@shapeshift/shared-types'
@@ -9,9 +9,11 @@ import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapMetadata, SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
+import type { BlockTimeLookup } from '../lib/block-time.service'
 import { getAssetPriceUsd } from '../utils/pricing'
 
-import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
+import { BLOCK_TIME_TOLERANCE_MS, PENDING_TIMEOUT_MS } from './constants'
+import type { AffiliateVerificationDetails, AttributionDetails, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
 
@@ -46,19 +48,50 @@ export const resolveStalledSwap = (
   status: SwapStatus,
   createdAt: Date,
   statusMessage: string,
-  timeoutMs: number,
 ): { status: SwapStatus; statusMessage: string } => {
   if (status !== 'PENDING') return { status, statusMessage }
-  if (Date.now() - createdAt.getTime() < timeoutMs) return { status, statusMessage }
+  if (Date.now() - createdAt.getTime() < PENDING_TIMEOUT_MS) return { status, statusMessage }
 
   const last = statusMessage || 'none reported'
-  const hours = timeoutMs / (60 * 60 * 1000)
-  const window = hours >= 48 ? `${hours / 24}d` : `${hours}h`
 
   return {
     status: 'FAILED',
-    statusMessage: `Abandoned: unsettled ${window} after registration (last swapper status: ${last})`,
+    statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})`,
   }
+}
+
+export const resolveQuoteBinding = (
+  lookup: BlockTimeLookup,
+  quotedAt: Date | null,
+  swap: { status: SwapStatus; createdAt: Date },
+): { status: AttributionStatus; details: AttributionDetails } => {
+  if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
+
+  if ('unavailable' in lookup) {
+    // rejection cannot be walked back, and a node briefly behind also reports not-found, so this waits
+    // until the swap is both abandoned and old enough that a real transaction would have been indexed
+    const abandoned = swap.status === 'FAILED' && Date.now() - swap.createdAt.getTime() > PENDING_TIMEOUT_MS
+
+    if (lookup.unavailable === 'not-found' && abandoned) {
+      return { status: 'REJECTED', details: { checked: true, reason: 'tx-not-found' } }
+    }
+
+    return { status: 'PENDING', details: { checked: false, reason: lookup.unavailable } }
+  }
+
+  const blockTime = lookup.blockTime * 1000
+  const quoted = quotedAt.getTime()
+  const checked = { checked: true, blockTime, quotedAt: quoted }
+
+  if (quoted <= blockTime) {
+    return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+  }
+
+  if (quoted <= blockTime + BLOCK_TIME_TOLERANCE_MS) {
+    return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-within-tolerance' } }
+  }
+
+  return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
 }
 
 export const toQuotedAt = (value: string | undefined): Date | null => {
