@@ -18,12 +18,23 @@ type ViemClient = {
   getBlock(args: { blockNumber: bigint }): Promise<{ timestamp: bigint }>
 }
 
-// only the chain answering that it has no such transaction counts, since not-found is the one outcome
-// that can end in rejection - a block we cannot read is a node problem and falls through to error
-const isNotFound = (error: unknown): boolean => {
-  const { name, response } = (error ?? {}) as { name?: string; response?: { status?: number } }
+// viem raises this only when the node itself answered with no transaction
+const isTxNotFound = (error: unknown): boolean =>
+  (error as { name?: string } | null)?.name === 'TransactionNotFoundError'
 
-  return name === 'TransactionNotFoundError' || response?.status === 404
+// unchained reports a missing transaction as a 4xx or 5xx that says so in the body, while a bare 404 is
+// the route being wrong - which says nothing about the transaction, and must never end in a rejection
+const isMissingTx = async (error: unknown): Promise<boolean> => {
+  const { response } = (error ?? {}) as { response?: Response }
+  if (!response || response.status === 404) return false
+
+  try {
+    const { message } = (await response.clone().json()) as { message?: unknown }
+
+    return typeof message === 'string' && message.toLowerCase().includes('not found')
+  } catch {
+    return false
+  }
 }
 
 const viemLookup =
@@ -32,14 +43,13 @@ const viemLookup =
     try {
       const tx = await client.getTransaction({ hash: txid as `0x${string}` })
 
-      // the node has the transaction, it just is not in a block yet
       if (tx.blockNumber === null) return { unavailable: 'unmined' }
 
       const block = await client.getBlock({ blockNumber: tx.blockNumber })
 
       return { blockTime: Number(block.timestamp) }
     } catch (error) {
-      if (isNotFound(error)) return { unavailable: 'not-found' }
+      if (isTxNotFound(error)) return { unavailable: 'not-found' }
 
       throw error
     }
@@ -51,12 +61,11 @@ const unchainedLookup =
     try {
       const { timestamp, blockHeight } = await getTx({ txid })
 
-      // the node has the transaction, it just is not in a block yet
       if (blockHeight <= 0) return { unavailable: 'unmined' }
 
       return { blockTime: timestamp }
     } catch (error) {
-      if (isNotFound(error)) return { unavailable: 'not-found' }
+      if (await isMissingTx(error)) return { unavailable: 'not-found' }
 
       throw error
     }

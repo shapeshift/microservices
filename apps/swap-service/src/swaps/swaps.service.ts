@@ -306,7 +306,6 @@ export class SwapsService {
       createdAt: swap.createdAt,
     })
 
-    // a repeat of the same verdict would only churn updatedAt, but the first one records why
     const previous = swap.attributionDetails as AttributionDetails | null
     const unchanged = status === swap.attributionStatus && details.reason === previous?.reason
 
@@ -446,7 +445,6 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      // a swapper we could not reach has told us nothing, but a swap unsettled this long is abandoned either way
       return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`)
     }
   }
