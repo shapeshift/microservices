@@ -21,6 +21,7 @@
     "siwe": "^3.0.0"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.10"
+    "@types/jsonwebtoken": "^9.0.10",
+    "lodash": "^4.17.21"
   }
 }

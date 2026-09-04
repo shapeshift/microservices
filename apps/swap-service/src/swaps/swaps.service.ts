@@ -446,8 +446,8 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      // a swapper we could not reach has told us nothing about the swap, so there is nothing to conclude
-      return { status: 'PENDING', statusMessage: `Error polling status: ${reason}` }
+      // a swapper we could not reach has told us nothing, but a swap unsettled this long is abandoned either way
+      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`)
     }
   }
 
