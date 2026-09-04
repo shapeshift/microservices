@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 
+import { ATTRIBUTION_BATCH_SIZE } from '../swaps/constants'
 import { SwapsService } from '../swaps/swaps.service'
 import type { Swap } from '../swaps/types'
 import { WebsocketGateway } from '../websocket/websocket.gateway'
@@ -66,6 +67,12 @@ export class SwapPollingService {
     try {
       const swaps = await this.swapsService.getPendingAttributionSwaps()
       if (swaps.length === 0) return
+
+      if (swaps.length === ATTRIBUTION_BATCH_SIZE) {
+        this.logger.warn(
+          `Attribution backlog is at capacity (${ATTRIBUTION_BATCH_SIZE}); oldest pending swaps are unchecked`,
+        )
+      }
 
       this.logger.log(`Polling attribution for ${swaps.length} swaps (${swapIds(swaps)})`)
       await this.runWorkers(swaps, (swap) => this.pollAttribution(swap))

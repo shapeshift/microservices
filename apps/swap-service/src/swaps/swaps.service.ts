@@ -290,7 +290,7 @@ export class SwapsService {
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: ATTRIBUTION_BATCH_SIZE,
     })
 
