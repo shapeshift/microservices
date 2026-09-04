@@ -194,8 +194,11 @@ describe('resolveQuoteBinding', () => {
   })
 
   // a block declaring a time behind the broadcast that filled it must not cost an honest quote
-  it('accepts a quote the block only appears to predate', () => {
-    expect(resolveQuoteBinding(found, at(BLOCK_TIME_TOLERANCE_MS), live).status).toBe('ACCEPTED')
+  it('accepts a quote the block only appears to predate, and says that is what happened', () => {
+    const { status, details } = resolveQuoteBinding(found, at(BLOCK_TIME_TOLERANCE_MS), live)
+
+    expect(status).toBe('ACCEPTED')
+    expect(details).toMatchObject({ checked: true, reason: 'quote-within-tolerance' })
   })
 
   // absence of evidence is never evidence - none of these may reject

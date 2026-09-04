@@ -83,8 +83,12 @@ export const resolveQuoteBinding = (
   const quoted = quotedAt.getTime()
   const checked = { checked: true, blockTime, quotedAt: quoted }
 
-  if (quoted <= blockTime + BLOCK_TIME_TOLERANCE_MS) {
+  if (quoted <= blockTime) {
     return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+  }
+
+  if (quoted <= blockTime + BLOCK_TIME_TOLERANCE_MS) {
+    return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-within-tolerance' } }
   }
 
   return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
