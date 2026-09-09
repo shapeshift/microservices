@@ -67,7 +67,7 @@ const swapOf = (claim: Claim): Swap =>
     attributionDetails: null,
   }) as unknown as Swap
 
-describe('checkQuoteBinding contest', () => {
+describe('resolveAttribution contest', () => {
   const first = { swapId: 'first', quotedAt: new Date(Date.UTC(2026, 8, 7, 14, 14, 57)) }
   const second = { swapId: 'second', quotedAt: new Date(Date.UTC(2026, 8, 7, 14, 26, 12)) }
 
@@ -75,7 +75,7 @@ describe('checkQuoteBinding contest', () => {
   it('accepts the oldest claim on a transaction', async () => {
     const { service, updates } = buildService([first, second])
 
-    await service.checkQuoteBinding(swapOf(first))
+    await service.resolveAttribution(swapOf(first))
 
     expect(updates[0]?.data).toMatchObject({
       attributionStatus: 'ACCEPTED',
@@ -86,7 +86,7 @@ describe('checkQuoteBinding contest', () => {
   it('disputes a later claim on a transaction another quote already holds', async () => {
     const { service, updates } = buildService([first, second])
 
-    await service.checkQuoteBinding(swapOf(second))
+    await service.resolveAttribution(swapOf(second))
 
     expect(updates[0]?.data).toMatchObject({
       attributionStatus: 'DISPUTED',
@@ -97,7 +97,7 @@ describe('checkQuoteBinding contest', () => {
   it('accepts an uncontested claim', async () => {
     const { service, updates } = buildService([second])
 
-    await service.checkQuoteBinding(swapOf(second))
+    await service.resolveAttribution(swapOf(second))
 
     expect(updates[0]?.data).toMatchObject({ attributionStatus: 'ACCEPTED' })
   })

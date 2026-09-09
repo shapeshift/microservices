@@ -45,7 +45,7 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
-  resolveQuoteBinding,
+  resolveQuotePrecedence,
   resolveStalledSwap,
   toQuotedAt,
   toSwap,
@@ -298,19 +298,17 @@ export class SwapsService {
     return swaps.map(toSwap)
   }
 
-  async checkQuoteBinding(swap: Swap): Promise<Swap> {
+  async resolveAttribution(swap: Swap): Promise<Swap> {
     if (!swap.sellTxHash) return swap
 
     const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
-    const { status, details } = resolveQuoteBinding(lookup, swap.quotedAt, {
+    const { status, details } = resolveQuotePrecedence(lookup, swap.quotedAt, {
       status: swap.status as SwapStatus,
       createdAt: swap.createdAt,
     })
 
-    // binding only ever sees one claim, so a transaction claimed twice binds twice: the oldest quote
-    // takes it and the rest are contested. A signer knows their own txid before broadcast, so every
-    // claim on it can precede the block honestly and no timestamp separates them.
-    const contested = status === 'ACCEPTED' && !(await this.holdsOldestClaim(swap))
+    // precedence sees one claim at a time, so a transaction claimed twice precedes twice
+    const contested = status === 'ACCEPTED' && (await this.isTxClaimedByOlderQuote(swap))
     const verdict = contested
       ? { status: 'DISPUTED' as AttributionStatus, details: { checked: true, reason: 'duplicate-claim' } }
       : { status, details }
@@ -333,14 +331,14 @@ export class SwapsService {
   }
 
   // ties break on swapId so the winner is stable; a null quotedAt never binds and so never competes
-  private async holdsOldestClaim(swap: Swap): Promise<boolean> {
+  private async isTxClaimedByOlderQuote(swap: Swap): Promise<boolean> {
     const oldest = await this.prisma.swap.findFirst({
       where: { sellTxHash: swap.sellTxHash, quotedAt: { not: null } },
       orderBy: [{ quotedAt: 'asc' }, { swapId: 'asc' }],
       select: { swapId: true },
     })
 
-    return oldest?.swapId === swap.swapId
+    return oldest !== null && oldest.swapId !== swap.swapId
   }
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {

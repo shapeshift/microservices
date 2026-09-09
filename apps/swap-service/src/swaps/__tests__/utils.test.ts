@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
-import { calculateFeeForSwap, describeError, resolveQuoteBinding, resolveStalledSwap } from '../utils'
+import { calculateFeeForSwap, describeError, resolveQuotePrecedence, resolveStalledSwap } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
 // '0' fee amount resolves to actualFeeUsd = 0 (the real 0-bps case this branch introduced).
@@ -165,7 +165,7 @@ describe('resolveStalledSwap', () => {
   })
 })
 
-describe('resolveQuoteBinding', () => {
+describe('resolveQuotePrecedence', () => {
   const blockTime = Date.UTC(2026, 8, 1, 12, 0, 0)
   const found = { blockTime: blockTime / 1000 } as const
   const at = (offsetMs: number) => new Date(blockTime + offsetMs)
@@ -174,7 +174,7 @@ describe('resolveQuoteBinding', () => {
   const justFailed = { status: 'FAILED' as const, createdAt: new Date() }
 
   it('accepts a quote minted before its transaction was mined', () => {
-    const { status, details } = resolveQuoteBinding(found, at(-60_000), live)
+    const { status, details } = resolveQuotePrecedence(found, at(-60_000), live)
 
     expect(status).toBe('ACCEPTED')
     expect(details).toMatchObject({ checked: true, reason: 'quote-precedes-tx', blockTime })
@@ -182,19 +182,19 @@ describe('resolveQuoteBinding', () => {
 
   // the harvest attack: the txid cannot be known until it exists, so the claim's quote is younger
   it('rejects a quote minted after its transaction was mined', () => {
-    const { status, details } = resolveQuoteBinding(found, at(1000), live)
+    const { status, details } = resolveQuotePrecedence(found, at(1000), live)
 
     expect(status).toBe('REJECTED')
     expect(details).toMatchObject({ checked: true, reason: 'quote-postdates-tx' })
   })
 
   it('accepts a quote minted in the same instant as its block', () => {
-    expect(resolveQuoteBinding(found, at(0), live).status).toBe('ACCEPTED')
+    expect(resolveQuotePrecedence(found, at(0), live).status).toBe('ACCEPTED')
   })
 
   // the block timestamp is the whole boundary now - a second past it is a rejection like any other
   it('rejects a quote that postdates its block by a single second', () => {
-    expect(resolveQuoteBinding(found, at(1000), live).status).toBe('REJECTED')
+    expect(resolveQuotePrecedence(found, at(1000), live).status).toBe('REJECTED')
   })
 
   // absence of evidence is never evidence - none of these may reject
@@ -204,7 +204,7 @@ describe('resolveQuoteBinding', () => {
     ['a transaction still in the mempool', { unavailable: 'unmined' } as const, 'unmined'],
     ['a failed lookup', { unavailable: 'error' } as const, 'error'],
   ])('holds on %s rather than deciding', (_label, lookup, reason) => {
-    const { status, details } = resolveQuoteBinding(lookup, at(-60_000), live)
+    const { status, details } = resolveQuotePrecedence(lookup, at(-60_000), live)
 
     expect(status).toBe('PENDING')
     expect(details).toMatchObject({ checked: false, reason })
@@ -212,7 +212,7 @@ describe('resolveQuoteBinding', () => {
 
   // holding forever would be a lie; the reason states what was observed, not why
   it('rejects an unfindable claim once the swap itself has failed', () => {
-    expect(resolveQuoteBinding({ unavailable: 'not-found' }, at(-60_000), abandoned)).toEqual({
+    expect(resolveQuotePrecedence({ unavailable: 'not-found' }, at(-60_000), abandoned)).toEqual({
       status: 'REJECTED',
       details: { checked: true, reason: 'tx-not-found' },
     })
@@ -220,23 +220,23 @@ describe('resolveQuoteBinding', () => {
 
   // a node briefly behind also reports not-found, and a rejection cannot be walked back
   it('holds an unfindable claim while the failed swap is still young', () => {
-    expect(resolveQuoteBinding({ unavailable: 'not-found' }, at(-60_000), justFailed).status).toBe('PENDING')
+    expect(resolveQuotePrecedence({ unavailable: 'not-found' }, at(-60_000), justFailed).status).toBe('PENDING')
   })
 
   // only the chain disowning the transaction can reject; a stuck one still exists and may yet mine
   it('still holds a failed swap that was not answered with a denial', () => {
-    expect(resolveQuoteBinding({ unavailable: 'error' }, at(-60_000), abandoned).status).toBe('PENDING')
-    expect(resolveQuoteBinding({ unavailable: 'unsupported' }, at(-60_000), abandoned).status).toBe('PENDING')
-    expect(resolveQuoteBinding({ unavailable: 'unmined' }, at(-60_000), abandoned).status).toBe('PENDING')
+    expect(resolveQuotePrecedence({ unavailable: 'error' }, at(-60_000), abandoned).status).toBe('PENDING')
+    expect(resolveQuotePrecedence({ unavailable: 'unsupported' }, at(-60_000), abandoned).status).toBe('PENDING')
+    expect(resolveQuotePrecedence({ unavailable: 'unmined' }, at(-60_000), abandoned).status).toBe('PENDING')
   })
 
   // a failed swap whose transaction is real is still attributable, it simply cannot be paid
   it('resolves a failed swap normally when its transaction exists', () => {
-    expect(resolveQuoteBinding(found, at(-60_000), abandoned).status).toBe('ACCEPTED')
+    expect(resolveQuotePrecedence(found, at(-60_000), abandoned).status).toBe('ACCEPTED')
   })
 
   it('holds a row with no quote time, which cannot be checked at all', () => {
-    expect(resolveQuoteBinding(found, null, live)).toMatchObject({
+    expect(resolveQuotePrecedence(found, null, live)).toMatchObject({
       status: 'PENDING',
       details: { checked: false, reason: 'no-quoted-at' },
     })

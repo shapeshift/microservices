@@ -118,7 +118,7 @@ export class SwapPollingService {
 
   private async pollAttribution(swap: Swap): Promise<void> {
     try {
-      const updated = await this.swapsService.checkQuoteBinding(swap)
+      const updated = await this.swapsService.resolveAttribution(swap)
       if (updated.attributionStatus !== swap.attributionStatus) {
         this.logger.log(
           `Attribution resolved for swap ${swap.swapId}: ${updated.attributionStatus} ${JSON.stringify(updated.attributionDetails)}`,
