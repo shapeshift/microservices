@@ -23,6 +23,7 @@ const makeRow = (overrides: Partial<PrismaSwap> & RowExtras = {}): PrismaSwap =>
     partnerBps: 30,
     verificationStatus: 'SUCCESS',
     isAffiliateVerified: true,
+    attributionStatus: 'ACCEPTED',
     priceable: true,
     ...overrides,
   }) as unknown as PrismaSwap
@@ -108,6 +109,25 @@ describe('aggregateByPartner', () => {
     const { partners, unpriceableSwaps } = aggregateByPartner([makeRow({ priceable: false })], stubDeps)
     expect(unpriceableSwaps).toBe(1)
     expect(partners.size).toBe(0)
+  })
+
+  // a verified fee on a transaction someone else has already claimed is still not this partner's
+  it('withholds any swap whose attribution is not accepted, however well it verifies', () => {
+    const { partners, unattributed } = aggregateByPartner(
+      [
+        makeRow({ swapId: 'rejected', attributionStatus: 'REJECTED', attributionDetails: { reason: 'tx-not-found' } }),
+        makeRow({ swapId: 'pending', attributionStatus: 'PENDING', attributionDetails: null }),
+        makeRow({ swapId: 'disputed', attributionStatus: 'DISPUTED', attributionDetails: { reason: 'duplicate' } }),
+      ] as never,
+      stubDeps,
+    )
+
+    expect(partners.size).toBe(0)
+    expect(unattributed).toEqual([
+      { swapId: 'rejected', partnerCode: 'acme', status: 'REJECTED', reason: 'tx-not-found' },
+      { swapId: 'pending', partnerCode: 'acme', status: 'PENDING', reason: null },
+      { swapId: 'disputed', partnerCode: 'acme', status: 'DISPUTED', reason: 'duplicate' },
+    ])
   })
 
   it('partitions unpaid swaps by verificationStatus: pending vs failed for inspection', () => {
@@ -303,6 +323,7 @@ describe('buildRecord', () => {
         },
       ],
       unverified: [{ swapId: 'u1', partnerCode: 'acme', status: 'pending' }],
+      unattributed: [{ swapId: 'x1', partnerCode: 'acme', status: 'REJECTED', reason: 'quote-postdates-tx' }],
       noAffiliateFee: [
         { swapId: 'n1', partnerCode: 'acme' },
         { swapId: 'n2', partnerCode: 'acme' },
@@ -318,6 +339,7 @@ describe('buildRecord', () => {
       unpriceableSwaps: 2,
       feeAnomalySwaps: 1,
       unverifiedSwaps: 1,
+      unattributedSwaps: 1,
       noAffiliateFeeSwaps: 2,
       partnerBpsUnsetSwaps: 1,
       noVerifiedFeeSwaps: 1,
@@ -329,6 +351,7 @@ describe('buildRecord', () => {
       'fee-anomaly',
       'no-verified-fee',
       'partner-bps-unset',
+      'unattributed',
       'unverified',
     ])
     const warnedSwapIds = record.warnings.map((w) => w.swapId)
