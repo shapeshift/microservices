@@ -54,7 +54,7 @@ const swapRequest = (overrides: Partial<CreateSwapDto> = {}): CreateSwapDto =>
 const buildService = (
   affiliate: AffiliateRow | null,
   addressMatches: { partnerCode: string }[] = [],
-  olderClaim: { swapId: string } | null = null,
+  precedingQuote: { swapId: string } | null = null,
 ) => {
   const findUniqueCalls: FindUniqueArgs[] = []
   const findManyCalls: FindManyArgs[] = []
@@ -72,8 +72,8 @@ const buildService = (
       },
     },
     swap: {
-      // the write guard looks for an older claim on the same transaction before creating
-      findFirst: (): Promise<{ swapId: string } | null> => Promise.resolve(olderClaim),
+      // the write guard looks for a preceding quote on the same transaction before creating
+      findFirst: (): Promise<{ swapId: string } | null> => Promise.resolve(precedingQuote),
       // echoed back for toSwap to spread; assertions read createCalls
       create: (args: CreateArgs): Promise<Record<string, unknown>> => {
         createCalls.push(args)
@@ -102,19 +102,19 @@ const deactivatedAffiliate: AffiliateRow = {
   isActive: false,
 }
 
-describe('createSwap claim guard', () => {
+describe('createSwap preceding quote guard', () => {
   // storing it would only produce a verdict the contest has already decided
-  it('refuses a swap whose transaction an earlier quote already claims', async () => {
+  it('refuses a swap whose transaction a preceding quote already holds', async () => {
     const { service, createCalls } = buildService(activeAffiliate, [], { swapId: 'earlier-claim' })
 
     await expect(
       service.createSwap(swapRequest({ sellTxHash: '0xshared', quotedAt: '2026-09-07T14:20:00.000Z' })),
-    ).rejects.toThrow(/already claimed/)
+    ).rejects.toThrow(/already attributed to a preceding quote/)
 
     expect(createCalls).toHaveLength(0)
   })
 
-  it('stores a swap that no earlier quote claims', async () => {
+  it('stores a swap no preceding quote holds', async () => {
     const { service, createCalls } = buildService(activeAffiliate, [], null)
 
     await service.createSwap(swapRequest({ sellTxHash: '0xshared', quotedAt: '2026-09-07T14:20:00.000Z' }))

@@ -46,7 +46,7 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
-  resolveClaimAgainstChain,
+  resolveAttributionFromChain,
   resolveStalledSwap,
   toQuotedAt,
   toSwap,
@@ -91,7 +91,7 @@ export class SwapsService {
   }
 
   async createSwap(data: CreateSwapDto): Promise<Swap> {
-    await this.assertClaimCanWin(data)
+    await this.assertNoPrecedingQuote(data)
 
     try {
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
@@ -161,22 +161,19 @@ export class SwapsService {
     }
   }
 
-  // an older claim on the same transaction can only ever leave this one disputed, so refuse the row
-  // instead of storing a verdict already decided - never the reverse, since refusing on arrival order
-  // rather than quote order would hand the transaction to whoever registers first
-  private async assertClaimCanWin(data: CreateSwapDto): Promise<void> {
+  private async assertNoPrecedingQuote(data: CreateSwapDto): Promise<void> {
     const quotedAt = toQuotedAt(data.quotedAt)
     if (!data.sellTxHash || !quotedAt) return
 
-    const older = await this.findOlderClaim({ sellTxHash: data.sellTxHash, quotedAt, swapId: data.swapId })
-    if (!older) return
+    const preceding = await this.findPrecedingQuote({ sellTxHash: data.sellTxHash, quotedAt, swapId: data.swapId })
+    if (!preceding) return
 
     logger.warn(
-      `Refusing swap ${data.swapId} on ${data.sellTxHash}: already claimed by ${older}` +
+      `Refusing swap ${data.swapId} on ${data.sellTxHash}: superseded by ${preceding}` +
         (data.partnerCode ? ` (partner ${data.partnerCode})` : ''),
     )
 
-    throw new ConflictException('Transaction already claimed by an earlier quote')
+    throw new ConflictException('Transaction already attributed to a preceding quote')
   }
 
   private async getReferralCode(userId: string | undefined): Promise<string | null> {
@@ -323,14 +320,14 @@ export class SwapsService {
     if (!swap.sellTxHash) return swap
 
     const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
-    const chainVerdict = resolveClaimAgainstChain(lookup, swap.quotedAt, {
+    const chainVerdict = resolveAttributionFromChain(lookup, swap.quotedAt, {
       status: swap.status as SwapStatus,
       createdAt: swap.createdAt,
     })
 
-    const superseded = chainVerdict.status === 'ACCEPTED' && (await this.hasOlderClaim(swap))
+    const superseded = chainVerdict.status === 'ACCEPTED' && (await this.hasPrecedingQuote(swap))
     const attribution: AttributionVerdict = superseded
-      ? { status: 'DISPUTED', details: { checked: true, reason: 'duplicate-claim' } }
+      ? { status: 'DISPUTED', details: { checked: true, reason: 'quote-superseded' } }
       : chainVerdict
 
     // a repeat of the same verdict would only churn updatedAt, so only the reason is compared
@@ -339,9 +336,7 @@ export class SwapsService {
 
     if (sameVerdict) return swap
 
-    // claims can arrive out of order, so the oldest one settles the whole transaction rather than
-    // only itself - this runs first so a crash leaves us pending and retrying, never doubly accepted
-    if (attribution.status === 'ACCEPTED') await this.disputeYoungerClaims(swap)
+    if (attribution.status === 'ACCEPTED') await this.disputeSupersededQuotes(swap)
 
     return toSwap(
       await this.prisma.swap.update({
@@ -355,38 +350,40 @@ export class SwapsService {
     )
   }
 
-  // ties break on swapId so the winner is stable; quotedAt is null only on rows predating attribution
-  private async findOlderClaim(claim: { sellTxHash: string; quotedAt: Date; swapId: string }): Promise<string | null> {
-    const older = await this.prisma.swap.findFirst({
+  private async findPrecedingQuote(quote: {
+    sellTxHash: string
+    quotedAt: Date
+    swapId: string
+  }): Promise<string | null> {
+    const preceding = await this.prisma.swap.findFirst({
       where: {
-        sellTxHash: claim.sellTxHash,
-        OR: [{ quotedAt: { lt: claim.quotedAt } }, { quotedAt: claim.quotedAt, swapId: { lt: claim.swapId } }],
+        sellTxHash: quote.sellTxHash,
+        OR: [{ quotedAt: { lt: quote.quotedAt } }, { quotedAt: quote.quotedAt, swapId: { lt: quote.swapId } }],
       },
       select: { swapId: true },
     })
 
-    return older?.swapId ?? null
+    return preceding?.swapId ?? null
   }
 
-  private async hasOlderClaim(swap: Swap): Promise<boolean> {
+  private async hasPrecedingQuote(swap: Swap): Promise<boolean> {
     if (!swap.sellTxHash || !swap.quotedAt) return false
 
-    const older = await this.findOlderClaim({
+    const preceding = await this.findPrecedingQuote({
       sellTxHash: swap.sellTxHash,
       quotedAt: swap.quotedAt,
       swapId: swap.swapId,
     })
 
-    return older !== null
+    return preceding !== null
   }
 
-  // only a younger claim can already be accepted, since an older one would have superseded this swap
-  private async disputeYoungerClaims(swap: Swap): Promise<void> {
+  private async disputeSupersededQuotes(swap: Swap): Promise<void> {
     await this.prisma.swap.updateMany({
       where: { sellTxHash: swap.sellTxHash, swapId: { not: swap.swapId }, attributionStatus: 'ACCEPTED' },
       data: {
         attributionStatus: 'DISPUTED',
-        attributionDetails: { checked: true, reason: 'duplicate-claim' },
+        attributionDetails: { checked: true, reason: 'quote-superseded' },
         attributionResolvedAt: new Date(),
       },
     })

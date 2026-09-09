@@ -100,7 +100,7 @@ describe('resolveAttribution contest', () => {
 
     expect(updates[0]?.data).toMatchObject({
       attributionStatus: 'DISPUTED',
-      attributionDetails: { checked: true, reason: 'duplicate-claim' },
+      attributionDetails: { checked: true, reason: 'quote-superseded' },
     })
   })
 
@@ -113,7 +113,7 @@ describe('resolveAttribution contest', () => {
     expect(updates[0]?.data).toMatchObject({ attributionStatus: 'ACCEPTED' })
     expect(sweeps[0]).toMatchObject({
       where: { sellTxHash: TX, swapId: { not: 'first' }, attributionStatus: 'ACCEPTED' },
-      data: { attributionStatus: 'DISPUTED', attributionDetails: { reason: 'duplicate-claim' } },
+      data: { attributionStatus: 'DISPUTED', attributionDetails: { reason: 'quote-superseded' } },
     })
   })
 

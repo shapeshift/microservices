@@ -111,7 +111,7 @@ export function aggregateByPartner<S>(
 
     const partnerCode = row.partnerCode.toLowerCase()
 
-    // a claim that has not been settled in this partner's favour is not payable, whatever else is true
+    // a transaction not attributed to this partner is not theirs to be paid for, whatever else is true
     if (row.attributionStatus !== 'ACCEPTED') {
       unattributed.push({
         swapId: row.swapId,
@@ -286,7 +286,7 @@ export function buildRecord(input: {
       type: 'unattributed' as const,
       partnerCode: u.partnerCode,
       swapId: u.swapId,
-      reason: `attribution ${u.status.toLowerCase()}${u.reason ? ` (${u.reason})` : ''} — not paid, this transaction's claim is unsettled`,
+      reason: `attribution ${u.status.toLowerCase()}${u.reason ? ` (${u.reason})` : ''} — not paid, this transaction is not attributed to them`,
     })),
     ...unverified.map((u) => ({
       type: 'unverified' as const,
