@@ -24,7 +24,10 @@ const buildService = (claims: Claim[]) => {
     swap: {
       // mirrors the real predicate: an older quote, or the same quote time with a lower swapId
       findFirst: (args: {
-        where: { OR: [{ quotedAt: { lt: Date } }, { quotedAt: Date; swapId: { lt: string } }] }
+        where: {
+          sellAsset: { path: string[]; equals: string }
+          OR: [{ quotedAt: { lt: Date } }, { quotedAt: Date; swapId: { lt: string } }]
+        }
       }): Promise<{ swapId: string } | null> => {
         const [older, tied] = args.where.OR
         const claim = claims.find(

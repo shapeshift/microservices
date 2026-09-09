@@ -165,7 +165,12 @@ export class SwapsService {
     const quotedAt = toQuotedAt(data.quotedAt)
     if (!data.sellTxHash || !quotedAt) return
 
-    const preceding = await this.findPrecedingQuote({ sellTxHash: data.sellTxHash, quotedAt, swapId: data.swapId })
+    const preceding = await this.findPrecedingQuote({
+      sellTxHash: data.sellTxHash,
+      chainId: data.sellAsset.chainId,
+      quotedAt,
+      swapId: data.swapId,
+    })
     if (!preceding) return
 
     logger.warn(
@@ -327,7 +332,7 @@ export class SwapsService {
 
     const superseded = chainVerdict.status === 'ACCEPTED' && (await this.hasPrecedingQuote(swap))
     const attribution: AttributionVerdict = superseded
-      ? { status: 'DISPUTED', details: { checked: true, reason: 'quote-superseded' } }
+      ? { status: 'DISPUTED', details: { ...chainVerdict.details, reason: 'quote-superseded' } }
       : chainVerdict
 
     // a repeat of the same verdict would only churn updatedAt, so only the reason is compared
@@ -350,14 +355,18 @@ export class SwapsService {
     )
   }
 
+  // a pre-EIP-155 transaction carries the same hash on every EVM chain, so a quote only contends with
+  // quotes on its own chain; ties break on swapId so the winner is stable
   private async findPrecedingQuote(quote: {
     sellTxHash: string
+    chainId: string
     quotedAt: Date
     swapId: string
   }): Promise<string | null> {
     const preceding = await this.prisma.swap.findFirst({
       where: {
         sellTxHash: quote.sellTxHash,
+        sellAsset: { path: ['chainId'], equals: quote.chainId },
         OR: [{ quotedAt: { lt: quote.quotedAt } }, { quotedAt: quote.quotedAt, swapId: { lt: quote.swapId } }],
       },
       select: { swapId: true },
@@ -371,6 +380,7 @@ export class SwapsService {
 
     const preceding = await this.findPrecedingQuote({
       sellTxHash: swap.sellTxHash,
+      chainId: swap.sellAsset.chainId,
       quotedAt: swap.quotedAt,
       swapId: swap.swapId,
     })
@@ -380,7 +390,12 @@ export class SwapsService {
 
   private async disputeSupersededQuotes(swap: Swap): Promise<void> {
     await this.prisma.swap.updateMany({
-      where: { sellTxHash: swap.sellTxHash, swapId: { not: swap.swapId }, attributionStatus: 'ACCEPTED' },
+      where: {
+        sellTxHash: swap.sellTxHash,
+        sellAsset: { path: ['chainId'], equals: swap.sellAsset.chainId },
+        swapId: { not: swap.swapId },
+        attributionStatus: 'ACCEPTED',
+      },
       data: {
         attributionStatus: 'DISPUTED',
         attributionDetails: { checked: true, reason: 'quote-superseded' },

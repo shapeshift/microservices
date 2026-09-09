@@ -82,6 +82,7 @@ export function checkFeeAnomaly(
 // Accrue each partner's fee share from the verified on-chain fee, using the injected swap-service
 // fee math. Rows are the window query — swap status SUCCESS with a partner code, in any
 // verification state — and each falls into exactly one bucket, tested top to bottom:
+//   attributionStatus not ACCEPTED → unattributed          (this transaction is not theirs to be paid for)
 //   verificationStatus PENDING     → unverified 'pending'  (not verified yet; may still settle)
 //   verificationStatus FAILED      → unverified 'failed'   (verification failed; investigate)
 //   verified, no affiliate fee     → noAffiliateFee        (not ours, or ours @ 0 bps)
