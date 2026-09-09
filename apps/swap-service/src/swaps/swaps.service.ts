@@ -27,7 +27,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE, SKEW_REVIEW_MS } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -305,6 +305,14 @@ export class SwapsService {
       status: swap.status as SwapStatus,
       createdAt: swap.createdAt,
     })
+
+    const overshoot = (details.quotedAt ?? 0) - (details.blockTime ?? 0)
+
+    // a harvested transaction is claimed minutes to days late, so a near miss is worth a second look
+    if (details.reason === 'quote-postdates-tx' && overshoot <= SKEW_REVIEW_MS) {
+      const by = Math.round(overshoot / 1000)
+      logger.warn(`Swap ${swap.swapId} rejected on a quote postdating its block by only ${by}s - check for clock skew`)
+    }
 
     const previous = swap.attributionDetails as AttributionDetails | null
     const unchanged = status === swap.attributionStatus && details.reason === previous?.reason
