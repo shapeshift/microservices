@@ -21,12 +21,17 @@ const buildService = (claims: Claim[]) => {
 
   const prisma = {
     swap: {
-      // mirrors orderBy [quotedAt asc, swapId asc] over the claims on this transaction
-      findFirst: (): Promise<{ swapId: string } | null> => {
-        const [oldest] = [...claims].sort(
-          (a, b) => a.quotedAt.getTime() - b.quotedAt.getTime() || a.swapId.localeCompare(b.swapId),
+      // mirrors the real predicate: an older quote, or the same quote time with a lower swapId
+      findFirst: (args: {
+        where: { OR: [{ quotedAt: { lt: Date } }, { quotedAt: Date; swapId: { lt: string } }] }
+      }): Promise<{ swapId: string } | null> => {
+        const [older, tied] = args.where.OR
+        const claim = claims.find(
+          (c) =>
+            c.quotedAt < older.quotedAt.lt ||
+            (c.quotedAt.getTime() === tied.quotedAt.getTime() && c.swapId < tied.swapId.lt),
         )
-        return Promise.resolve(oldest ? { swapId: oldest.swapId } : null)
+        return Promise.resolve(claim ? { swapId: claim.swapId } : null)
       },
       update: (args: { where: { swapId: string }; data: Record<string, unknown> }) => {
         updates.push({ swapId: args.where.swapId, data: args.data })

@@ -5,7 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common'
-import type { AttributionStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, Fees, SwapStatus, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
@@ -34,6 +33,7 @@ import type {
   AffiliateVerificationDetails,
   AggregateFeesParams,
   AttributionDetails,
+  AttributionVerdict,
   FeeTotals,
   PaginatedSwaps,
   Swap,
@@ -302,42 +302,47 @@ export class SwapsService {
     if (!swap.sellTxHash) return swap
 
     const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
-    const { status, details } = resolveQuotePrecedence(lookup, swap.quotedAt, {
+    const precedence = resolveQuotePrecedence(lookup, swap.quotedAt, {
       status: swap.status as SwapStatus,
       createdAt: swap.createdAt,
     })
 
-    const contested = status === 'ACCEPTED' && (await this.isTxClaimedByOlderQuote(swap))
-    const verdict = contested
-      ? { status: 'DISPUTED' as AttributionStatus, details: { checked: true, reason: 'duplicate-claim' } }
-      : { status, details }
+    const superseded = precedence.status === 'ACCEPTED' && (await this.isTxClaimedByOlderQuote(swap))
+    const attribution: AttributionVerdict = superseded
+      ? { status: 'DISPUTED', details: { checked: true, reason: 'duplicate-claim' } }
+      : precedence
 
-    const previous = swap.attributionDetails as AttributionDetails | null
-    const unchanged = verdict.status === swap.attributionStatus && verdict.details.reason === previous?.reason
+    // a repeat of the same verdict would only churn updatedAt, so only the reason is compared
+    const recorded = swap.attributionDetails as AttributionDetails | null
+    const sameVerdict = attribution.status === swap.attributionStatus && attribution.details.reason === recorded?.reason
 
-    if (unchanged) return swap
+    if (sameVerdict) return swap
 
     return toSwap(
       await this.prisma.swap.update({
         where: { swapId: swap.swapId },
         data: {
-          attributionStatus: verdict.status,
-          attributionDetails: verdict.details,
-          ...(verdict.status !== 'PENDING' && { attributionResolvedAt: new Date() }),
+          attributionStatus: attribution.status,
+          attributionDetails: attribution.details,
+          ...(attribution.status !== 'PENDING' && { attributionResolvedAt: new Date() }),
         },
       }),
     )
   }
 
-  // ties break on swapId so the winner is stable; a null quotedAt never binds and so never competes
+  // the oldest quote takes the transaction, ties breaking on swapId so the winner is stable
   private async isTxClaimedByOlderQuote(swap: Swap): Promise<boolean> {
-    const oldest = await this.prisma.swap.findFirst({
-      where: { sellTxHash: swap.sellTxHash, quotedAt: { not: null } },
-      orderBy: [{ quotedAt: 'asc' }, { swapId: 'asc' }],
+    if (!swap.quotedAt) return false
+
+    const olderClaim = await this.prisma.swap.findFirst({
+      where: {
+        sellTxHash: swap.sellTxHash,
+        OR: [{ quotedAt: { lt: swap.quotedAt } }, { quotedAt: swap.quotedAt, swapId: { lt: swap.swapId } }],
+      },
       select: { swapId: true },
     })
 
-    return oldest !== null && oldest.swapId !== swap.swapId
+    return olderClaim !== null
   }
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {

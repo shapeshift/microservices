@@ -1,4 +1,4 @@
-import type { Prisma, Swap as PrismaSwap } from '@prisma/client'
+import type { AttributionStatus, Prisma, Swap as PrismaSwap } from '@prisma/client'
 import { Type } from 'class-transformer'
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
 
@@ -21,6 +21,11 @@ export type AttributionDetails = {
   reason: string
   blockTime?: number
   quotedAt?: number
+}
+
+export type AttributionVerdict = {
+  status: AttributionStatus
+  details: AttributionDetails
 }
 
 export type AffiliateVerificationDetails = {
