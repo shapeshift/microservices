@@ -14,6 +14,7 @@ import type {
   PayoutRecord,
   PayoutWarning,
   PayoutWindow,
+  UnattributedSwap,
   UnresolvedFeeSwap,
   UnverifiedSwap,
 } from './types'
@@ -98,6 +99,7 @@ export function aggregateByPartner<S>(
   const partners = new Map<string, PartnerAccrual>()
   const anomalies: FeeAnomaly[] = []
   const unverified: UnverifiedSwap[] = []
+  const unattributed: UnattributedSwap[] = []
   const noAffiliateFee: NoAffiliateFeeSwap[] = []
   const partnerBpsUnset: PartnerBpsUnsetSwap[] = []
   const unresolvedFee: UnresolvedFeeSwap[] = []
@@ -108,6 +110,17 @@ export function aggregateByPartner<S>(
     if (!row.partnerCode) continue
 
     const partnerCode = row.partnerCode.toLowerCase()
+
+    // a claim that has not been settled in this partner's favour is not payable, whatever else is true
+    if (row.attributionStatus !== 'ACCEPTED') {
+      unattributed.push({
+        swapId: row.swapId,
+        partnerCode,
+        status: row.attributionStatus,
+        reason: (row.attributionDetails as { reason?: string } | null)?.reason ?? null,
+      })
+      continue
+    }
 
     if (row.verificationStatus === 'PENDING') {
       unverified.push({ swapId: row.swapId, partnerCode, status: 'pending' })
@@ -161,12 +174,23 @@ export function aggregateByPartner<S>(
     // Pay only on the verified on-chain fee, via the shared exact partner-share helper.
     accrual.swapCount += 1
     accrual.volumeUsd = accrual.volumeUsd.plus(fee.volumeUsd)
-    accrual.feesEarnedUsd = accrual.feesEarnedUsd.plus(deps.getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, row.partnerBps))
+    accrual.feesEarnedUsd = accrual.feesEarnedUsd.plus(
+      deps.getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, row.partnerBps),
+    )
 
     partners.set(partnerCode.toLowerCase(), accrual)
   }
 
-  return { partners, unpriceableSwaps, anomalies, unverified, noAffiliateFee, partnerBpsUnset, unresolvedFee }
+  return {
+    partners,
+    unpriceableSwaps,
+    anomalies,
+    unverified,
+    unattributed,
+    noAffiliateFee,
+    partnerBpsUnset,
+    unresolvedFee,
+  }
 }
 
 // USD is paid 1:1 as USDC, floored to 6 dp (USDC precision), trailing zeros stripped.
@@ -228,6 +252,7 @@ export function buildRecord(input: {
   unpriceableSwaps: number
   anomalies: FeeAnomaly[]
   unverified: UnverifiedSwap[]
+  unattributed: UnattributedSwap[]
   noAffiliateFee: NoAffiliateFeeSwap[]
   partnerBpsUnset: PartnerBpsUnsetSwap[]
   unresolvedFee: UnresolvedFeeSwap[]
@@ -239,6 +264,7 @@ export function buildRecord(input: {
     unpriceableSwaps,
     anomalies,
     unverified,
+    unattributed,
     noAffiliateFee,
     partnerBpsUnset,
     unresolvedFee,
@@ -256,6 +282,12 @@ export function buildRecord(input: {
     ...payouts
       .filter((p) => !p.included)
       .map((p) => ({ type: 'address' as const, partnerCode: p.partnerCode, swapId: null, reason: p.excludedReason })),
+    ...unattributed.map((u) => ({
+      type: 'unattributed' as const,
+      partnerCode: u.partnerCode,
+      swapId: u.swapId,
+      reason: `attribution ${u.status.toLowerCase()}${u.reason ? ` (${u.reason})` : ''} — not paid, this transaction's claim is unsettled`,
+    })),
     ...unverified.map((u) => ({
       type: 'unverified' as const,
       partnerCode: u.partnerCode,
@@ -287,6 +319,7 @@ export function buildRecord(input: {
       unpriceableSwaps,
       feeAnomalySwaps: anomalies.length,
       unverifiedSwaps: unverified.length,
+      unattributedSwaps: unattributed.length,
       noAffiliateFeeSwaps: noAffiliateFee.length,
       partnerBpsUnsetSwaps: partnerBpsUnset.length,
       noVerifiedFeeSwaps: unresolvedFee.length,
