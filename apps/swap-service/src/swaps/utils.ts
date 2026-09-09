@@ -60,7 +60,7 @@ export const resolveStalledSwap = (
   }
 }
 
-export const resolveQuotePrecedence = (
+export const resolveClaimAgainstChain = (
   lookup: BlockTimeLookup,
   quotedAt: Date | null,
   swap: { status: SwapStatus; createdAt: Date },

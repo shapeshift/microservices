@@ -18,6 +18,7 @@ type Claim = { swapId: string; quotedAt: Date }
 
 const buildService = (claims: Claim[]) => {
   const updates: { swapId: string; data: Record<string, unknown> }[] = []
+  const sweeps: { where: Record<string, unknown>; data: Record<string, unknown> }[] = []
 
   const prisma = {
     swap: {
@@ -36,6 +37,10 @@ const buildService = (claims: Claim[]) => {
       update: (args: { where: { swapId: string }; data: Record<string, unknown> }) => {
         updates.push({ swapId: args.where.swapId, data: args.data })
         return Promise.resolve({ ...args.data, swapId: args.where.swapId })
+      },
+      updateMany: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        sweeps.push(args)
+        return Promise.resolve({ count: 0 })
       },
     },
   }
@@ -57,7 +62,7 @@ const buildService = (claims: Claim[]) => {
     blockTime as never,
   )
 
-  return { service, updates }
+  return { service, updates, sweeps }
 }
 
 const swapOf = (claim: Claim): Swap =>
@@ -97,6 +102,27 @@ describe('resolveAttribution contest', () => {
       attributionStatus: 'DISPUTED',
       attributionDetails: { checked: true, reason: 'duplicate-claim' },
     })
+  })
+
+  // a younger claim can be accepted before its older sibling is even registered
+  it('demotes a claim already accepted on the transaction when the oldest arrives', async () => {
+    const { service, updates, sweeps } = buildService([first, second])
+
+    await service.resolveAttribution(swapOf(first))
+
+    expect(updates[0]?.data).toMatchObject({ attributionStatus: 'ACCEPTED' })
+    expect(sweeps[0]).toMatchObject({
+      where: { sellTxHash: TX, swapId: { not: 'first' }, attributionStatus: 'ACCEPTED' },
+      data: { attributionStatus: 'DISPUTED', attributionDetails: { reason: 'duplicate-claim' } },
+    })
+  })
+
+  it('leaves other claims alone when this one loses', async () => {
+    const { service, sweeps } = buildService([first, second])
+
+    await service.resolveAttribution(swapOf(second))
+
+    expect(sweeps).toHaveLength(0)
   })
 
   it('accepts an uncontested claim', async () => {
