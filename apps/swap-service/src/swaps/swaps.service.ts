@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common'
+import type { AttributionStatus } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 
 import { CreateSwapDto, Fees, SwapStatus, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
@@ -306,8 +307,16 @@ export class SwapsService {
       createdAt: swap.createdAt,
     })
 
+    // binding only ever sees one claim, so a transaction claimed twice binds twice: the oldest quote
+    // takes it and the rest are contested. A signer knows their own txid before broadcast, so every
+    // claim on it can precede the block honestly and no timestamp separates them.
+    const contested = status === 'ACCEPTED' && !(await this.holdsOldestClaim(swap))
+    const verdict = contested
+      ? { status: 'DISPUTED' as AttributionStatus, details: { checked: true, reason: 'duplicate-claim' } }
+      : { status, details }
+
     const previous = swap.attributionDetails as AttributionDetails | null
-    const unchanged = status === swap.attributionStatus && details.reason === previous?.reason
+    const unchanged = verdict.status === swap.attributionStatus && verdict.details.reason === previous?.reason
 
     if (unchanged) return swap
 
@@ -315,12 +324,23 @@ export class SwapsService {
       await this.prisma.swap.update({
         where: { swapId: swap.swapId },
         data: {
-          attributionStatus: status,
-          attributionDetails: details,
-          ...(status !== 'PENDING' && { attributionResolvedAt: new Date() }),
+          attributionStatus: verdict.status,
+          attributionDetails: verdict.details,
+          ...(verdict.status !== 'PENDING' && { attributionResolvedAt: new Date() }),
         },
       }),
     )
+  }
+
+  // ties break on swapId so the winner is stable; a null quotedAt never binds and so never competes
+  private async holdsOldestClaim(swap: Swap): Promise<boolean> {
+    const oldest = await this.prisma.swap.findFirst({
+      where: { sellTxHash: swap.sellTxHash, quotedAt: { not: null } },
+      orderBy: [{ quotedAt: 'asc' }, { swapId: 'asc' }],
+      select: { swapId: true },
+    })
+
+    return oldest?.swapId === swap.swapId
   }
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {
