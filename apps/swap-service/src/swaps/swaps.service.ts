@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -90,6 +91,8 @@ export class SwapsService {
   }
 
   async createSwap(data: CreateSwapDto): Promise<Swap> {
+    await this.assertClaimCanWin(data)
+
     try {
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
 
@@ -156,6 +159,24 @@ export class SwapsService {
       logger.error('Failed to create swap', error)
       throw error
     }
+  }
+
+  // an older claim on the same transaction can only ever leave this one disputed, so refuse the row
+  // instead of storing a verdict already decided - never the reverse, since refusing on arrival order
+  // rather than quote order would hand the transaction to whoever registers first
+  private async assertClaimCanWin(data: CreateSwapDto): Promise<void> {
+    const quotedAt = toQuotedAt(data.quotedAt)
+    if (!data.sellTxHash || !quotedAt) return
+
+    const older = await this.findOlderClaim({ sellTxHash: data.sellTxHash, quotedAt, swapId: data.swapId })
+    if (!older) return
+
+    logger.warn(
+      `Refusing swap ${data.swapId} on ${data.sellTxHash}: already claimed by ${older}` +
+        (data.partnerCode ? ` (partner ${data.partnerCode})` : ''),
+    )
+
+    throw new ConflictException('Transaction already claimed by an earlier quote')
   }
 
   private async getReferralCode(userId: string | undefined): Promise<string | null> {
@@ -335,15 +356,25 @@ export class SwapsService {
   }
 
   // ties break on swapId so the winner is stable; quotedAt is null only on rows predating attribution
-  private async hasOlderClaim(swap: Swap): Promise<boolean> {
-    if (!swap.quotedAt) return false
-
+  private async findOlderClaim(claim: { sellTxHash: string; quotedAt: Date; swapId: string }): Promise<string | null> {
     const older = await this.prisma.swap.findFirst({
       where: {
-        sellTxHash: swap.sellTxHash,
-        OR: [{ quotedAt: { lt: swap.quotedAt } }, { quotedAt: swap.quotedAt, swapId: { lt: swap.swapId } }],
+        sellTxHash: claim.sellTxHash,
+        OR: [{ quotedAt: { lt: claim.quotedAt } }, { quotedAt: claim.quotedAt, swapId: { lt: claim.swapId } }],
       },
       select: { swapId: true },
+    })
+
+    return older?.swapId ?? null
+  }
+
+  private async hasOlderClaim(swap: Swap): Promise<boolean> {
+    if (!swap.sellTxHash || !swap.quotedAt) return false
+
+    const older = await this.findOlderClaim({
+      sellTxHash: swap.sellTxHash,
+      quotedAt: swap.quotedAt,
+      swapId: swap.swapId,
     })
 
     return older !== null
