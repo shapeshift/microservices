@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -91,8 +90,6 @@ export class SwapsService {
   }
 
   async createSwap(data: CreateSwapDto): Promise<Swap> {
-    await this.assertNoPrecedingQuote(data)
-
     try {
       const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
 
@@ -159,26 +156,6 @@ export class SwapsService {
       logger.error('Failed to create swap', error)
       throw error
     }
-  }
-
-  private async assertNoPrecedingQuote(data: CreateSwapDto): Promise<void> {
-    const quotedAt = toQuotedAt(data.quotedAt)
-    if (!data.sellTxHash || !quotedAt) return
-
-    const preceding = await this.findPrecedingQuote({
-      sellTxHash: data.sellTxHash,
-      chainId: data.sellAsset.chainId,
-      quotedAt,
-      swapId: data.swapId,
-    })
-    if (!preceding) return
-
-    logger.warn(
-      `Refusing swap ${data.swapId} on ${data.sellTxHash}: superseded by ${preceding}` +
-        (data.partnerCode ? ` (partner ${data.partnerCode})` : ''),
-    )
-
-    throw new ConflictException('Transaction already attributed to a preceding quote')
   }
 
   private async getReferralCode(userId: string | undefined): Promise<string | null> {

@@ -51,11 +51,7 @@ const swapRequest = (overrides: Partial<CreateSwapDto> = {}): CreateSwapDto =>
     ...overrides,
   }) as CreateSwapDto
 
-const buildService = (
-  affiliate: AffiliateRow | null,
-  addressMatches: { partnerCode: string }[] = [],
-  precedingQuote: { swapId: string } | null = null,
-) => {
+const buildService = (affiliate: AffiliateRow | null, addressMatches: { partnerCode: string }[] = []) => {
   const findUniqueCalls: FindUniqueArgs[] = []
   const findManyCalls: FindManyArgs[] = []
   const createCalls: CreateArgs[] = []
@@ -72,8 +68,6 @@ const buildService = (
       },
     },
     swap: {
-      // the write guard looks for a preceding quote on the same transaction before creating
-      findFirst: (): Promise<{ swapId: string } | null> => Promise.resolve(precedingQuote),
       // echoed back for toSwap to spread; assertions read createCalls
       create: (args: CreateArgs): Promise<Record<string, unknown>> => {
         createCalls.push(args)
@@ -101,37 +95,6 @@ const deactivatedAffiliate: AffiliateRow = {
   walletAddress: '0xwallet',
   isActive: false,
 }
-
-describe('createSwap preceding quote guard', () => {
-  // storing it would only produce a verdict the contest has already decided
-  it('refuses a swap whose transaction a preceding quote already holds', async () => {
-    const { service, createCalls } = buildService(activeAffiliate, [], { swapId: 'earlier-claim' })
-
-    await expect(
-      service.createSwap(swapRequest({ sellTxHash: '0xshared', quotedAt: '2026-09-07T14:20:00.000Z' })),
-    ).rejects.toThrow(/already attributed to a preceding quote/)
-
-    expect(createCalls).toHaveLength(0)
-  })
-
-  it('stores a swap no preceding quote holds', async () => {
-    const { service, createCalls } = buildService(activeAffiliate, [], null)
-
-    await service.createSwap(swapRequest({ sellTxHash: '0xshared', quotedAt: '2026-09-07T14:20:00.000Z' }))
-
-    expect(createCalls).toHaveLength(1)
-  })
-
-  // deposit-address swaps have no txid to contest, and a missing quote time cannot be ordered
-  it('stores a swap with no transaction or no quote time without querying', async () => {
-    const { service, createCalls } = buildService(activeAffiliate, [], { swapId: 'earlier-claim' })
-
-    await service.createSwap(swapRequest({ sellTxHash: undefined, quotedAt: '2026-09-07T14:20:00.000Z' }))
-    await service.createSwap(swapRequest({ sellTxHash: '0xshared', quotedAt: undefined }))
-
-    expect(createCalls).toHaveLength(2)
-  })
-})
 
 describe('createSwap partner attribution', () => {
   it('persists attribution for an active partner, resolved from the registry', async () => {
