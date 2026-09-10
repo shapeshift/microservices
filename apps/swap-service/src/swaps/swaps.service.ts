@@ -22,12 +22,14 @@ import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service'
 import { TonChainAdapterService } from '../lib/chain-adapters/ton.service'
 import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
+import { DepositDetectionService } from '../lib/deposit-detection.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
+import { EXTERNAL_PAYMENT_SWAPPERS, isExternallyPaid } from './external-payment'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -73,6 +75,7 @@ export class SwapsService {
     starknetChainAdapterService: StarknetChainAdapterService,
     tonChainAdapterService: TonChainAdapterService,
     private blockTimeService: BlockTimeService,
+    private depositDetectionService: DepositDetectionService,
   ) {
     this.notificationsClient = new NotificationsServiceClient()
     this.userServiceClient = new UserServiceClient()
@@ -277,11 +280,12 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
+  // An externally paid swap is tracked from registration, before the provider has seen its deposit
   async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
-        sellTxHash: { not: null },
         status: { in: ['IDLE', 'PENDING'] },
+        OR: [{ sellTxHash: { not: null } }, { swapperName: { in: EXTERNAL_PAYMENT_SWAPPERS } }],
       },
     })
 
@@ -476,7 +480,17 @@ export class SwapsService {
     const swapper = swappers[swap.swapperName]
     if (!swapper) throw new InternalServerErrorException(`Swapper not registered: ${swap.swapperName}`)
 
-    if (!swap.sellTxHash) throw new BadRequestException('Sell tx hash is required')
+    if (!swap.sellTxHash) {
+      if (!isExternallyPaid(swap.swapperName)) throw new BadRequestException('Sell tx hash is required')
+
+      // Nothing can settle before funds arrive, so the deposit lookup is the whole status until then
+      const sellTxHash = await this.depositDetectionService.findDepositTxHash(swap)
+
+      return {
+        ...resolveStalledSwap('PENDING', swap.createdAt, sellTxHash ? 'Deposit detected' : 'Awaiting deposit'),
+        sellTxHash,
+      }
+    }
 
     try {
       const { status, buyTxHash, message } = await swapper.checkTradeStatus({

@@ -98,9 +98,17 @@ export class SwapPollingService {
     try {
       const statusUpdate = await this.swapsService.checkSwapStatus(swap.swapId)
 
-      if (statusUpdate.status === swap.status) return
+      const hasStatusChanged = statusUpdate.status !== swap.status
+      const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
+      const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
 
-      this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
+      if (!hasStatusChanged && !hasNewSellTxHash && !hasNewBuyTxHash) return
+
+      if (hasStatusChanged) {
+        this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
+      } else {
+        this.logger.log(`Transaction hash reported for swap ${swap.swapId} (${statusUpdate.status})`)
+      }
 
       const updated = await this.swapsService.updateSwapStatus({
         swapId: swap.swapId,
