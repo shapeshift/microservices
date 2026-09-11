@@ -93,36 +93,55 @@ describe('checkSwapStatus', () => {
     expect(checkTradeStatus).not.toHaveBeenCalled()
   })
 
-  it('reports an externally paid swap as awaiting its deposit until the provider sees one', async () => {
+  it('polls the provider for an externally paid swap before any deposit is seen', async () => {
+    checkTradeStatus.mockResolvedValue({ status: 'Pending', buyTxHash: undefined, message: 'Waiting for deposit...' })
     const { service } = buildService(row(), undefined)
 
     await expect(service.checkSwapStatus('swap-1')).resolves.toEqual({
       status: 'PENDING',
-      statusMessage: 'Awaiting deposit',
+      statusMessage: 'Waiting for deposit...',
       sellTxHash: undefined,
+      buyTxHash: undefined,
     })
 
-    expect(checkTradeStatus).not.toHaveBeenCalled()
+    expect(checkTradeStatus).toHaveBeenCalledWith(expect.objectContaining({ txHash: '' }))
   })
 
   it('returns the deposit tx hash the provider reports, still pending', async () => {
+    checkTradeStatus.mockResolvedValue({ status: 'Pending', buyTxHash: undefined, message: 'Processing swap...' })
     const { service } = buildService(row({ swapperName: 'NEAR Intents' as never }), 'nearhash')
 
     await expect(service.checkSwapStatus('swap-1')).resolves.toEqual({
       status: 'PENDING',
-      statusMessage: 'Deposit detected',
+      statusMessage: 'Processing swap...',
       sellTxHash: 'nearhash',
+      buyTxHash: undefined,
+    })
+
+    expect(checkTradeStatus).toHaveBeenCalledWith(expect.objectContaining({ txHash: 'nearhash' }))
+  })
+
+  it('settles an externally paid swap the provider completed without ever reporting a deposit', async () => {
+    checkTradeStatus.mockResolvedValue({ status: 'Confirmed', buyTxHash: '0xbuy', message: undefined })
+    const { service } = buildService(row({ swapperName: 'NEAR Intents' as never }), undefined)
+
+    await expect(service.checkSwapStatus('swap-1')).resolves.toEqual({
+      status: 'SUCCESS',
+      statusMessage: '',
+      sellTxHash: undefined,
+      buyTxHash: '0xbuy',
     })
   })
 
   it('abandons an externally paid swap that was never funded', async () => {
+    checkTradeStatus.mockResolvedValue({ status: 'Pending', buyTxHash: undefined, message: 'Waiting for deposit...' })
     const createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
     const { service } = buildService(row({ createdAt }), undefined)
 
     const result = await service.checkSwapStatus('swap-1')
 
     expect(result.status).toBe('FAILED')
-    expect(result.statusMessage).toContain('Awaiting deposit')
+    expect(result.statusMessage).toContain('Waiting for deposit...')
   })
 
   it('polls the swapper once a sell tx hash is known', async () => {

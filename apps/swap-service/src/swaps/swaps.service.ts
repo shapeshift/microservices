@@ -480,21 +480,17 @@ export class SwapsService {
     const swapper = swappers[swap.swapperName]
     if (!swapper) throw new InternalServerErrorException(`Swapper not registered: ${swap.swapperName}`)
 
-    if (!swap.sellTxHash) {
-      if (!isExternallyPaid(swap.swapperName)) throw new BadRequestException('Sell tx hash is required')
-
-      // Nothing can settle before funds arrive, so the deposit lookup is the whole status until then
-      const sellTxHash = await this.depositDetectionService.findDepositTxHash(swap)
-
-      return {
-        ...resolveStalledSwap('PENDING', swap.createdAt, sellTxHash ? 'Deposit detected' : 'Awaiting deposit'),
-        sellTxHash,
-      }
+    if (!swap.sellTxHash && !isExternallyPaid(swap.swapperName)) {
+      throw new BadRequestException('Sell tx hash is required')
     }
+
+    // The provider may never report the deposit (a shielded zcash spend has no attributable input),
+    // so its status is polled regardless and the hash is filled in whenever it does appear
+    const sellTxHash = swap.sellTxHash ?? (await this.depositDetectionService.findDepositTxHash(swap))
 
     try {
       const { status, buyTxHash, message } = await swapper.checkTradeStatus({
-        txHash: swap.sellTxHash,
+        txHash: sellTxHash ?? '',
         chainId: swap.sellAsset.chainId,
         address: swap.sellAccountId,
         swap: toSwapperSwap(swap),
@@ -509,7 +505,7 @@ export class SwapsService {
 
       return {
         ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
-        sellTxHash: swap.sellTxHash,
+        sellTxHash,
         buyTxHash,
       }
     } catch (error) {
