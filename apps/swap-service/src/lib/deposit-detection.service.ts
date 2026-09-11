@@ -38,8 +38,7 @@ const unchainedApi = <C, A>(
 
 const HISTORY_PAGE_SIZE = 25
 
-// A deposit address's history is the deposits into it and the provider's sweeps out of it. The
-// earliest transaction that pays it without spending from it is the deposit, whatever funded it.
+// The earliest transaction paying the address without spending from it is the deposit; the rest are sweeps
 export const findDepositInHistory = (txs: UtxoTx[], depositAddress: string): string | undefined => {
   const deposits = txs.filter(
     (tx) =>

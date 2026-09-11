@@ -294,8 +294,7 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
-  // An externally paid swap is tracked from registration, before the provider has seen its deposit,
-  // and one that settled before its deposit was found stays tracked until the hash is filled in
+  // Externally paid swaps are tracked from registration, and past settlement until their hash is known
   async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
@@ -507,8 +506,7 @@ export class SwapsService {
       throw new BadRequestException('Sell tx hash is required')
     }
 
-    // The provider may never report the deposit (a shielded zcash spend has no attributable input),
-    // so its status is polled regardless and the hash is filled in whenever it does appear
+    // A shielded zcash spend is never reported as a deposit, so status is polled with or without the hash
     const sellTxHash = swap.sellTxHash ?? (await this.depositDetectionService.findDepositTxHash(swap))
 
     try {
