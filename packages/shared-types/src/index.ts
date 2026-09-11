@@ -113,6 +113,7 @@ export interface SwapStatusResponse {
   status: 'IDLE' | 'PENDING' | 'SUCCESS' | 'FAILED'
   sellTxHash?: string
   buyTxHash?: string
+  txLink?: string
   statusMessage: string
 }
 

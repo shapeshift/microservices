@@ -64,8 +64,24 @@ describe('pollPendingTxStatus', () => {
       swapId: 'swap-1',
       sellTxHash: '0xdeposit',
       buyTxHash: undefined,
+      txLink: undefined,
     })
     expect(sendSwapUpdateToUser).toHaveBeenCalledWith('api', expect.objectContaining({ sellTxHash: '0xdeposit' }))
+  })
+
+  it('writes a tracker link the provider reports even when nothing else changed', async () => {
+    const { service, updateSwapTxHashes } = buildService({
+      status: 'PENDING',
+      statusMessage: 'Processing swap...',
+      sellTxHash: '0xdeposit',
+      txLink: 'https://explorer.near-intents.org/transactions/deposit',
+    })
+
+    await service.pollPendingTxStatus()
+
+    expect(updateSwapTxHashes).toHaveBeenCalledWith(
+      expect.objectContaining({ txLink: 'https://explorer.near-intents.org/transactions/deposit' }),
+    )
   })
 
   it('writes a status change as before', async () => {

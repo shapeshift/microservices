@@ -29,7 +29,7 @@ import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import { ATTRIBUTION_BATCH_SIZE, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE } from './constants'
-import { EXTERNAL_PAYMENT_SWAPPERS, isExternallyPaid } from './external-payment'
+import { getExternalPaymentSwappers, isExternallyPaid } from './external-payment'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -247,11 +247,16 @@ export class SwapsService {
   }
 
   // A hash learned after the fact changes nothing the user is told about
-  async updateSwapTxHashes(data: { swapId: string; sellTxHash?: string; buyTxHash?: string }): Promise<Swap> {
+  async updateSwapTxHashes(data: {
+    swapId: string
+    sellTxHash?: string
+    buyTxHash?: string
+    txLink?: string
+  }): Promise<Swap> {
     const swap = toSwap(
       await this.prisma.swap.update({
         where: { swapId: data.swapId },
-        data: { sellTxHash: data.sellTxHash, buyTxHash: data.buyTxHash },
+        data: { sellTxHash: data.sellTxHash, buyTxHash: data.buyTxHash, txLink: data.txLink },
       }),
     )
 
@@ -300,11 +305,11 @@ export class SwapsService {
       where: {
         OR: [
           { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
-          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: EXTERNAL_PAYMENT_SWAPPERS } },
+          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
           {
             status: { in: ['SUCCESS', 'FAILED'] },
             sellTxHash: null,
-            swapperName: { in: EXTERNAL_PAYMENT_SWAPPERS },
+            swapperName: { in: getExternalPaymentSwappers() },
             createdAt: { gt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
           },
         ],
@@ -502,16 +507,19 @@ export class SwapsService {
     const swapper = swappers[swap.swapperName]
     if (!swapper) throw new InternalServerErrorException(`Swapper not registered: ${swap.swapperName}`)
 
-    if (!swap.sellTxHash && !isExternallyPaid(swap.swapperName)) {
-      throw new BadRequestException('Sell tx hash is required')
-    }
+    const isExternal = isExternallyPaid(swap.swapperName)
 
-    // A shielded zcash spend is never reported as a deposit, so status is polled with or without the hash
-    const sellTxHash = swap.sellTxHash ?? (await this.depositDetectionService.findDepositTxHash(swap))
+    if (!swap.sellTxHash && !isExternal) throw new BadRequestException('Sell tx hash is required')
 
     try {
-      const { status, buyTxHash, message } = await swapper.checkTradeStatus({
-        txHash: sellTxHash ?? '',
+      const {
+        status,
+        buyTxHash,
+        sellTxHash: reportedSellTxHash,
+        swapperTxLink,
+        message,
+      } = await swapper.checkTradeStatus({
+        txHash: swap.sellTxHash ?? '',
         chainId: swap.sellAsset.chainId,
         address: swap.sellAccountId,
         swap: toSwapperSwap(swap),
@@ -521,6 +529,12 @@ export class SwapsService {
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       })
 
+      // A shielded zcash spend is never reported as a deposit, so the address's own history is the fallback
+      const sellTxHash =
+        swap.sellTxHash ??
+        reportedSellTxHash ??
+        (isExternal ? await this.depositDetectionService.findDepositOnChain(swap) : undefined)
+
       const statusMessage = Array.isArray(message) ? message[0] : message
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
@@ -528,6 +542,7 @@ export class SwapsService {
         ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
         sellTxHash,
         buyTxHash,
+        txLink: swapperTxLink,
       }
     } catch (error) {
       const reason = describeError(error)

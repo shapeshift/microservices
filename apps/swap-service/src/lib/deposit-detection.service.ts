@@ -1,7 +1,4 @@
-import { OneClickService, OpenAPI } from '@defuse-protocol/one-click-sdk-typescript'
-import { HttpService } from '@nestjs/axios'
 import { Injectable, Logger } from '@nestjs/common'
-import { firstValueFrom } from 'rxjs'
 
 import type { ChainId } from '@shapeshiftoss/caip'
 import { SwapperName } from '@shapeshiftoss/swapper'
@@ -13,13 +10,6 @@ import { env } from '../env'
 import type { Swap } from '../swaps/types'
 import { describeError } from '../swaps/utils'
 import { getSwapMetadata } from '../verification/utils'
-
-// Non-exhaustive - only the deposit leg of the broker's status-by-id response
-type ChainflipStatusResponse = {
-  status?: {
-    deposit?: { transactionReference?: string | null }
-  }
-}
 
 type UtxoTx = {
   txid: string
@@ -53,19 +43,15 @@ export const findDepositInHistory = (txs: UtxoTx[], depositAddress: string): str
 }
 
 /**
- * Finds the transaction that funded an externally paid swap. The client that registered the swap
- * may never see that transaction, so the provider is asked first; when it reports none - a shielded
- * zcash spend has no input it can attribute - the deposit address's own history is searched.
+ * Finds a deposit the provider never reported - a shielded zcash spend has no input NEAR Intents can
+ * attribute - by searching the deposit address's own history on the sell chain.
  */
 @Injectable()
 export class DepositDetectionService {
   private readonly logger = new Logger(DepositDetectionService.name)
   private readonly utxoHistory = new Map<ChainId, UtxoTxHistory>()
 
-  constructor(private readonly httpService: HttpService) {
-    OpenAPI.BASE = 'https://1click.chaindefuser.com'
-    OpenAPI.TOKEN = env.VITE_NEAR_INTENTS_API_KEY
-
+  constructor() {
     const utxoApis: [UtxoChainId, UtxoTxHistory][] = [
       [
         KnownChainIds.BitcoinMainnet,
@@ -94,63 +80,23 @@ export class DepositDetectionService {
     return (pubkey) => api.getTxHistory({ pubkey, pageSize: HISTORY_PAGE_SIZE }) as Promise<{ txs: UtxoTx[] }>
   }
 
-  async findDepositTxHash(swap: Swap): Promise<string | undefined> {
-    try {
-      const reported = await this.findProviderReportedTxHash(swap)
-      if (reported) return reported
-
-      return await this.findDepositOnChain(swap)
-    } catch (error) {
-      this.logger.warn(`Deposit lookup failed for swap ${swap.swapId}: ${describeError(error)}`)
-      return undefined
-    }
-  }
-
-  private async findProviderReportedTxHash(swap: Swap): Promise<string | undefined> {
-    switch (swap.swapperName) {
-      case SwapperName.Chainflip:
-        return this.findChainflipDepositTxHash(swap)
-      case SwapperName.NearIntents:
-        return this.findNearIntentsDepositTxHash(swap)
-      default:
-        return undefined
-    }
-  }
-
-  private async findChainflipDepositTxHash(swap: Swap): Promise<string | undefined> {
-    const swapId = getSwapMetadata(swap.metadata, 'chainflip')?.swapId
-    if (!swapId) throw new Error('Missing swapId in chainflip metadata')
-
-    const url = `${env.VITE_CHAINFLIP_API_URL}/status-by-id?apiKey=${env.VITE_CHAINFLIP_API_KEY}&swapId=${swapId}`
-    const response = await firstValueFrom(this.httpService.get<ChainflipStatusResponse>(url))
-
-    return response.data?.status?.deposit?.transactionReference || undefined
-  }
-
-  private async findNearIntentsDepositTxHash(swap: Swap): Promise<string | undefined> {
-    const depositAddress = this.nearIntentsDepositAddress(swap)
-
-    const status = await OneClickService.getExecutionStatus(depositAddress)
-
-    return status.swapDetails?.originChainTxHashes?.[0]?.hash || undefined
-  }
-
-  private nearIntentsDepositAddress(swap: Swap): string {
-    const depositAddress = getSwapMetadata(swap.metadata, 'nearIntents')?.depositAddress
-    if (!depositAddress) throw new Error('Missing depositAddress in nearIntents metadata')
-    return depositAddress
-  }
-
-  private async findDepositOnChain(swap: Swap): Promise<string | undefined> {
+  async findDepositOnChain(swap: Swap): Promise<string | undefined> {
     // Chainflip attributes every deposit it credits; only NEAR Intents leaves some unreported
     if (swap.swapperName !== SwapperName.NearIntents) return undefined
 
     const history = this.utxoHistory.get(swap.sellAsset.chainId)
     if (!history) return undefined
 
-    const depositAddress = this.nearIntentsDepositAddress(swap)
-    const { txs } = await history(depositAddress)
+    try {
+      const depositAddress = getSwapMetadata(swap.metadata, 'nearIntents')?.depositAddress
+      if (!depositAddress) throw new Error('Missing depositAddress in nearIntents metadata')
 
-    return findDepositInHistory(txs, depositAddress)
+      const { txs } = await history(depositAddress)
+
+      return findDepositInHistory(txs, depositAddress)
+    } catch (error) {
+      this.logger.warn(`Deposit lookup failed for swap ${swap.swapId}: ${describeError(error)}`)
+      return undefined
+    }
   }
 }
