@@ -28,7 +28,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE } from './constants'
 import { EXTERNAL_PAYMENT_SWAPPERS, isExternallyPaid } from './external-payment'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
@@ -246,6 +246,20 @@ export class SwapsService {
     }
   }
 
+  // A hash learned after the fact changes nothing the user is told about
+  async updateSwapTxHashes(data: { swapId: string; sellTxHash?: string; buyTxHash?: string }): Promise<Swap> {
+    const swap = toSwap(
+      await this.prisma.swap.update({
+        where: { swapId: data.swapId },
+        data: { sellTxHash: data.sellTxHash, buyTxHash: data.buyTxHash },
+      }),
+    )
+
+    logger.log(`Transaction hashes updated for swap: ${swap.swapId}`)
+
+    return swap
+  }
+
   private async sendStatusUpdateNotification(swap: Swap) {
     if (swap.userId === 'api') return
 
@@ -280,12 +294,21 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
-  // An externally paid swap is tracked from registration, before the provider has seen its deposit
+  // An externally paid swap is tracked from registration, before the provider has seen its deposit,
+  // and one that settled before its deposit was found stays tracked until the hash is filled in
   async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
-        status: { in: ['IDLE', 'PENDING'] },
-        OR: [{ sellTxHash: { not: null } }, { swapperName: { in: EXTERNAL_PAYMENT_SWAPPERS } }],
+        OR: [
+          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
+          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: EXTERNAL_PAYMENT_SWAPPERS } },
+          {
+            status: { in: ['SUCCESS', 'FAILED'] },
+            sellTxHash: null,
+            swapperName: { in: EXTERNAL_PAYMENT_SWAPPERS },
+            createdAt: { gt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
+          },
+        ],
       },
     })
 

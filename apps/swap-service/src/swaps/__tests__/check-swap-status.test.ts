@@ -168,8 +168,16 @@ describe('getPendingTxSwaps', () => {
 
     expect(findManyCalls[0]).toEqual({
       where: {
-        status: { in: ['IDLE', 'PENDING'] },
-        OR: [{ sellTxHash: { not: null } }, { swapperName: { in: ['Chainflip', 'NEAR Intents'] } }],
+        OR: [
+          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
+          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: ['Chainflip', 'NEAR Intents'] } },
+          {
+            status: { in: ['SUCCESS', 'FAILED'] },
+            sellTxHash: null,
+            swapperName: { in: ['Chainflip', 'NEAR Intents'] },
+            createdAt: { gt: expect.any(Date) as unknown as Date },
+          },
+        ],
       },
     })
   })

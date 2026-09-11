@@ -19,28 +19,39 @@ const swap = {
 
 const buildService = (statusUpdate: Record<string, unknown>) => {
   const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...swap, ...data }))
+  const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...swap, ...data }))
   const swapsService = {
     getPendingTxSwaps: jest.fn().mockResolvedValue([swap]),
     checkSwapStatus: jest.fn().mockResolvedValue(statusUpdate),
     updateSwapStatus,
+    updateSwapTxHashes,
   } as unknown as SwapsService
   const sendSwapUpdateToUser = jest.fn()
   const websocketGateway = { sendSwapUpdateToUser } as unknown as WebsocketGateway
 
-  return { service: new SwapPollingService(swapsService, websocketGateway), updateSwapStatus, sendSwapUpdateToUser }
+  return {
+    service: new SwapPollingService(swapsService, websocketGateway),
+    updateSwapStatus,
+    updateSwapTxHashes,
+    sendSwapUpdateToUser,
+  }
 }
 
 describe('pollPendingTxStatus', () => {
   it('leaves a swap alone when neither its status nor its hashes changed', async () => {
-    const { service, updateSwapStatus } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' })
+    const { service, updateSwapStatus, updateSwapTxHashes } = buildService({
+      status: 'PENDING',
+      statusMessage: 'Awaiting deposit',
+    })
 
     await service.pollPendingTxStatus()
 
     expect(updateSwapStatus).not.toHaveBeenCalled()
+    expect(updateSwapTxHashes).not.toHaveBeenCalled()
   })
 
-  it('writes a newly reported sell tx hash while the swap is still pending', async () => {
-    const { service, updateSwapStatus, sendSwapUpdateToUser } = buildService({
+  it('writes a newly reported sell tx hash without touching the status', async () => {
+    const { service, updateSwapStatus, updateSwapTxHashes, sendSwapUpdateToUser } = buildService({
       status: 'PENDING',
       statusMessage: 'Deposit detected',
       sellTxHash: '0xdeposit',
@@ -48,12 +59,11 @@ describe('pollPendingTxStatus', () => {
 
     await service.pollPendingTxStatus()
 
-    expect(updateSwapStatus).toHaveBeenCalledWith({
+    expect(updateSwapStatus).not.toHaveBeenCalled()
+    expect(updateSwapTxHashes).toHaveBeenCalledWith({
       swapId: 'swap-1',
-      status: 'PENDING',
       sellTxHash: '0xdeposit',
       buyTxHash: undefined,
-      statusMessage: 'Deposit detected',
     })
     expect(sendSwapUpdateToUser).toHaveBeenCalledWith('api', expect.objectContaining({ sellTxHash: '0xdeposit' }))
   })

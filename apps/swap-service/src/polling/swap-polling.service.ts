@@ -104,19 +104,25 @@ export class SwapPollingService {
 
       if (!hasStatusChanged && !hasNewSellTxHash && !hasNewBuyTxHash) return
 
-      if (hasStatusChanged) {
-        this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
-      } else {
-        this.logger.log(`Transaction hash reported for swap ${swap.swapId} (${statusUpdate.status})`)
-      }
+      const updated = hasStatusChanged
+        ? await this.swapsService.updateSwapStatus({
+            swapId: swap.swapId,
+            status: statusUpdate.status,
+            sellTxHash: statusUpdate.sellTxHash,
+            buyTxHash: statusUpdate.buyTxHash,
+            statusMessage: statusUpdate.statusMessage,
+          })
+        : await this.swapsService.updateSwapTxHashes({
+            swapId: swap.swapId,
+            sellTxHash: statusUpdate.sellTxHash,
+            buyTxHash: statusUpdate.buyTxHash,
+          })
 
-      const updated = await this.swapsService.updateSwapStatus({
-        swapId: swap.swapId,
-        status: statusUpdate.status,
-        sellTxHash: statusUpdate.sellTxHash,
-        buyTxHash: statusUpdate.buyTxHash,
-        statusMessage: statusUpdate.statusMessage,
-      })
+      this.logger.log(
+        hasStatusChanged
+          ? `Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`
+          : `Transaction hash reported for swap ${swap.swapId} (${statusUpdate.status})`,
+      )
 
       this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
     } catch (err) {
