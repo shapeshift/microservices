@@ -98,7 +98,9 @@ export class SwapPollingService {
     try {
       const statusUpdate = await this.swapsService.checkSwapStatus(swap.swapId)
 
-      const hasStatusChanged = statusUpdate.status !== swap.status
+      // A settled swap is only re-polled to learn its hashes; a provider error must not reopen it
+      const isSettled = swap.status === 'SUCCESS' || swap.status === 'FAILED'
+      const hasStatusChanged = !isSettled && statusUpdate.status !== swap.status
       const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
       const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
       const hasNewTxLink = !!statusUpdate.txLink && statusUpdate.txLink !== swap.txLink

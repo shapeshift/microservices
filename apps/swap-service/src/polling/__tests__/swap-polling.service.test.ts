@@ -17,11 +17,11 @@ const swap = {
   buyTxHash: null,
 } as unknown as Swap
 
-const buildService = (statusUpdate: Record<string, unknown>) => {
-  const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...swap, ...data }))
-  const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...swap, ...data }))
+const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap) => {
+  const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
+  const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
   const swapsService = {
-    getPendingTxSwaps: jest.fn().mockResolvedValue([swap]),
+    getPendingTxSwaps: jest.fn().mockResolvedValue([polled]),
     checkSwapStatus: jest.fn().mockResolvedValue(statusUpdate),
     updateSwapStatus,
     updateSwapTxHashes,
@@ -82,6 +82,32 @@ describe('pollPendingTxStatus', () => {
     expect(updateSwapTxHashes).toHaveBeenCalledWith(
       expect.objectContaining({ txLink: 'https://explorer.near-intents.org/transactions/deposit' }),
     )
+  })
+
+  it('keeps a settled swap settled when a poll reports it pending again', async () => {
+    const settled = { ...swap, status: 'SUCCESS' } as Swap
+    const { service, updateSwapStatus, updateSwapTxHashes } = buildService(
+      { status: 'PENDING', statusMessage: 'Error polling status: 1Click unavailable' },
+      settled,
+    )
+
+    await service.pollPendingTxStatus()
+
+    expect(updateSwapStatus).not.toHaveBeenCalled()
+    expect(updateSwapTxHashes).not.toHaveBeenCalled()
+  })
+
+  it('backfills the deposit hash on a settled swap without re-sending its notification', async () => {
+    const settled = { ...swap, status: 'SUCCESS' } as Swap
+    const { service, updateSwapStatus, updateSwapTxHashes } = buildService(
+      { status: 'SUCCESS', statusMessage: '', sellTxHash: '0xdeposit' },
+      settled,
+    )
+
+    await service.pollPendingTxStatus()
+
+    expect(updateSwapStatus).not.toHaveBeenCalled()
+    expect(updateSwapTxHashes).toHaveBeenCalledWith(expect.objectContaining({ sellTxHash: '0xdeposit' }))
   })
 
   it('writes a status change as before', async () => {
