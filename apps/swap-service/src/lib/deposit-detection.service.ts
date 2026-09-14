@@ -50,13 +50,13 @@ export class DepositDetectionService {
   }
 
   async findDepositOnChain(swap: Swap): Promise<string | undefined> {
-    if (swap.swapperName !== SwapperName.NearIntents) return undefined
-    if (swap.sellAsset.chainId !== zecChainId) return undefined
+    if (swap.swapperName !== SwapperName.NearIntents) return
+    if (swap.sellAsset.chainId !== zecChainId) return
 
     const depositAddress = getSwapMetadata(swap.metadata, 'nearIntents')?.depositAddress
     if (!depositAddress) {
       this.logger.warn(`Swap ${swap.swapId} has no depositAddress in its nearIntents metadata`)
-      return undefined
+      return
     }
 
     try {
@@ -65,7 +65,7 @@ export class DepositDetectionService {
       return findDepositInHistory(txs, depositAddress)
     } catch (error) {
       this.logger.warn(`Deposit lookup failed for swap ${swap.swapId}: ${describeError(error)}`)
-      return undefined
+      return
     }
   }
 }
