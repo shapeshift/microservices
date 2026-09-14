@@ -17,11 +17,11 @@ const swap = {
   buyTxHash: null,
 } as unknown as Swap
 
-const buildService = (statusUpdate: Record<string, unknown>) => {
-  const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...swap, ...data }))
-  const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...swap, ...data }))
+const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap) => {
+  const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
+  const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
   const swapsService = {
-    getPendingTxSwaps: jest.fn().mockResolvedValue([swap]),
+    getPendingTxSwaps: jest.fn().mockResolvedValue([polled]),
     checkSwapStatus: jest.fn().mockResolvedValue(statusUpdate),
     updateSwapStatus,
     updateSwapTxHashes,
@@ -48,6 +48,19 @@ describe('pollPendingTxStatus', () => {
 
     expect(updateSwapStatus).not.toHaveBeenCalled()
     expect(updateSwapTxHashes).not.toHaveBeenCalled()
+  })
+
+  it('does not rewrite a sell tx hash the row already holds', async () => {
+    const { service, updateSwapStatus, updateSwapTxHashes, sendSwapUpdateToUser } = buildService(
+      { status: 'PENDING', statusMessage: 'Processing swap...', sellTxHash: '0xknown' },
+      { ...swap, sellTxHash: '0xknown' } as Swap,
+    )
+
+    await service.pollPendingTxStatus()
+
+    expect(updateSwapStatus).not.toHaveBeenCalled()
+    expect(updateSwapTxHashes).not.toHaveBeenCalled()
+    expect(sendSwapUpdateToUser).not.toHaveBeenCalled()
   })
 
   it('writes a newly reported sell tx hash without touching the status', async () => {

@@ -23,18 +23,16 @@ type UtxoTxHistory = (pubkey: string) => Promise<{ txs: UtxoTx[] }>
 
 const HISTORY_PAGE_SIZE = 25
 
-// The earliest transaction paying the address without spending from it is the deposit; the rest are sweeps
+// The earliest mined transaction paying the address without spending from it is the deposit; the rest are sweeps
 export const findDepositInHistory = (txs: UtxoTx[], depositAddress: string): string | undefined => {
   const deposits = txs.filter(
     (tx) =>
+      tx.blockHeight > 0 &&
       tx.vout.some((out) => out.addresses?.includes(depositAddress)) &&
       !tx.vin.some((input) => input.addresses?.includes(depositAddress)),
   )
 
-  // Unmined transactions carry no height, so they sort last as the most recent
-  const height = (tx: UtxoTx): number => (tx.blockHeight > 0 ? tx.blockHeight : Number.MAX_SAFE_INTEGER)
-
-  return deposits.sort((a, b) => height(a) - height(b) || a.timestamp - b.timestamp)[0]?.txid
+  return deposits.sort((a, b) => a.blockHeight - b.blockHeight || a.timestamp - b.timestamp)[0]?.txid
 }
 
 // A shielded zcash spend has no input NEAR Intents can attribute, so the deposit address's own history is searched

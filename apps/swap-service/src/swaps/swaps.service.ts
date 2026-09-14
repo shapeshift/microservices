@@ -529,7 +529,7 @@ export class SwapsService {
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       })
 
-      // The provider's hash outranks a stored one the chain scan may have seen unmined, before a fee bump replaced it
+      // The provider's hash outranks one supplied at registration, which a fee bump may have replaced since
       const sellTxHash =
         reportedSellTxHash ??
         swap.sellTxHash ??

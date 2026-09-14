@@ -88,14 +88,13 @@ describe('DepositDetectionService', () => {
 })
 
 describe('findDepositInHistory', () => {
-  it('takes the earliest deposit, mined before unmined', () => {
-    const unmined = { ...shieldedDeposit, txid: 'mempool', blockHeight: -1, timestamp: 50 }
+  it('takes the earliest mined deposit', () => {
     const later = { ...shieldedDeposit, txid: 'later', blockHeight: 3479875 }
-    expect(findDepositInHistory([unmined, later, shieldedDeposit, sweep], DEPOSIT)).toBe('f85da1de')
+    expect(findDepositInHistory([later, shieldedDeposit, sweep], DEPOSIT)).toBe('f85da1de')
   })
 
-  it('returns an unmined deposit when nothing else has paid the address', () => {
+  it('ignores a deposit still in the mempool', () => {
     const unmined = { ...shieldedDeposit, txid: 'mempool', blockHeight: -1 }
-    expect(findDepositInHistory([unmined], DEPOSIT)).toBe('mempool')
+    expect(findDepositInHistory([unmined], DEPOSIT)).toBeUndefined()
   })
 })

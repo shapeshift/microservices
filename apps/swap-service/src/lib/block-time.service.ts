@@ -5,7 +5,7 @@ import { viemClientByChainId } from '@shapeshiftoss/contracts'
 import { KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
 
-import { COSMOS_SDK_URLS, SOLANA_URL, UTXO_URLS, unchainedApi } from './unchained'
+import { COSMOS_SDK_URLS, SOLANA_URL, unchainedApi, UTXO_URLS } from './unchained'
 
 export type BlockTimeLookup = { blockTime: number } | { unavailable: 'unsupported' | 'not-found' | 'unmined' | 'error' }
 
