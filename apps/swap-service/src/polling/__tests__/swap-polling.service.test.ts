@@ -13,6 +13,7 @@ const swap = {
   swapId: 'swap-1',
   userId: 'api',
   status: 'PENDING',
+  statusMessage: 'Awaiting deposit',
   sellTxHash: null,
   buyTxHash: null,
 } as unknown as Swap
@@ -48,6 +49,21 @@ describe('pollPendingTxStatus', () => {
 
     expect(updateSwapStatus).not.toHaveBeenCalled()
     expect(updateSwapTxHashes).not.toHaveBeenCalled()
+  })
+
+  it('writes a status message the provider changed on its own', async () => {
+    const { service, updateSwapStatus, updateSwapTxHashes, sendSwapUpdateToUser } = buildService({
+      status: 'PENDING',
+      statusMessage: 'Confirmed by provider, waiting for deposit hash',
+    })
+
+    await service.pollPendingTxStatus()
+
+    expect(updateSwapStatus).not.toHaveBeenCalled()
+    expect(updateSwapTxHashes).toHaveBeenCalledWith(
+      expect.objectContaining({ statusMessage: 'Confirmed by provider, waiting for deposit hash' }),
+    )
+    expect(sendSwapUpdateToUser).toHaveBeenCalledTimes(1)
   })
 
   it('does not rewrite a sell tx hash the row already holds', async () => {

@@ -113,12 +113,13 @@ export class SwapPollingService {
         return
       }
 
-      // Same status, but a hash or tracker link the row did not have yet
+      // Same status, but a hash, tracker link, or message the row did not have yet
       const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
       const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
       const hasNewTxLink = !!statusUpdate.txLink && statusUpdate.txLink !== swap.txLink
+      const hasNewStatusMessage = !!statusUpdate.statusMessage && statusUpdate.statusMessage !== swap.statusMessage
 
-      if (hasNewSellTxHash || hasNewBuyTxHash || hasNewTxLink) {
+      if (hasNewSellTxHash || hasNewBuyTxHash || hasNewTxLink || hasNewStatusMessage) {
         const updated = await this.swapsService.updateSwapTxHashes({
           swapId: swap.swapId,
           sellTxHash: statusUpdate.sellTxHash,

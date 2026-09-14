@@ -266,7 +266,7 @@ export class SwapsService {
       }),
     )
 
-    logger.log(`Transaction hashes updated for swap: ${swap.swapId}`)
+    logger.log(`Transaction details updated for swap: ${swap.swapId}`)
 
     return swap
   }
