@@ -65,6 +65,7 @@ describe('pollPendingTxStatus', () => {
       sellTxHash: '0xdeposit',
       buyTxHash: undefined,
       txLink: undefined,
+      statusMessage: 'Deposit detected',
     })
     expect(sendSwapUpdateToUser).toHaveBeenCalledWith('api', expect.objectContaining({ sellTxHash: '0xdeposit' }))
   })

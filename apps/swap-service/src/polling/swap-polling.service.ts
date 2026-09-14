@@ -121,6 +121,7 @@ export class SwapPollingService {
             sellTxHash: statusUpdate.sellTxHash,
             buyTxHash: statusUpdate.buyTxHash,
             txLink: statusUpdate.txLink,
+            statusMessage: statusUpdate.statusMessage,
           })
 
       this.logger.log(

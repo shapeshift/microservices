@@ -246,17 +246,23 @@ export class SwapsService {
     }
   }
 
-  // A hash learned after the fact changes nothing the user is told about
+  // A hash learned after the fact changes nothing the user is notified about
   async updateSwapTxHashes(data: {
     swapId: string
     sellTxHash?: string
     buyTxHash?: string
     txLink?: string
+    statusMessage?: string
   }): Promise<Swap> {
     const swap = toSwap(
       await this.prisma.swap.update({
         where: { swapId: data.swapId },
-        data: { sellTxHash: data.sellTxHash, buyTxHash: data.buyTxHash, txLink: data.txLink },
+        data: {
+          sellTxHash: data.sellTxHash,
+          buyTxHash: data.buyTxHash,
+          txLink: data.txLink,
+          statusMessage: data.statusMessage,
+        },
       }),
     )
 
