@@ -54,7 +54,7 @@
     "@shapeshiftoss/caip": "8.16.10",
     "@shapeshiftoss/chain-adapters": "11.5.1",
     "@shapeshiftoss/swapper": "20.1.0",
-    "@shapeshiftoss/types": "9.0.0",
+    "@shapeshiftoss/types": "9.0.1",
     "@shapeshiftoss/unchained-client": "10.14.11",
     "@shapeshiftoss/unchained-pulumi": "1.0.2",
     "axios": "^1.7.4",
