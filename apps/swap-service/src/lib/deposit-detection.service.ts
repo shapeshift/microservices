@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
 
-import type { ChainId } from '@shapeshiftoss/caip'
 import { SwapperName } from '@shapeshiftoss/swapper'
 import { KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
@@ -37,53 +36,21 @@ export const findDepositInHistory = (txs: UtxoTx[], depositAddress: string): str
   return deposits.sort((a, b) => height(a) - height(b) || a.timestamp - b.timestamp)[0]?.txid
 }
 
-/**
- * Finds a deposit the provider never reported - a shielded zcash spend has no input NEAR Intents can
- * attribute - by searching the deposit address's own history on the sell chain.
- */
+// A shielded zcash spend has no input NEAR Intents can attribute, so the deposit address's own history is searched
 @Injectable()
 export class DepositDetectionService {
   private readonly logger = new Logger(DepositDetectionService.name)
-  private readonly utxoHistory = new Map<ChainId, UtxoTxHistory>()
+  private readonly zcashHistory: UtxoTxHistory
 
   constructor() {
-    const utxoApis: [ChainId, UtxoTxHistory][] = [
-      [
-        KnownChainIds.BitcoinMainnet,
-        this.txHistory(unchainedApi(unchained.bitcoin, UTXO_URLS[KnownChainIds.BitcoinMainnet])),
-      ],
-      [
-        KnownChainIds.BitcoinCashMainnet,
-        this.txHistory(unchainedApi(unchained.bitcoincash, UTXO_URLS[KnownChainIds.BitcoinCashMainnet])),
-      ],
-      [
-        KnownChainIds.DogecoinMainnet,
-        this.txHistory(unchainedApi(unchained.dogecoin, UTXO_URLS[KnownChainIds.DogecoinMainnet])),
-      ],
-      [
-        KnownChainIds.LitecoinMainnet,
-        this.txHistory(unchainedApi(unchained.litecoin, UTXO_URLS[KnownChainIds.LitecoinMainnet])),
-      ],
-      [
-        KnownChainIds.ZcashMainnet,
-        this.txHistory(unchainedApi(unchained.zcash, UTXO_URLS[KnownChainIds.ZcashMainnet])),
-      ],
-    ]
-    for (const [chainId, history] of utxoApis) this.utxoHistory.set(chainId, history)
-  }
+    const api = unchainedApi(unchained.zcash, UTXO_URLS[KnownChainIds.ZcashMainnet])
 
-  private txHistory(api: {
-    getTxHistory: (req: { pubkey: string; pageSize?: number }) => Promise<{ txs: UtxoTx[] }>
-  }): UtxoTxHistory {
-    return (pubkey) => api.getTxHistory({ pubkey, pageSize: HISTORY_PAGE_SIZE })
+    this.zcashHistory = (pubkey) => api.getTxHistory({ pubkey, pageSize: HISTORY_PAGE_SIZE })
   }
 
   async findDepositOnChain(swap: Swap): Promise<string | undefined> {
-    // Chainflip attributes every deposit it credits; only NEAR Intents leaves some unreported
     if (swap.swapperName !== SwapperName.NearIntents) return undefined
-
-    const history = this.utxoHistory.get(swap.sellAsset.chainId)
-    if (!history) return undefined
+    if (swap.sellAsset.chainId !== KnownChainIds.ZcashMainnet) return undefined
 
     const depositAddress = getSwapMetadata(swap.metadata, 'nearIntents')?.depositAddress
     if (!depositAddress) {
@@ -92,7 +59,7 @@ export class DepositDetectionService {
     }
 
     try {
-      const { txs } = await history(depositAddress)
+      const { txs } = await this.zcashHistory(depositAddress)
 
       return findDepositInHistory(txs, depositAddress)
     } catch (error) {

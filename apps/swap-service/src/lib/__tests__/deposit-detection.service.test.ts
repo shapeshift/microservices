@@ -1,16 +1,15 @@
 import type { Swap } from '../../swaps/types'
 import { DepositDetectionService, findDepositInHistory } from '../deposit-detection.service'
 
-// unchained-client is ESM; ts-jest can't transform it. Only the utxo history clients are built here.
-jest.mock('@shapeshiftoss/unchained-client', () => {
-  const namespace = {
+// unchained-client is ESM; ts-jest can't transform it. Only the zcash history client is built here.
+jest.mock('@shapeshiftoss/unchained-client', () => ({
+  zcash: {
     V1Api: class {
       getTxHistory = getTxHistory
     },
     Configuration: class {},
-  }
-  return { bitcoin: namespace, bitcoincash: namespace, dogecoin: namespace, litecoin: namespace, zcash: namespace }
-})
+  },
+}))
 
 const getTxHistory = jest.fn()
 
@@ -59,8 +58,8 @@ describe('DepositDetectionService', () => {
     await expect(new DepositDetectionService().findDepositOnChain(zcashSwap)).resolves.toBeUndefined()
   })
 
-  it('does not scan chains without a utxo history client', async () => {
-    const swap = { ...zcashSwap, sellAsset: { chainId: 'eip155:1' } } as unknown as Swap
+  it('does not scan a chain whose deposits the provider can attribute', async () => {
+    const swap = { ...zcashSwap, sellAsset: { chainId: 'bip122:000000000019d6689c085ae165831e93' } } as unknown as Swap
 
     await expect(new DepositDetectionService().findDepositOnChain(swap)).resolves.toBeUndefined()
     expect(getTxHistory).not.toHaveBeenCalled()
