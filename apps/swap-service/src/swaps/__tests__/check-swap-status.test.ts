@@ -162,6 +162,17 @@ describe('checkSwapStatus', () => {
     expect(result.statusMessage).toContain('Waiting for deposit...')
   })
 
+  it('replaces a hash found on chain with the one the provider later reports', async () => {
+    checkTradeStatus.mockResolvedValue({ ...pending, sellTxHash: 'bumped', message: 'Processing swap...' })
+    const { service, depositDetection } = buildService(row({ sellTxHash: 'replaced' }), undefined)
+
+    const result = await service.checkSwapStatus('swap-1')
+
+    expect(result.sellTxHash).toBe('bumped')
+    expect(checkTradeStatus).toHaveBeenCalledWith(expect.objectContaining({ txHash: 'replaced' }))
+    expect(depositDetection.findDepositOnChain).not.toHaveBeenCalled()
+  })
+
   it('polls with the known sell tx hash and never scans', async () => {
     checkTradeStatus.mockResolvedValue({ status: 'Confirmed', buyTxHash: '0xbuy', message: undefined })
     const { service, depositDetection } = buildService(row({ sellTxHash: '0xsell' }), undefined)

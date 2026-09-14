@@ -529,10 +529,10 @@ export class SwapsService {
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       })
 
-      // A shielded zcash spend is never reported as a deposit, so the address's own history is the fallback
+      // The provider's hash outranks a stored one the chain scan may have seen unmined, before a fee bump replaced it
       const sellTxHash =
-        swap.sellTxHash ??
         reportedSellTxHash ??
+        swap.sellTxHash ??
         (isExternal ? await this.depositDetectionService.findDepositOnChain(swap) : undefined)
 
       const statusMessage = Array.isArray(message) ? message[0] : message
