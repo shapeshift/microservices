@@ -28,7 +28,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_BATCH_SIZE, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -247,7 +247,6 @@ export class SwapsService {
     }
   }
 
-  // A hash learned after the fact changes nothing the user is notified about
   async updateSwapTxHashes(data: {
     swapId: string
     sellTxHash?: string
@@ -306,19 +305,13 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
-  // Externally paid swaps are tracked from registration, and past settlement until their hash is known
+  // Externally paid swaps are tracked from registration, before any deposit hash is known
   async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
         OR: [
           { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
           { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
-          {
-            status: { in: ['SUCCESS', 'FAILED'] },
-            sellTxHash: null,
-            swapperName: { in: getExternalPaymentSwappers() },
-            createdAt: { gt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
-          },
         ],
       },
     })
@@ -541,6 +534,17 @@ export class SwapsService {
         reportedSellTxHash ??
         swap.sellTxHash ??
         (isExternal ? await this.depositDetectionService.findDepositOnChain(swap) : undefined)
+
+      // A success needs a deposit to verify, so a confirmed shielded zcash swap waits on unchained rather than settling
+      if (status === TxStatus.Confirmed && !sellTxHash) {
+        return {
+          status: 'PENDING',
+          statusMessage: 'Confirmed by provider, waiting for deposit hash',
+          sellTxHash,
+          buyTxHash,
+          txLink: swapperTxLink,
+        }
+      }
 
       const statusMessage = Array.isArray(message) ? message[0] : message
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'

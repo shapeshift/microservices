@@ -151,6 +151,20 @@ describe('checkSwapStatus', () => {
     expect(depositDetection.findDepositOnChain).toHaveBeenCalledTimes(1)
   })
 
+  it('holds a confirmed swap pending until its deposit hash is found', async () => {
+    checkTradeStatus.mockResolvedValue({ status: 'Confirmed', buyTxHash: '0xbuy', message: undefined })
+    const createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    const { service } = buildService(row({ createdAt }), undefined)
+
+    await expect(service.checkSwapStatus('swap-1')).resolves.toEqual({
+      status: 'PENDING',
+      statusMessage: 'Confirmed by provider, waiting for deposit hash',
+      sellTxHash: undefined,
+      buyTxHash: '0xbuy',
+      txLink: undefined,
+    })
+  })
+
   it('abandons an externally paid swap that was never funded', async () => {
     checkTradeStatus.mockResolvedValue(pending)
     const createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
@@ -201,12 +215,6 @@ describe('getPendingTxSwaps', () => {
         OR: [
           { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
           { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: ['Chainflip', 'NEAR Intents'] } },
-          {
-            status: { in: ['SUCCESS', 'FAILED'] },
-            sellTxHash: null,
-            swapperName: { in: ['Chainflip', 'NEAR Intents'] },
-            createdAt: { gt: expect.any(Date) as unknown as Date },
-          },
         ],
       },
     })
