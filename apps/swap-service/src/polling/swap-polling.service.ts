@@ -98,37 +98,39 @@ export class SwapPollingService {
     try {
       const statusUpdate = await this.swapsService.checkSwapStatus(swap.swapId)
 
-      const hasStatusChanged = statusUpdate.status !== swap.status
+      if (statusUpdate.status !== swap.status) {
+        const updated = await this.swapsService.updateSwapStatus({
+          swapId: swap.swapId,
+          status: statusUpdate.status,
+          sellTxHash: statusUpdate.sellTxHash,
+          buyTxHash: statusUpdate.buyTxHash,
+          txLink: statusUpdate.txLink,
+          statusMessage: statusUpdate.statusMessage,
+        })
+
+        this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
+        this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+        return
+      }
+
+      // Same status, but a hash or tracker link the row did not have yet
       const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
       const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
       const hasNewTxLink = !!statusUpdate.txLink && statusUpdate.txLink !== swap.txLink
 
-      if (!hasStatusChanged && !hasNewSellTxHash && !hasNewBuyTxHash && !hasNewTxLink) return
+      if (hasNewSellTxHash || hasNewBuyTxHash || hasNewTxLink) {
+        const updated = await this.swapsService.updateSwapTxHashes({
+          swapId: swap.swapId,
+          sellTxHash: statusUpdate.sellTxHash,
+          buyTxHash: statusUpdate.buyTxHash,
+          txLink: statusUpdate.txLink,
+          statusMessage: statusUpdate.statusMessage,
+        })
 
-      const updated = hasStatusChanged
-        ? await this.swapsService.updateSwapStatus({
-            swapId: swap.swapId,
-            status: statusUpdate.status,
-            sellTxHash: statusUpdate.sellTxHash,
-            buyTxHash: statusUpdate.buyTxHash,
-            txLink: statusUpdate.txLink,
-            statusMessage: statusUpdate.statusMessage,
-          })
-        : await this.swapsService.updateSwapTxHashes({
-            swapId: swap.swapId,
-            sellTxHash: statusUpdate.sellTxHash,
-            buyTxHash: statusUpdate.buyTxHash,
-            txLink: statusUpdate.txLink,
-            statusMessage: statusUpdate.statusMessage,
-          })
-
-      this.logger.log(
-        hasStatusChanged
-          ? `Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`
-          : `Transaction hash reported for swap ${swap.swapId} (${statusUpdate.status})`,
-      )
-
-      this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+        this.logger.log(`Transaction details reported for swap ${swap.swapId} (${statusUpdate.status})`)
+        this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+        return
+      }
     } catch (err) {
       this.logger.error(`Failed to poll tx status for swap ${swap.swapId}:`, err)
     }
