@@ -22,6 +22,7 @@ import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service'
 import { TonChainAdapterService } from '../lib/chain-adapters/ton.service'
 import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
+import { DepositDetectionService } from '../lib/deposit-detection.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
@@ -45,6 +46,8 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
+  getExternalPaymentSwappers,
+  isExternallyPaid,
   resolveAttributionFromChain,
   resolveStalledSwap,
   toQuotedAt,
@@ -73,6 +76,7 @@ export class SwapsService {
     starknetChainAdapterService: StarknetChainAdapterService,
     tonChainAdapterService: TonChainAdapterService,
     private blockTimeService: BlockTimeService,
+    private depositDetectionService: DepositDetectionService,
   ) {
     this.notificationsClient = new NotificationsServiceClient()
     this.userServiceClient = new UserServiceClient()
@@ -243,6 +247,30 @@ export class SwapsService {
     }
   }
 
+  async updateSwapTxHashes(data: {
+    swapId: string
+    sellTxHash?: string
+    buyTxHash?: string
+    txLink?: string
+    statusMessage?: string
+  }): Promise<Swap> {
+    const swap = toSwap(
+      await this.prisma.swap.update({
+        where: { swapId: data.swapId },
+        data: {
+          sellTxHash: data.sellTxHash,
+          buyTxHash: data.buyTxHash,
+          txLink: data.txLink,
+          statusMessage: data.statusMessage,
+        },
+      }),
+    )
+
+    logger.log(`Transaction details updated for swap: ${swap.swapId}`)
+
+    return swap
+  }
+
   private async sendStatusUpdateNotification(swap: Swap) {
     if (swap.userId === 'api') return
 
@@ -277,11 +305,14 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
+  // Externally paid swaps are tracked from registration, before any deposit hash is known
   async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
-        sellTxHash: { not: null },
-        status: { in: ['IDLE', 'PENDING'] },
+        OR: [
+          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
+          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
+        ],
       },
     })
 
@@ -476,11 +507,19 @@ export class SwapsService {
     const swapper = swappers[swap.swapperName]
     if (!swapper) throw new InternalServerErrorException(`Swapper not registered: ${swap.swapperName}`)
 
-    if (!swap.sellTxHash) throw new BadRequestException('Sell tx hash is required')
+    const isExternal = isExternallyPaid(swap.swapperName)
+
+    if (!swap.sellTxHash && !isExternal) throw new BadRequestException('Sell tx hash is required')
 
     try {
-      const { status, buyTxHash, message } = await swapper.checkTradeStatus({
-        txHash: swap.sellTxHash,
+      const {
+        status,
+        buyTxHash,
+        sellTxHash: reportedSellTxHash,
+        swapperTxLink,
+        message,
+      } = await swapper.checkTradeStatus({
+        txHash: swap.sellTxHash ?? '',
         chainId: swap.sellAsset.chainId,
         address: swap.sellAccountId,
         swap: toSwapperSwap(swap),
@@ -490,13 +529,31 @@ export class SwapsService {
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       })
 
+      // The provider's hash outranks one supplied at registration, which a fee bump may have replaced since
+      const sellTxHash =
+        reportedSellTxHash ??
+        swap.sellTxHash ??
+        (isExternal ? await this.depositDetectionService.findDepositOnChain(swap) : undefined)
+
+      // A success needs a deposit to verify, so a confirmed shielded zcash swap waits on unchained rather than settling
+      if (status === TxStatus.Confirmed && !sellTxHash) {
+        return {
+          status: 'PENDING',
+          statusMessage: 'Confirmed by provider, waiting for deposit hash',
+          sellTxHash,
+          buyTxHash,
+          txLink: swapperTxLink,
+        }
+      }
+
       const statusMessage = Array.isArray(message) ? message[0] : message
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
         ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
-        sellTxHash: swap.sellTxHash,
+        sellTxHash,
         buyTxHash,
+        txLink: swapperTxLink,
       }
     } catch (error) {
       const reason = describeError(error)

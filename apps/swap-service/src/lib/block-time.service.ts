@@ -2,11 +2,10 @@ import { Injectable, Logger } from '@nestjs/common'
 
 import type { ChainId } from '@shapeshiftoss/caip'
 import { viemClientByChainId } from '@shapeshiftoss/contracts'
-import type { CosmosSdkChainId, UtxoChainId } from '@shapeshiftoss/types'
 import { KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
 
-import { env } from '../env'
+import { COSMOS_SDK_URLS, SOLANA_URL, unchainedApi, UTXO_URLS } from './unchained'
 
 export type BlockTimeLookup = { blockTime: number } | { unavailable: 'unsupported' | 'not-found' | 'unmined' | 'error' }
 
@@ -67,25 +66,6 @@ const unchainedLookup =
     }
   }
 
-const unchainedApi = <C, A>(
-  namespace: { V1Api: new (config: C) => A; Configuration: new (params: { basePath: string }) => C },
-  basePath: string,
-): A => new namespace.V1Api(new namespace.Configuration({ basePath }))
-
-const UTXO_URLS: Record<UtxoChainId, string> = {
-  [KnownChainIds.BitcoinMainnet]: env.VITE_UNCHAINED_BITCOIN_HTTP_URL,
-  [KnownChainIds.BitcoinCashMainnet]: env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL,
-  [KnownChainIds.DogecoinMainnet]: env.VITE_UNCHAINED_DOGECOIN_HTTP_URL,
-  [KnownChainIds.LitecoinMainnet]: env.VITE_UNCHAINED_LITECOIN_HTTP_URL,
-  [KnownChainIds.ZcashMainnet]: env.VITE_UNCHAINED_ZCASH_HTTP_URL,
-}
-
-const COSMOS_SDK_URLS: Record<CosmosSdkChainId, string> = {
-  [KnownChainIds.CosmosMainnet]: env.VITE_UNCHAINED_COSMOS_HTTP_URL,
-  [KnownChainIds.ThorchainMainnet]: env.VITE_UNCHAINED_THORCHAIN_HTTP_URL,
-  [KnownChainIds.MayachainMainnet]: env.VITE_UNCHAINED_MAYACHAIN_HTTP_URL,
-}
-
 @Injectable()
 export class BlockTimeService {
   private readonly logger = new Logger(BlockTimeService.name)
@@ -104,7 +84,7 @@ export class BlockTimeService {
     const cosmos = unchainedApi(unchained.cosmos, COSMOS_SDK_URLS[KnownChainIds.CosmosMainnet])
     const thorchain = unchainedApi(unchained.thorchain, COSMOS_SDK_URLS[KnownChainIds.ThorchainMainnet])
     const mayachain = unchainedApi(unchained.mayachain, COSMOS_SDK_URLS[KnownChainIds.MayachainMainnet])
-    const solana = unchainedApi(unchained.solana, env.VITE_UNCHAINED_SOLANA_HTTP_URL)
+    const solana = unchainedApi(unchained.solana, SOLANA_URL)
 
     const nodes: [ChainId, GetTx][] = [
       [KnownChainIds.BitcoinMainnet, (req) => btc.getTransaction(req)],
