@@ -7,6 +7,7 @@ import { baseUnitToPrecision } from '@shapeshift/shared-utils'
 import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapMetadata, SwapperName } from '@shapeshiftoss/swapper'
+import { swappers } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
 import type { BlockTimeLookup } from '../lib/block-time.service'
@@ -285,3 +286,9 @@ export const calculateFeeForSwap = (
 
   return { feeUsd, volumeUsd, verifiedBps, actualFeeUsd, impliedFeeUsd }
 }
+
+export const isExternallyPaid = (swapperName: SwapperName): boolean =>
+  swappers[swapperName]?.supportsExternalPayment === true
+
+export const getExternalPaymentSwappers = (): SwapperName[] =>
+  (Object.keys(swappers) as SwapperName[]).filter(isExternallyPaid)

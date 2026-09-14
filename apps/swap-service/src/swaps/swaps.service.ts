@@ -29,7 +29,6 @@ import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import { ATTRIBUTION_BATCH_SIZE, PENDING_TIMEOUT_MS, REFERRER_FEE_RATE } from './constants'
-import { getExternalPaymentSwappers, isExternallyPaid } from './external-payment'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -47,6 +46,8 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
+  getExternalPaymentSwappers,
+  isExternallyPaid,
   resolveAttributionFromChain,
   resolveStalledSwap,
   toQuotedAt,
