@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 
+import { zecChainId } from '@shapeshiftoss/caip'
 import { SwapperName } from '@shapeshiftoss/swapper'
 import { KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
@@ -8,7 +9,7 @@ import type { Swap } from '../swaps/types'
 import { describeError } from '../swaps/utils'
 import { getSwapMetadata } from '../verification/utils'
 
-import { UTXO_URLS, unchainedApi } from './unchained'
+import { unchainedApi, UTXO_URLS } from './unchained'
 
 type UtxoTx = {
   txid: string
@@ -50,7 +51,7 @@ export class DepositDetectionService {
 
   async findDepositOnChain(swap: Swap): Promise<string | undefined> {
     if (swap.swapperName !== SwapperName.NearIntents) return undefined
-    if (swap.sellAsset.chainId !== KnownChainIds.ZcashMainnet) return undefined
+    if (swap.sellAsset.chainId !== zecChainId) return undefined
 
     const depositAddress = getSwapMetadata(swap.metadata, 'nearIntents')?.depositAddress
     if (!depositAddress) {
