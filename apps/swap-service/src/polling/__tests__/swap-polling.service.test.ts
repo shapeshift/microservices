@@ -68,7 +68,7 @@ describe('pollPendingTxStatus', () => {
 
   it('does not rewrite a sell tx hash the row already holds', async () => {
     const { service, updateSwapStatus, updateSwapTxHashes, sendSwapUpdateToUser } = buildService(
-      { status: 'PENDING', statusMessage: 'Processing swap...', sellTxHash: '0xknown' },
+      { status: 'PENDING', statusMessage: 'Awaiting deposit', sellTxHash: '0xknown' },
       { ...swap, sellTxHash: '0xknown' } as Swap,
     )
 
