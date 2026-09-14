@@ -74,7 +74,6 @@ describe('pollPendingTxStatus', () => {
     const { service, updateSwapTxHashes } = buildService({
       status: 'PENDING',
       statusMessage: 'Processing swap...',
-      sellTxHash: '0xdeposit',
       txLink: 'https://explorer.near-intents.org/transactions/deposit',
     })
 
