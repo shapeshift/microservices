@@ -73,6 +73,14 @@ describe('DepositDetectionService', () => {
     expect(getTxHistory).not.toHaveBeenCalled()
   })
 
+  it('does not scan when the metadata carries no deposit address', async () => {
+    const swap = { ...zcashSwap, metadata: { swapperMetadata: { name: 'nearIntents' } } } as unknown as Swap
+
+    await expect(new DepositDetectionService().findDepositOnChain(swap)).resolves.toBeUndefined()
+
+    expect(getTxHistory).not.toHaveBeenCalled()
+  })
+
   it('returns undefined when the lookup throws', async () => {
     getTxHistory.mockRejectedValue(new Error('boom'))
 

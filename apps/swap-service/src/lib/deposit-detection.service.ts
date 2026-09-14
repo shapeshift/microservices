@@ -2,14 +2,14 @@ import { Injectable, Logger } from '@nestjs/common'
 
 import type { ChainId } from '@shapeshiftoss/caip'
 import { SwapperName } from '@shapeshiftoss/swapper'
-import type { UtxoChainId } from '@shapeshiftoss/types'
 import { KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
 
-import { env } from '../env'
 import type { Swap } from '../swaps/types'
 import { describeError } from '../swaps/utils'
 import { getSwapMetadata } from '../verification/utils'
+
+import { UTXO_URLS, unchainedApi } from './unchained'
 
 type UtxoTx = {
   txid: string
@@ -20,11 +20,6 @@ type UtxoTx = {
 }
 
 type UtxoTxHistory = (pubkey: string) => Promise<{ txs: UtxoTx[] }>
-
-const unchainedApi = <C, A>(
-  namespace: { V1Api: new (config: C) => A; Configuration: new (params: { basePath: string }) => C },
-  basePath: string,
-): A => new namespace.V1Api(new namespace.Configuration({ basePath }))
 
 const HISTORY_PAGE_SIZE = 25
 
@@ -52,32 +47,35 @@ export class DepositDetectionService {
   private readonly utxoHistory = new Map<ChainId, UtxoTxHistory>()
 
   constructor() {
-    const utxoApis: [UtxoChainId, UtxoTxHistory][] = [
+    const utxoApis: [ChainId, UtxoTxHistory][] = [
       [
         KnownChainIds.BitcoinMainnet,
-        this.txHistory(unchainedApi(unchained.bitcoin, env.VITE_UNCHAINED_BITCOIN_HTTP_URL)),
+        this.txHistory(unchainedApi(unchained.bitcoin, UTXO_URLS[KnownChainIds.BitcoinMainnet])),
       ],
       [
         KnownChainIds.BitcoinCashMainnet,
-        this.txHistory(unchainedApi(unchained.bitcoincash, env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL)),
+        this.txHistory(unchainedApi(unchained.bitcoincash, UTXO_URLS[KnownChainIds.BitcoinCashMainnet])),
       ],
       [
         KnownChainIds.DogecoinMainnet,
-        this.txHistory(unchainedApi(unchained.dogecoin, env.VITE_UNCHAINED_DOGECOIN_HTTP_URL)),
+        this.txHistory(unchainedApi(unchained.dogecoin, UTXO_URLS[KnownChainIds.DogecoinMainnet])),
       ],
       [
         KnownChainIds.LitecoinMainnet,
-        this.txHistory(unchainedApi(unchained.litecoin, env.VITE_UNCHAINED_LITECOIN_HTTP_URL)),
+        this.txHistory(unchainedApi(unchained.litecoin, UTXO_URLS[KnownChainIds.LitecoinMainnet])),
       ],
-      [KnownChainIds.ZcashMainnet, this.txHistory(unchainedApi(unchained.zcash, env.VITE_UNCHAINED_ZCASH_HTTP_URL))],
+      [
+        KnownChainIds.ZcashMainnet,
+        this.txHistory(unchainedApi(unchained.zcash, UTXO_URLS[KnownChainIds.ZcashMainnet])),
+      ],
     ]
     for (const [chainId, history] of utxoApis) this.utxoHistory.set(chainId, history)
   }
 
   private txHistory(api: {
-    getTxHistory: (req: { pubkey: string; pageSize?: number }) => Promise<unknown>
+    getTxHistory: (req: { pubkey: string; pageSize?: number }) => Promise<{ txs: UtxoTx[] }>
   }): UtxoTxHistory {
-    return (pubkey) => api.getTxHistory({ pubkey, pageSize: HISTORY_PAGE_SIZE }) as Promise<{ txs: UtxoTx[] }>
+    return (pubkey) => api.getTxHistory({ pubkey, pageSize: HISTORY_PAGE_SIZE })
   }
 
   async findDepositOnChain(swap: Swap): Promise<string | undefined> {
@@ -87,10 +85,13 @@ export class DepositDetectionService {
     const history = this.utxoHistory.get(swap.sellAsset.chainId)
     if (!history) return undefined
 
-    try {
-      const depositAddress = getSwapMetadata(swap.metadata, 'nearIntents')?.depositAddress
-      if (!depositAddress) throw new Error('Missing depositAddress in nearIntents metadata')
+    const depositAddress = getSwapMetadata(swap.metadata, 'nearIntents')?.depositAddress
+    if (!depositAddress) {
+      this.logger.warn(`Swap ${swap.swapId} has no depositAddress in its nearIntents metadata`)
+      return undefined
+    }
 
+    try {
       const { txs } = await history(depositAddress)
 
       return findDepositInHistory(txs, depositAddress)

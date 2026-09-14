@@ -2,11 +2,13 @@ import { Injectable, Logger } from '@nestjs/common'
 
 import type { ChainId } from '@shapeshiftoss/caip'
 import { viemClientByChainId } from '@shapeshiftoss/contracts'
-import type { CosmosSdkChainId, UtxoChainId } from '@shapeshiftoss/types'
+import type { CosmosSdkChainId } from '@shapeshiftoss/types'
 import { KnownChainIds } from '@shapeshiftoss/types'
 import * as unchained from '@shapeshiftoss/unchained-client'
 
 import { env } from '../env'
+
+import { UTXO_URLS, unchainedApi } from './unchained'
 
 export type BlockTimeLookup = { blockTime: number } | { unavailable: 'unsupported' | 'not-found' | 'unmined' | 'error' }
 
@@ -66,19 +68,6 @@ const unchainedLookup =
       throw error
     }
   }
-
-const unchainedApi = <C, A>(
-  namespace: { V1Api: new (config: C) => A; Configuration: new (params: { basePath: string }) => C },
-  basePath: string,
-): A => new namespace.V1Api(new namespace.Configuration({ basePath }))
-
-const UTXO_URLS: Record<UtxoChainId, string> = {
-  [KnownChainIds.BitcoinMainnet]: env.VITE_UNCHAINED_BITCOIN_HTTP_URL,
-  [KnownChainIds.BitcoinCashMainnet]: env.VITE_UNCHAINED_BITCOINCASH_HTTP_URL,
-  [KnownChainIds.DogecoinMainnet]: env.VITE_UNCHAINED_DOGECOIN_HTTP_URL,
-  [KnownChainIds.LitecoinMainnet]: env.VITE_UNCHAINED_LITECOIN_HTTP_URL,
-  [KnownChainIds.ZcashMainnet]: env.VITE_UNCHAINED_ZCASH_HTTP_URL,
-}
 
 const COSMOS_SDK_URLS: Record<CosmosSdkChainId, string> = {
   [KnownChainIds.CosmosMainnet]: env.VITE_UNCHAINED_COSMOS_HTTP_URL,
