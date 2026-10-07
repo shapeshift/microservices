@@ -90,3 +90,6 @@ export { NotificationsServiceClient, SwapServiceClient, UserServiceClient } from
 
 // Auth
 export { API_KEY_HEADER, ApiKeyGuard } from './api-key.guard'
+export * from './auth/client-ip'
+export * from './auth/rate-limit'
+export * from './auth/session'
