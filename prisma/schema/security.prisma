@@ -1,0 +1,7 @@
+model SecurityRateLimit {
+  key String @id
+  count Int
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("security_rate_limits")
+}
