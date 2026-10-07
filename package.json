@@ -33,7 +33,8 @@
     "db:studio": "prisma studio",
     "referral-rewards": "ts-node scripts/referral-rewards.ts",
     "affiliate-payouts": "ts-node --transpile-only scripts/affiliate-payouts/affiliate-payouts.ts",
-    "affiliate-payouts:test": "jest --config scripts/jest.config.ts"
+    "affiliate-payouts:test": "jest --config scripts/jest.config.ts",
+    "test:security": "jest --config jest.security.config.cjs --runInBand"
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",

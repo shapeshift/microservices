@@ -4,6 +4,8 @@ model User {
   updatedAt    DateTime      @updatedAt
   userAccounts UserAccount[]
   devices      Device[]
+  identity DeviceIdentity?
+  sessions DeviceSession[]
 
   @@map("users")
 }
