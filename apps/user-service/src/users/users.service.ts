@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { ConflictException, Injectable, Logger } from '@nestjs/common'
 import { Device, User, UserAccount } from '@prisma/client'
 
 import { AddAccountIdDto, CreateUserDto, DeviceType, RegisterDeviceDto } from '@shapeshift/shared-types'
@@ -25,20 +25,10 @@ export class UsersService {
   }
 
   private async findUserByHashedAccountId(hashedAccountId: string) {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        userAccounts: {
-          some: {
-            accountId: hashedAccountId,
-          },
-        },
-      },
-      include: {
-        userAccounts: true,
-        devices: true,
-      },
+    return this.prisma.user.findFirst({
+      where: { userAccounts: { some: { accountId: hashedAccountId } } },
+      include: { userAccounts: true, devices: true },
     })
-    return user
   }
 
   async createUser(data: CreateUserDto): Promise<User> {
@@ -55,7 +45,7 @@ export class UsersService {
           )
 
           if (newAccountIds.length > 0) {
-            await this.addHashedAccountIds(existingUser.id, newAccountIds)
+            throw new ConflictException('Account linking requires a separate authorized operation')
           }
 
           return this.getUserById(existingUser.id)
@@ -175,22 +165,9 @@ export class UsersService {
       throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashAccountId(accountId)
+    const hashedAccountId = hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
 
-    const user = await this.prisma.user.findFirst({
-      where: {
-        userAccounts: {
-          some: {
-            accountId: hashedAccountId,
-          },
-        },
-      },
-      include: {
-        userAccounts: true,
-        devices: true,
-      },
-    })
-    return user
+    return this.findUserByHashedAccountId(hashedAccountId)
   }
 
   async getAllUsers(limit = 50): Promise<User[]> {
@@ -212,7 +189,7 @@ export class UsersService {
       return false
     }
 
-    const hashedAccountId = hashAccountId(accountId)
+    const hashedAccountId = hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
     const user = await this.findUserByHashedAccountId(hashedAccountId)
     return !!user
   }
@@ -222,7 +199,7 @@ export class UsersService {
       throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashAccountId(accountId)
+    const hashedAccountId = hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
     const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
 
     if (existingUser) {
@@ -236,10 +213,6 @@ export class UsersService {
   }
 
   async getOrCreateUserByAccountIds(accountIds: string[], referralCode?: string): Promise<User> {
-    this.logger.log(
-      `getOrCreateUserByAccountIds called with accountIds: ${JSON.stringify(accountIds)}, referralCode: ${referralCode}`,
-    )
-
     if (!accountIds || accountIds.length === 0) {
       throw new Error('At least one account ID is required')
     }
@@ -252,7 +225,6 @@ export class UsersService {
     })
 
     const hashedAccountIds = accountIds.map((id) => hashAccountId(id))
-    this.logger.log(`Hashed account IDs: ${JSON.stringify(hashedAccountIds)}`)
 
     for (const hashedAccountId of hashedAccountIds) {
       const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
@@ -264,7 +236,7 @@ export class UsersService {
         )
 
         if (newAccountIds.length > 0) {
-          await this.addHashedAccountIds(existingUser.id, newAccountIds)
+          throw new ConflictException('Account linking requires a separate authorized operation')
         }
 
         // Try to apply referral code for existing user if provided
@@ -334,9 +306,9 @@ export class UsersService {
       const device = await this.prisma.device.upsert({
         where: {
           deviceToken: data.deviceToken,
+          userId: data.userId,
         },
         update: {
-          userId: data.userId,
           deviceType: data.deviceType,
           isActive: true,
         },
@@ -347,7 +319,7 @@ export class UsersService {
         },
       })
 
-      this.logger.log(`Device registered: ${data.deviceToken} for user ${data.userId} (${data.deviceType})`)
+      this.logger.log(`Device registered for user ${data.userId}`)
       return device
     } catch (error) {
       this.logger.error('Failed to register device', error)

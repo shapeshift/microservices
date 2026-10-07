@@ -1,0 +1,38 @@
+model DeviceIdentity {
+  keyId String @id
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@map("device_identities")
+}
+
+model DeviceChallenge {
+  id String @id
+  keyId String
+  publicKey String
+  message String
+  origin String
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("device_challenges")
+}
+
+model DeviceSession {
+  tokenHash String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("device_sessions")
+}
+
+model PushRegistration {
+  id String @id
+  userId String
+  deviceToken String
+  nonceHash String
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("push_registrations")
+}
