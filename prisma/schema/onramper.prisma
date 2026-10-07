@@ -1,0 +1,9 @@
+model OnramperIntent {
+  id String @id
+  tokenHash String
+  origin String
+  checkout Json
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("onramper_intents")
+}
