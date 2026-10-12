@@ -72,4 +72,8 @@ export default {
   affiliateFeeAssetId: 'eip155:1/slip44:60',
   actualAffiliateFeeAmountCryptoBaseUnit: null,
   shapeshiftBps: 10,
+  quotedAt: null,
+  attributionStatus: 'PENDING',
+  attributionResolvedAt: null,
+  attributionDetails: null,
 } satisfies Swap

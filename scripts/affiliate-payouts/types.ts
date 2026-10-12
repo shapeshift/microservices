@@ -41,6 +41,14 @@ export type UnverifiedSwap = {
   status: 'pending' | 'failed'
 }
 
+// A swap whose claim on its transaction is not settled in this partner's favour.
+export type UnattributedSwap = {
+  swapId: string
+  partnerCode: string
+  status: string
+  reason: string | null
+}
+
 // A verified swap with no on chain affiliate fee.
 export type NoAffiliateFeeSwap = {
   swapId: string
@@ -66,6 +74,7 @@ export type AggregateResult = {
   unpriceableSwaps: number
   anomalies: FeeAnomaly[]
   unverified: UnverifiedSwap[]
+  unattributed: UnattributedSwap[]
   noAffiliateFee: NoAffiliateFeeSwap[]
   partnerBpsUnset: PartnerBpsUnsetSwap[]
   unresolvedFee: UnresolvedFeeSwap[]
@@ -78,7 +87,7 @@ export type FeeDeps<S> = {
 }
 
 export type PayoutWarning = {
-  type: 'fee-anomaly' | 'address' | 'unverified' | 'partner-bps-unset' | 'no-verified-fee'
+  type: 'fee-anomaly' | 'address' | 'unverified' | 'unattributed' | 'partner-bps-unset' | 'no-verified-fee'
   partnerCode: string
   swapId: string | null
   reason: string | null
@@ -95,6 +104,7 @@ export type PayoutRecord = {
     unpriceableSwaps: number
     feeAnomalySwaps: number
     unverifiedSwaps: number
+    unattributedSwaps: number
     noAffiliateFeeSwaps: number
     partnerBpsUnsetSwaps: number
     noVerifiedFeeSwaps: number

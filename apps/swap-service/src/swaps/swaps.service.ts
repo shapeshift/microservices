@@ -7,11 +7,12 @@ import {
 } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 
-import { CreateSwapDto, Fees, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
+import { CreateSwapDto, Fees, SwapStatus, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
 import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
+import { BlockTimeService } from '../lib/block-time.service'
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service'
 import { EvmChainAdapterService } from '../lib/chain-adapters/evm.service'
 import { NearChainAdapterService } from '../lib/chain-adapters/near.service'
@@ -21,14 +22,23 @@ import { SuiChainAdapterService } from '../lib/chain-adapters/sui.service'
 import { TonChainAdapterService } from '../lib/chain-adapters/ton.service'
 import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
+import { DepositDetectionService } from '../lib/deposit-detection.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { REFERRER_FEE_RATE } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
-import type { AffiliateVerificationDetails, AggregateFeesParams, FeeTotals, PaginatedSwaps, Swap } from './types'
+import type {
+  AffiliateVerificationDetails,
+  AggregateFeesParams,
+  AttributionDetails,
+  AttributionVerdict,
+  FeeTotals,
+  PaginatedSwaps,
+  Swap,
+} from './types'
 import { PaginationQueryDto } from './types'
 import {
   buildStatusNotification,
@@ -36,6 +46,11 @@ import {
   computeSellAmountUsd,
   describeError,
   fetchUsdPrices,
+  getExternalPaymentSwappers,
+  isExternallyPaid,
+  resolveAttributionFromChain,
+  resolveStalledSwap,
+  toQuotedAt,
   toSwap,
   toSwapperSwap,
 } from './utils'
@@ -60,6 +75,8 @@ export class SwapsService {
     nearChainAdapterService: NearChainAdapterService,
     starknetChainAdapterService: StarknetChainAdapterService,
     tonChainAdapterService: TonChainAdapterService,
+    private blockTimeService: BlockTimeService,
+    private depositDetectionService: DepositDetectionService,
   ) {
     this.notificationsClient = new NotificationsServiceClient()
     this.userServiceClient = new UserServiceClient()
@@ -121,6 +138,7 @@ export class SwapsService {
             affiliateBps: data.affiliateBps,
             shapeshiftBps: data.shapeshiftBps,
             origin: data.origin ?? null,
+            quotedAt: toQuotedAt(data.quotedAt),
             affiliateFeeAssetId,
           },
         }),
@@ -229,6 +247,30 @@ export class SwapsService {
     }
   }
 
+  async updateSwapTxHashes(data: {
+    swapId: string
+    sellTxHash?: string
+    buyTxHash?: string
+    txLink?: string
+    statusMessage?: string
+  }): Promise<Swap> {
+    const swap = toSwap(
+      await this.prisma.swap.update({
+        where: { swapId: data.swapId },
+        data: {
+          sellTxHash: data.sellTxHash,
+          buyTxHash: data.buyTxHash,
+          txLink: data.txLink,
+          statusMessage: data.statusMessage,
+        },
+      }),
+    )
+
+    logger.log(`Transaction details updated for swap: ${swap.swapId}`)
+
+    return swap
+  }
+
   private async sendStatusUpdateNotification(swap: Swap) {
     if (swap.userId === 'api') return
 
@@ -263,15 +305,111 @@ export class SwapsService {
     return { swaps: rows.map(toSwap), nextCursor: getNextCursor(rows, limit) }
   }
 
+  // Externally paid swaps are tracked from registration, before any deposit hash is known
   async getPendingTxSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
-        sellTxHash: { not: null },
-        status: { in: ['IDLE', 'PENDING'] },
+        OR: [
+          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
+          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
+        ],
       },
     })
 
     return swaps.map(toSwap)
+  }
+
+  async getPendingAttributionSwaps(): Promise<Swap[]> {
+    const swaps = await this.prisma.swap.findMany({
+      where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      take: ATTRIBUTION_BATCH_SIZE,
+    })
+
+    return swaps.map(toSwap)
+  }
+
+  async resolveAttribution(swap: Swap): Promise<Swap> {
+    if (!swap.sellTxHash) return swap
+
+    const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
+    const chainVerdict = resolveAttributionFromChain(lookup, swap.quotedAt, {
+      status: swap.status as SwapStatus,
+      createdAt: swap.createdAt,
+    })
+
+    const superseded = chainVerdict.status === 'ACCEPTED' && (await this.hasPrecedingQuote(swap))
+    const attribution: AttributionVerdict = superseded
+      ? { status: 'DISPUTED', details: { ...chainVerdict.details, reason: 'quote-superseded' } }
+      : chainVerdict
+
+    // a repeat of the same verdict would only churn updatedAt, so only the reason is compared
+    const recorded = swap.attributionDetails as AttributionDetails | null
+    const sameVerdict = attribution.status === swap.attributionStatus && attribution.details.reason === recorded?.reason
+
+    if (sameVerdict) return swap
+
+    if (attribution.status === 'ACCEPTED') await this.disputeSupersededQuotes(swap)
+
+    return toSwap(
+      await this.prisma.swap.update({
+        where: { swapId: swap.swapId },
+        data: {
+          attributionStatus: attribution.status,
+          attributionDetails: attribution.details,
+          ...(attribution.status !== 'PENDING' && { attributionResolvedAt: new Date() }),
+        },
+      }),
+    )
+  }
+
+  // a pre-EIP-155 transaction carries the same hash on every EVM chain, so a quote only contends with
+  // quotes on its own chain; ties break on swapId so the winner is stable
+  private async findPrecedingQuote(quote: {
+    sellTxHash: string
+    chainId: string
+    quotedAt: Date
+    swapId: string
+  }): Promise<string | null> {
+    const preceding = await this.prisma.swap.findFirst({
+      where: {
+        sellTxHash: quote.sellTxHash,
+        sellAsset: { path: ['chainId'], equals: quote.chainId },
+        OR: [{ quotedAt: { lt: quote.quotedAt } }, { quotedAt: quote.quotedAt, swapId: { lt: quote.swapId } }],
+      },
+      select: { swapId: true },
+    })
+
+    return preceding?.swapId ?? null
+  }
+
+  private async hasPrecedingQuote(swap: Swap): Promise<boolean> {
+    if (!swap.sellTxHash || !swap.quotedAt) return false
+
+    const preceding = await this.findPrecedingQuote({
+      sellTxHash: swap.sellTxHash,
+      chainId: swap.sellAsset.chainId,
+      quotedAt: swap.quotedAt,
+      swapId: swap.swapId,
+    })
+
+    return preceding !== null
+  }
+
+  private async disputeSupersededQuotes(swap: Swap): Promise<void> {
+    await this.prisma.swap.updateMany({
+      where: {
+        sellTxHash: swap.sellTxHash,
+        sellAsset: { path: ['chainId'], equals: swap.sellAsset.chainId },
+        swapId: { not: swap.swapId },
+        attributionStatus: 'ACCEPTED',
+      },
+      data: {
+        attributionStatus: 'DISPUTED',
+        attributionDetails: { checked: true, reason: 'quote-superseded' },
+        attributionResolvedAt: new Date(),
+      },
+    })
   }
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {
@@ -369,11 +507,19 @@ export class SwapsService {
     const swapper = swappers[swap.swapperName]
     if (!swapper) throw new InternalServerErrorException(`Swapper not registered: ${swap.swapperName}`)
 
-    if (!swap.sellTxHash) throw new BadRequestException('Sell tx hash is required')
+    const isExternal = isExternallyPaid(swap.swapperName)
+
+    if (!swap.sellTxHash && !isExternal) throw new BadRequestException('Sell tx hash is required')
 
     try {
-      const { status, buyTxHash, message } = await swapper.checkTradeStatus({
-        txHash: swap.sellTxHash,
+      const {
+        status,
+        buyTxHash,
+        sellTxHash: reportedSellTxHash,
+        swapperTxLink,
+        message,
+      } = await swapper.checkTradeStatus({
+        txHash: swap.sellTxHash ?? '',
         chainId: swap.sellAsset.chainId,
         address: swap.sellAccountId,
         swap: toSwapperSwap(swap),
@@ -383,23 +529,38 @@ export class SwapsService {
         fetchIsSmartContractAddressQuery: () => Promise.resolve(false),
       })
 
+      // The provider's hash outranks one supplied at registration, which a fee bump may have replaced since
+      const sellTxHash =
+        reportedSellTxHash ??
+        swap.sellTxHash ??
+        (isExternal ? await this.depositDetectionService.findDepositOnChain(swap) : undefined)
+
+      // A success needs a deposit to verify, so a confirmed shielded zcash swap waits on unchained rather than settling
+      if (status === TxStatus.Confirmed && !sellTxHash) {
+        return {
+          status: 'PENDING',
+          statusMessage: 'Confirmed by provider, waiting for deposit hash',
+          sellTxHash,
+          buyTxHash,
+          txLink: swapperTxLink,
+        }
+      }
+
       const statusMessage = Array.isArray(message) ? message[0] : message
+      const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
-        status: status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING',
-        sellTxHash: swap.sellTxHash,
+        ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
+        sellTxHash,
         buyTxHash,
-        statusMessage: typeof statusMessage === 'string' ? statusMessage : '',
+        txLink: swapperTxLink,
       }
     } catch (error) {
       const reason = describeError(error)
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return {
-        status: 'PENDING',
-        statusMessage: `Error polling status: ${reason}`,
-      }
+      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`)
     }
   }
 

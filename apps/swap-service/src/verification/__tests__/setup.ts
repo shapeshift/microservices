@@ -58,6 +58,7 @@ jest.mock('@shapeshiftoss/swapper', () => ({
     Across: 'Across',
     Debridge: 'deBridge',
   },
+  swappers: {},
   assertGetCowNetwork: jest.fn(),
   getSwapMetadata: (metadata: { name?: string } | undefined, name: string) => {
     if (metadata?.name !== name) throw new Error(`Expected ${name} swap metadata`)

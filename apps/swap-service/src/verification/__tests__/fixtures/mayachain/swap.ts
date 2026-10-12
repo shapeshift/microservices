@@ -78,4 +78,8 @@ export default {
   actualAffiliateFeeAmountCryptoBaseUnit: null,
   shapeshiftBps: 10,
   verificationStatus: 'PENDING',
+  quotedAt: null,
+  attributionStatus: 'PENDING',
+  attributionResolvedAt: null,
+  attributionDetails: null,
 } satisfies Swap

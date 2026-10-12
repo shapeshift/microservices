@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
-import { calculateFeeForSwap, describeError } from '../utils'
+import { calculateFeeForSwap, describeError, resolveAttributionFromChain, resolveStalledSwap } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
 // '0' fee amount resolves to actualFeeUsd = 0 (the real 0-bps case this branch introduced).
@@ -131,5 +131,114 @@ describe('describeError', () => {
 
   it('does not stringify a thrown object as [object Object]', () => {
     expect(describeError({ nope: true })).toBe('Unknown error')
+  })
+})
+
+describe('resolveStalledSwap', () => {
+  const justNow = new Date(Date.now() - 60_000)
+  const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
+
+  it('fails a swap the swapper still cannot settle past the timeout', () => {
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting')).toEqual({
+      status: 'FAILED',
+      statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: waiting)',
+    })
+  })
+
+  // an unmined source tx leaves the swapper with nothing to report
+  it('records why it failed when the swapper reported no status', () => {
+    expect(resolveStalledSwap('PENDING', longAgo, '').statusMessage).toBe(
+      'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
+    )
+  })
+
+  it('leaves a swap pending inside the timeout', () => {
+    expect(resolveStalledSwap('PENDING', justNow, 'waiting')).toEqual({
+      status: 'PENDING',
+      statusMessage: 'waiting',
+    })
+  })
+
+  it('never overrides a terminal status, however old the swap', () => {
+    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete').status).toBe('SUCCESS')
+    expect(resolveStalledSwap('FAILED', longAgo, 'reverted').status).toBe('FAILED')
+  })
+})
+
+describe('resolveAttributionFromChain', () => {
+  const blockTime = Date.UTC(2026, 8, 1, 12, 0, 0)
+  const found = { blockTime: blockTime / 1000 } as const
+  const at = (offsetMs: number) => new Date(blockTime + offsetMs)
+  const live = { status: 'SUCCESS' as const, createdAt: new Date() }
+  const abandoned = { status: 'FAILED' as const, createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) }
+  const justFailed = { status: 'FAILED' as const, createdAt: new Date() }
+
+  it('accepts a quote minted before its transaction was mined', () => {
+    const { status, details } = resolveAttributionFromChain(found, at(-60_000), live)
+
+    expect(status).toBe('ACCEPTED')
+    expect(details).toMatchObject({ checked: true, reason: 'quote-precedes-tx', blockTime })
+  })
+
+  // the harvest attack: the txid cannot be known until it exists, so the claim's quote is younger
+  it('rejects a quote minted after its transaction was mined', () => {
+    const { status, details } = resolveAttributionFromChain(found, at(1000), live)
+
+    expect(status).toBe('REJECTED')
+    expect(details).toMatchObject({ checked: true, reason: 'quote-postdates-tx' })
+  })
+
+  it('accepts a quote minted in the same instant as its block', () => {
+    expect(resolveAttributionFromChain(found, at(0), live).status).toBe('ACCEPTED')
+  })
+
+  // the block timestamp is the whole boundary now - a second past it is a rejection like any other
+  it('rejects a quote that postdates its block by a single second', () => {
+    expect(resolveAttributionFromChain(found, at(1000), live).status).toBe('REJECTED')
+  })
+
+  // absence of evidence is never evidence - none of these may reject
+  it.each([
+    ['unsupported chain', { unavailable: 'unsupported' } as const, 'unsupported'],
+    ['a transaction it cannot see', { unavailable: 'not-found' } as const, 'not-found'],
+    ['a transaction still in the mempool', { unavailable: 'unmined' } as const, 'unmined'],
+    ['a failed lookup', { unavailable: 'error' } as const, 'error'],
+  ])('holds on %s rather than deciding', (_label, lookup, reason) => {
+    const { status, details } = resolveAttributionFromChain(lookup, at(-60_000), live)
+
+    expect(status).toBe('PENDING')
+    expect(details).toMatchObject({ checked: false, reason })
+  })
+
+  // holding forever would be a lie; the reason states what was observed, not why
+  it('rejects an unfindable claim once the swap itself has failed', () => {
+    expect(resolveAttributionFromChain({ unavailable: 'not-found' }, at(-60_000), abandoned)).toEqual({
+      status: 'REJECTED',
+      details: { checked: true, reason: 'tx-not-found' },
+    })
+  })
+
+  // a node briefly behind also reports not-found, and a rejection cannot be walked back
+  it('holds an unfindable claim while the failed swap is still young', () => {
+    expect(resolveAttributionFromChain({ unavailable: 'not-found' }, at(-60_000), justFailed).status).toBe('PENDING')
+  })
+
+  // only the chain disowning the transaction can reject; a stuck one still exists and may yet mine
+  it('still holds a failed swap that was not answered with a denial', () => {
+    expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), abandoned).status).toBe('PENDING')
+    expect(resolveAttributionFromChain({ unavailable: 'unsupported' }, at(-60_000), abandoned).status).toBe('PENDING')
+    expect(resolveAttributionFromChain({ unavailable: 'unmined' }, at(-60_000), abandoned).status).toBe('PENDING')
+  })
+
+  // a failed swap whose transaction is real is still attributable, it simply cannot be paid
+  it('resolves a failed swap normally when its transaction exists', () => {
+    expect(resolveAttributionFromChain(found, at(-60_000), abandoned).status).toBe('ACCEPTED')
+  })
+
+  it('holds a row with no quote time, which cannot be checked at all', () => {
+    expect(resolveAttributionFromChain(found, null, live)).toMatchObject({
+      status: 'PENDING',
+      details: { checked: false, reason: 'no-quoted-at' },
+    })
   })
 })

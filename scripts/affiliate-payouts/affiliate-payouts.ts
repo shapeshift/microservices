@@ -22,7 +22,7 @@ function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
   console.log(`Total USDC:     ${record.totals.totalUsdc}`)
   console.log(`Paid swaps:     ${record.totals.paidSwaps}`)
   console.log(
-    `Excluded/review: ${record.totals.unpriceableSwaps} unpriceable | ${record.totals.feeAnomalySwaps} fee anomalies | ${record.totals.unverifiedSwaps} unverified | ${record.totals.noAffiliateFeeSwaps} no-affiliate-fee | ${record.totals.partnerBpsUnsetSwaps} partner-bps-unset | ${record.totals.noVerifiedFeeSwaps} no-verified-fee`,
+    `Excluded/review: ${record.totals.unpriceableSwaps} unpriceable | ${record.totals.feeAnomalySwaps} fee anomalies | ${record.totals.unverifiedSwaps} unverified | ${record.totals.unattributedSwaps} unattributed | ${record.totals.noAffiliateFeeSwaps} no-affiliate-fee | ${record.totals.partnerBpsUnsetSwaps} partner-bps-unset | ${record.totals.noVerifiedFeeSwaps} no-verified-fee`,
   )
 
   const top = payouts.filter((p) => p.included).slice(0, 10)
@@ -87,8 +87,16 @@ async function generate(monthArg: string | undefined, force: boolean): Promise<v
   })
   console.log(`Found ${rows.length} successful swaps with a partner code`)
 
-  const { partners, unpriceableSwaps, anomalies, unverified, noAffiliateFee, partnerBpsUnset, unresolvedFee } =
-    aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
+  const {
+    partners,
+    unpriceableSwaps,
+    anomalies,
+    unverified,
+    unattributed,
+    noAffiliateFee,
+    partnerBpsUnset,
+    unresolvedFee,
+  } = aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
 
   const affiliates = await prisma.affiliate.findMany({
     where: { partnerCode: { in: Array.from(partners.keys()) } },
@@ -106,6 +114,7 @@ async function generate(monthArg: string | undefined, force: boolean): Promise<v
     unpriceableSwaps,
     anomalies,
     unverified,
+    unattributed,
     noAffiliateFee,
     partnerBpsUnset,
     unresolvedFee,

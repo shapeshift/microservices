@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 
+import { ATTRIBUTION_BATCH_SIZE } from '../swaps/constants'
 import { SwapsService } from '../swaps/swaps.service'
 import type { Swap } from '../swaps/types'
 import { WebsocketGateway } from '../websocket/websocket.gateway'
@@ -15,6 +16,7 @@ export class SwapPollingService {
 
   private isPollingTx = false
   private isPollingVerification = false
+  private isPollingAttribution = false
 
   constructor(
     private swapsService: SwapsService,
@@ -57,6 +59,30 @@ export class SwapPollingService {
     }
   }
 
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async pollPendingAttribution() {
+    if (this.isPollingAttribution) return
+    this.isPollingAttribution = true
+
+    try {
+      const swaps = await this.swapsService.getPendingAttributionSwaps()
+      if (swaps.length === 0) return
+
+      if (swaps.length === ATTRIBUTION_BATCH_SIZE) {
+        this.logger.warn(
+          `Attribution backlog is at capacity (${ATTRIBUTION_BATCH_SIZE}); oldest pending swaps are unchecked`,
+        )
+      }
+
+      this.logger.log(`Polling attribution for ${swaps.length} swaps (${swapIds(swaps)})`)
+      await this.runWorkers(swaps, (swap) => this.pollAttribution(swap))
+    } catch (err) {
+      this.logger.error('Failed to poll pending attribution:', err)
+    } finally {
+      this.isPollingAttribution = false
+    }
+  }
+
   private async runWorkers(swaps: Swap[], handler: (swap: Swap) => Promise<void>): Promise<void> {
     const queue = [...swaps]
     const workers = Array.from({ length: Math.min(POLL_CONCURRENCY, queue.length) }, async () => {
@@ -72,21 +98,55 @@ export class SwapPollingService {
     try {
       const statusUpdate = await this.swapsService.checkSwapStatus(swap.swapId)
 
-      if (statusUpdate.status === swap.status) return
+      if (statusUpdate.status !== swap.status) {
+        const updated = await this.swapsService.updateSwapStatus({
+          swapId: swap.swapId,
+          status: statusUpdate.status,
+          sellTxHash: statusUpdate.sellTxHash,
+          buyTxHash: statusUpdate.buyTxHash,
+          txLink: statusUpdate.txLink,
+          statusMessage: statusUpdate.statusMessage,
+        })
 
-      this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
+        this.logger.log(`Status changed for swap ${swap.swapId}: ${swap.status} -> ${statusUpdate.status}`)
+        this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+        return
+      }
 
-      const updated = await this.swapsService.updateSwapStatus({
-        swapId: swap.swapId,
-        status: statusUpdate.status,
-        sellTxHash: statusUpdate.sellTxHash,
-        buyTxHash: statusUpdate.buyTxHash,
-        statusMessage: statusUpdate.statusMessage,
-      })
+      // Same status, but a hash, tracker link, or message the row did not have yet
+      const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
+      const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
+      const hasNewTxLink = !!statusUpdate.txLink && statusUpdate.txLink !== swap.txLink
+      const hasNewStatusMessage = !!statusUpdate.statusMessage && statusUpdate.statusMessage !== swap.statusMessage
 
-      this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+      if (hasNewSellTxHash || hasNewBuyTxHash || hasNewTxLink || hasNewStatusMessage) {
+        const updated = await this.swapsService.updateSwapTxHashes({
+          swapId: swap.swapId,
+          sellTxHash: statusUpdate.sellTxHash,
+          buyTxHash: statusUpdate.buyTxHash,
+          txLink: statusUpdate.txLink,
+          statusMessage: statusUpdate.statusMessage,
+        })
+
+        this.logger.log(`Transaction details reported for swap ${swap.swapId} (${statusUpdate.status})`)
+        this.websocketGateway.sendSwapUpdateToUser(updated.userId, updated)
+        return
+      }
     } catch (err) {
       this.logger.error(`Failed to poll tx status for swap ${swap.swapId}:`, err)
+    }
+  }
+
+  private async pollAttribution(swap: Swap): Promise<void> {
+    try {
+      const updated = await this.swapsService.resolveAttribution(swap)
+      if (updated.attributionStatus !== swap.attributionStatus) {
+        this.logger.log(
+          `Attribution resolved for swap ${swap.swapId}: ${updated.attributionStatus} ${JSON.stringify(updated.attributionDetails)}`,
+        )
+      }
+    } catch (err) {
+      this.logger.error(`Failed to check attribution for swap ${swap.swapId}:`, err)
     }
   }
 

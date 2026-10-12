@@ -82,6 +82,7 @@ export interface CreateSwapDto {
   partnerBps?: number
   partnerCode?: string
   origin?: 'web' | 'api'
+  quotedAt?: string
 }
 
 export interface UpdateSwapStatusDto {
@@ -112,6 +113,7 @@ export interface SwapStatusResponse {
   status: 'IDLE' | 'PENDING' | 'SUCCESS' | 'FAILED'
   sellTxHash?: string
   buyTxHash?: string
+  txLink?: string
   statusMessage: string
 }
 

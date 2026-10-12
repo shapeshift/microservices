@@ -5,6 +5,9 @@ import { SwapsService } from '../swaps.service'
 // unchained-client is ESM; ts-jest can't transform it and nothing here uses it.
 jest.mock('@shapeshiftoss/unchained-client', () => ({ TxStatus: {} }))
 
+// contracts reaches lodash-es, which is ESM for the same reason, and only the block time lookup needs it.
+jest.mock('@shapeshiftoss/contracts', () => ({ viemClientByChainId: {} }))
+
 // The constructor eagerly builds HTTP clients that require these.
 process.env.NOTIFICATIONS_SERVICE_URL ??= 'http://notifications.test'
 process.env.USER_SERVICE_URL ??= 'http://user.test'
@@ -74,7 +77,21 @@ const buildService = (affiliate: AffiliateRow | null, addressMatches: { partnerC
   }
 
   const stub = {} as never
-  const service = new SwapsService(prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub)
+  const service = new SwapsService(
+    prisma as never,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+    stub,
+  )
 
   return { service, findUniqueCalls, findManyCalls, createCalls }
 }
@@ -129,5 +146,43 @@ describe('createSwap partner attribution', () => {
     await service.createSwap(swapRequest({ partnerAddress: '0xwallet' }))
 
     expect(findManyCalls[0]?.where?.isActive).toBe(true)
+  })
+})
+
+describe('createSwap quote provenance', () => {
+  it('persists the quote mint time carried by the registration payload', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest({ quotedAt: '2026-09-01T12:00:00.000Z' }))
+
+    expect(createCalls[0]?.data).toMatchObject({
+      quotedAt: new Date('2026-09-01T12:00:00.000Z'),
+    })
+  })
+
+  // null rather than a default now(): the resolver would trust a fabricated quote time
+  it('stores a null quote time when the payload carries none', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest())
+
+    expect(createCalls[0]?.data).toMatchObject({ quotedAt: null })
+  })
+
+  it('drops a malformed quote timestamp rather than failing registration', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest({ quotedAt: 'not-a-date' }))
+
+    expect(createCalls[0]?.data).toMatchObject({ quotedAt: null })
+  })
+
+  // the route has no runtime validation, and epoch millis would otherwise parse as a valid date
+  it('rejects a non-string quote timestamp', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest({ quotedAt: 1756729200000 as unknown as string }))
+
+    expect(createCalls[0]?.data).toMatchObject({ quotedAt: null })
   })
 })

@@ -2,16 +2,19 @@ import { Logger } from '@nestjs/common'
 import type { Swap as PrismaSwap } from '@prisma/client'
 import axios from 'axios'
 
-import type { CreateSwapDto } from '@shapeshift/shared-types'
+import type { CreateSwapDto, SwapStatus } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
 import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import type { Swap as SwapperSwap, SwapMetadata, SwapperName } from '@shapeshiftoss/swapper'
+import { swappers } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
+import type { BlockTimeLookup } from '../lib/block-time.service'
 import { getAssetPriceUsd } from '../utils/pricing'
 
-import type { AffiliateVerificationDetails, StatusNotification, Swap, UsdPrices } from './types'
+import { PENDING_TIMEOUT_MS } from './constants'
+import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
 
@@ -41,6 +44,58 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   metadata: swap.metadata as SwapMetadata,
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
+
+export const resolveStalledSwap = (
+  status: SwapStatus,
+  createdAt: Date,
+  statusMessage: string,
+): { status: SwapStatus; statusMessage: string } => {
+  if (status !== 'PENDING') return { status, statusMessage }
+  if (Date.now() - createdAt.getTime() < PENDING_TIMEOUT_MS) return { status, statusMessage }
+
+  const last = statusMessage || 'none reported'
+
+  return {
+    status: 'FAILED',
+    statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})`,
+  }
+}
+
+export const resolveAttributionFromChain = (
+  lookup: BlockTimeLookup,
+  quotedAt: Date | null,
+  swap: { status: SwapStatus; createdAt: Date },
+): AttributionVerdict => {
+  if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
+
+  if ('unavailable' in lookup) {
+    // rejection cannot be walked back, and a node briefly behind also reports not-found, so this waits
+    // until the swap is both abandoned and old enough that a real transaction would have been indexed
+    const abandoned = swap.status === 'FAILED' && Date.now() - swap.createdAt.getTime() > PENDING_TIMEOUT_MS
+
+    if (lookup.unavailable === 'not-found' && abandoned) {
+      return { status: 'REJECTED', details: { checked: true, reason: 'tx-not-found' } }
+    }
+
+    return { status: 'PENDING', details: { checked: false, reason: lookup.unavailable } }
+  }
+
+  const blockTime = lookup.blockTime * 1000
+  const quoted = quotedAt.getTime()
+  const checked = { checked: true, blockTime, quotedAt: quoted }
+
+  if (quoted <= blockTime) return { status: 'ACCEPTED', details: { ...checked, reason: 'quote-precedes-tx' } }
+
+  return { status: 'REJECTED', details: { ...checked, reason: 'quote-postdates-tx' } }
+}
+
+export const toQuotedAt = (value: string | undefined): Date | null => {
+  if (typeof value !== 'string') return null
+
+  const parsed = new Date(value)
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
 
 export const toSwapperSwap = (swap: Swap): SwapperSwap =>
   ({
@@ -231,3 +286,9 @@ export const calculateFeeForSwap = (
 
   return { feeUsd, volumeUsd, verifiedBps, actualFeeUsd, impliedFeeUsd }
 }
+
+export const isExternallyPaid = (swapperName: SwapperName): boolean =>
+  swappers[swapperName]?.supportsExternalPayment === true
+
+export const getExternalPaymentSwappers = (): SwapperName[] =>
+  (Object.keys(swappers) as SwapperName[]).filter(isExternallyPaid)
