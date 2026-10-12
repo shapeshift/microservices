@@ -17613,6 +17613,7 @@ __metadata:
     turbo: "npm:^2.5.6"
     typescript: "npm:^5.7.3"
     typescript-eslint: "npm:^8.20.0"
+    viem: "npm:2.43.5"
     zod: "npm:^4.3.6"
   languageName: unknown
   linkType: soft

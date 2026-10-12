@@ -34,7 +34,12 @@
     "referral-rewards": "ts-node scripts/referral-rewards.ts",
     "affiliate-payouts": "ts-node --transpile-only scripts/affiliate-payouts/affiliate-payouts.ts",
     "affiliate-payouts:test": "jest --config scripts/jest.config.ts",
-    "test:security": "jest --config jest.security.config.cjs --runInBand"
+    "test:security": "jest --config jest.security.config.cjs --runInBand",
+    "onramper:local": "ts-node scripts/onramper-local.ts",
+    "onramper:smoke": "ts-node scripts/onramper-local-smoke.ts",
+    "onramper:db": "node scripts/onramper-local-db.mjs",
+    "onramper:setup": "DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_local yarn db:migrate && yarn tsc -p packages/shared-types && yarn tsc -p packages/shared-utils",
+    "test:onramper:postgres": "ONRAMPER_TEST_DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_authorization_test yarn test:security"
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
@@ -67,6 +72,7 @@
     "socket.io": "^4.8.1",
     "starknet": "9.2.1",
     "tronweb": "^6.0.0",
+    "viem": "2.43.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

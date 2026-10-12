@@ -4,6 +4,33 @@ model OnramperIntent {
   origin String
   checkout Json
   expiresAt DateTime
+  sessionId String
+  session OnramperSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   @@index([expiresAt])
   @@map("onramper_intents")
+}
+
+model OnramperChallenge {
+  id String @id
+  origin String
+  address String
+  chainId Int
+  message String
+  expiresAt DateTime
+  @@index([expiresAt])
+  @@map("onramper_challenges")
+}
+
+model OnramperSession {
+  id String @id
+  tokenHash String @unique
+  origin String
+  address String
+  chainId Int
+  message String
+  signature String
+  expiresAt DateTime
+  intents OnramperIntent[]
+  @@index([expiresAt])
+  @@map("onramper_sessions")
 }

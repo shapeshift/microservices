@@ -1,6 +1,8 @@
 import { createHash, createPrivateKey, randomUUID, sign } from 'node:crypto'
 import { z } from 'zod'
 
+import { isAllowedUrl } from './config'
+
 const amount = z
   .string()
   .regex(/^(?:0|[1-9]\d{0,8})(?:\.\d{1,18})?$/)
@@ -27,10 +29,11 @@ export function signWidgetUrl(checkout: Checkout, config: SigningConfig, now = n
   const key = createPrivateKey(config.privateKey)
   if (key.asymmetricKeyType !== 'ed25519') throw new Error('Onramper requires an Ed25519 key')
   const url = new URL(config.widgetUrl)
-  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash)
+  if (!isAllowedUrl(config.widgetUrl) || url.username || url.password || url.pathname !== '/' || url.search || url.hash)
     throw new Error('Invalid Onramper widget URL')
   const fields = new URLSearchParams({
     apiKey: config.apiKey,
+    isAddressEditable: 'false',
     wallets: `${checkout.crypto}:${checkout.address}`,
     mode: checkout.action,
     defaultCrypto: checkout.crypto,
