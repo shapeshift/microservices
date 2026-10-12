@@ -234,7 +234,7 @@ The Onramper checkout requires a wallet-verified session. The server generates a
 
 The local simulator uses generated Ed25519 keys, a dummy provider API key, and a dedicated PostgreSQL database. It accepts ETH on Ethereum with USD, verifies widget signatures, and rejects modified, expired, or reused widget URLs. It never creates a real Onramper order or makes a transfer. Keep production credentials out of this setup.
 
-Use Node 22 and Yarn 4.7. If the `yarn` shim is unavailable on this machine, replace `yarn` with `node /tmp/shapeshift-yarn-4.7.cjs`; that Yarn 4.7 launcher is already available locally. In the `security-fixes/web01-server` worktree:
+Use Node 22 and Yarn 4.7. Run `corepack prepare yarn@4.7.0 --activate`, then use `corepack yarn` wherever the commands below say `yarn` if a Yarn shim is unavailable. If Corepack is unavailable, use `npx --yes --package @yarnpkg/cli-dist@4.7.0 yarn <command>` instead. In your backend checkout:
 
 ```sh
 yarn install --immutable
@@ -252,7 +252,7 @@ yarn onramper:local
 
 Setup generates Prisma types, applies migrations to `onramper_local`, and builds the shared package declarations. The launcher starts the wallet-auth API on port 3002 and the provider simulator on port 3999. It explicitly supplies its validated local database URL to Prisma. Signing keys are generated in memory at startup. Stop it with Ctrl+C; restart invalidates previously signed simulator URLs.
 
-In a third terminal in the paired `security-fixes/web01` worktree:
+In a third terminal in your paired web checkout:
 
 ```sh
 pnpm install --frozen-lockfile
