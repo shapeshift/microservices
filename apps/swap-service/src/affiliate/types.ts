@@ -79,7 +79,7 @@ export class CreateAffiliateDto {
 export class UpdateAffiliateDto {
   @IsOptional()
   @IsEthereumAddress()
-  receiveAddress?: string
+  receiveAddress?: string | null
 
   @IsOptional()
   @IsInt()

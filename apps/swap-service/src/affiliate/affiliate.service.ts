@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
-import { Affiliate, AffiliateMember, Prisma } from '@prisma/client'
+import type { Affiliate } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { getAddress } from 'viem'
 
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
@@ -15,19 +17,25 @@ import type {
   ResolvedAffiliate,
   UpdateAffiliateDto,
 } from './types'
-import { isReservedPartnerCode, toChecksumAddress } from './utils'
+import { isReservedPartnerCode } from './utils'
 
-const isUniqueViolation = (error: unknown): boolean =>
-  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+// Advisory lock namespaces, always taken in this order so two registrations cannot deadlock
+const WALLET_LOCK = 1
+const PARTNER_CODE_LOCK = 2
+
+type Claims = { walletAddress: string; partnerCode?: string }
 
 @Injectable()
 export class AffiliateService {
   constructor(private prisma: PrismaService) {}
 
-  // Serializes every write that claims a wallet so the owner/member exclusivity check cannot race
-  private async withWalletLock<T>(walletAddress: string, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  // Serializes every write that claims a wallet or partner code so the uniqueness checks cannot race
+  private async withClaimLocks<T>(claims: Claims, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${walletAddress.toLowerCase()}))`
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${WALLET_LOCK}::int, hashtext(${claims.walletAddress.toLowerCase()}))`
+      if (claims.partnerCode) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${PARTNER_CODE_LOCK}::int, hashtext(${claims.partnerCode.toLowerCase()}))`
+      }
       return fn(tx)
     })
   }
@@ -37,8 +45,11 @@ export class AffiliateService {
   }
 
   // The registering wallet owns the affiliate; any wallet in affiliate_members is an admin of it
-  async resolveAffiliateByWalletAddress(walletAddress: string): Promise<ResolvedAffiliate | null> {
-    const affiliate = await this.prisma.affiliate.findFirst({
+  async resolveAffiliateByWalletAddress(
+    walletAddress: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<ResolvedAffiliate | null> {
+    const affiliate = await client.affiliate.findFirst({
       where: { OR: [{ walletAddress }, { members: { some: { walletAddress } } }] },
     })
     if (!affiliate) return null
@@ -55,37 +66,32 @@ export class AffiliateService {
 
   async createAffiliate(data: CreateAffiliateDto): Promise<Affiliate> {
     const { bps, partnerCode } = data
-    const walletAddress = toChecksumAddress(data.walletAddress)
-    const receiveAddress = data.receiveAddress && toChecksumAddress(data.receiveAddress)
+    const walletAddress = getAddress(data.walletAddress)
+    const receiveAddress = data.receiveAddress && getAddress(data.receiveAddress)
 
     if (isReservedPartnerCode(partnerCode)) throw new BadRequestException('This partner code is reserved')
 
-    return this.withWalletLock(walletAddress, async (tx) => {
-      const existing = await tx.affiliate.findUnique({ where: { walletAddress } })
-      if (existing) throw new ConflictException('Affiliate already registered')
-
-      const member = await tx.affiliateMember.findUnique({ where: { walletAddress } })
-      if (member) throw new ConflictException('Wallet is already a member of a partner')
+    return this.withClaimLocks({ walletAddress, partnerCode }, async (tx) => {
+      const claimed = await this.resolveAffiliateByWalletAddress(walletAddress, tx)
+      if (claimed?.role === 'owner') throw new ConflictException('Affiliate already registered')
+      if (claimed) throw new ConflictException('Wallet is already a member of a partner')
 
       const existingCode = await tx.affiliate.findUnique({ where: { partnerCode } })
       if (existingCode) throw new ConflictException('Partner code already taken')
 
-      try {
-        return await tx.affiliate.create({ data: { walletAddress, receiveAddress, partnerCode, bps } })
-      } catch (error) {
-        // Two registrations racing on the same code are not covered by the wallet lock
-        if (isUniqueViolation(error)) throw new ConflictException('Partner code already taken')
-        throw error
-      }
+      return tx.affiliate.create({ data: { walletAddress, receiveAddress, partnerCode, bps } })
     })
   }
 
-  // isActive is deliberately not updatable here; only ShapeShift deactivates a partner
+  // isActive is not updatable here; only ShapeShift deactivates a partner
   async updateAffiliate(affiliate: Affiliate, data: UpdateAffiliateDto): Promise<Affiliate> {
     const updateData: Prisma.AffiliateUpdateInput = {}
 
     if (data.bps !== undefined) updateData.bps = data.bps
-    if (data.receiveAddress !== undefined) updateData.receiveAddress = toChecksumAddress(data.receiveAddress)
+    // null clears the override so payouts fall back to walletAddress
+    if (data.receiveAddress !== undefined) {
+      updateData.receiveAddress = data.receiveAddress && getAddress(data.receiveAddress)
+    }
 
     return this.prisma.affiliate.update({ where: { id: affiliate.id }, data: updateData })
   }
@@ -108,28 +114,27 @@ export class AffiliateService {
   }
 
   // A wallet belongs to at most one affiliate across both tables so address lookups stay unambiguous
-  async addMember(affiliate: Affiliate, rawWalletAddress: string, rawAddedBy: string): Promise<AffiliateMember> {
-    const walletAddress = toChecksumAddress(rawWalletAddress)
-    const addedBy = toChecksumAddress(rawAddedBy)
+  async addMember(affiliate: Affiliate, data: { walletAddress: string; addedBy: string }): Promise<void> {
+    const walletAddress = getAddress(data.walletAddress)
+    const addedBy = getAddress(data.addedBy)
 
-    return this.withWalletLock(walletAddress, async (tx) => {
-      const registered = await tx.affiliate.findUnique({ where: { walletAddress } })
-      if (registered?.id === affiliate.id) throw new ConflictException('Wallet is already the owner')
-      if (registered) throw new ConflictException('Wallet is already registered as an affiliate')
+    await this.withClaimLocks({ walletAddress }, async (tx) => {
+      const claimed = await this.resolveAffiliateByWalletAddress(walletAddress, tx)
+      if (claimed) {
+        const here = claimed.affiliate.id === affiliate.id
+        if (claimed.role === 'owner') {
+          throw new ConflictException(here ? 'Wallet is already the owner' : 'Wallet is already registered as an affiliate')
+        }
+        throw new ConflictException(here ? 'Wallet is already a member' : 'Wallet is already a member of another partner')
+      }
 
-      const existing = await tx.affiliateMember.findUnique({ where: { walletAddress } })
-      if (existing?.affiliateId === affiliate.id) throw new ConflictException('Wallet is already a member')
-      if (existing) throw new ConflictException('Wallet is already a member of another partner')
-
-      return tx.affiliateMember.create({ data: { affiliateId: affiliate.id, walletAddress, addedBy } })
+      await tx.affiliateMember.create({ data: { affiliateId: affiliate.id, walletAddress, addedBy } })
     })
   }
 
   async removeMember(affiliate: Affiliate, walletAddress: string): Promise<void> {
-    const member = await this.prisma.affiliateMember.findUnique({ where: { walletAddress } })
-    if (member?.affiliateId !== affiliate.id) throw new NotFoundException('Member not found')
-
-    await this.prisma.affiliateMember.delete({ where: { id: member.id } })
+    const { count } = await this.prisma.affiliateMember.deleteMany({ where: { walletAddress, affiliateId: affiliate.id } })
+    if (count === 0) throw new NotFoundException('Member not found')
   }
 
   async getAffiliateStats(

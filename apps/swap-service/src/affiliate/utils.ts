@@ -1,5 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common'
-import { getAddress } from 'viem'
+import { ForbiddenException } from '@nestjs/common'
 
 import type { SiweRequest } from './siwe-auth.guard'
 
@@ -30,12 +29,4 @@ export function isReservedPartnerCode(partnerCode: string): boolean {
 
 export function assertSiweMatches(req: SiweRequest, target: string, message: string): void {
   if (req.siweAddress !== target.toLowerCase()) throw new ForbiddenException(message)
-}
-
-export const toChecksumAddress = (address: string): string => {
-  try {
-    return getAddress(address)
-  } catch {
-    throw new BadRequestException(`Invalid address: ${address}`)
-  }
 }

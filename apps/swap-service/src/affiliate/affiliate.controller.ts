@@ -17,13 +17,12 @@ import { SHAPESHIFT_BPS } from '../swaps/constants'
 
 import { AffiliateService } from './affiliate.service'
 import { SiweAuthGuard, SiweRequest } from './siwe-auth.guard'
+import type { AffiliateRole, ResolvedAffiliate } from './types'
 import {
   AddAffiliateMemberDto,
-  AffiliateRole,
   AffiliateStatsQueryDto,
   AffiliateSwapsQueryDto,
   CreateAffiliateDto,
-  ResolvedAffiliate,
   UpdateAffiliateDto,
 } from './types'
 import { assertSiweMatches } from './utils'
@@ -54,9 +53,8 @@ export class AffiliateController {
 
   @Get(':address')
   async getAffiliate(@Param('address') address: string) {
-    const resolved = await this.affiliateService.resolveAffiliateByWalletAddress(address)
-    if (!resolved) throw new NotFoundException('Affiliate not found')
-    return toAffiliateResponse(resolved.affiliate, resolved.role)
+    const { affiliate, role } = await this.resolveOrThrow(address)
+    return toAffiliateResponse(affiliate, role)
   }
 
   @UseGuards(SiweAuthGuard)
@@ -87,7 +85,7 @@ export class AffiliateController {
   @Post(':address/members')
   async addMember(@Req() req: SiweRequest, @Param('address') address: string, @Body() data: AddAffiliateMemberDto) {
     const { affiliate } = await this.resolveCaller(req, address)
-    await this.affiliateService.addMember(affiliate, data.walletAddress, address)
+    await this.affiliateService.addMember(affiliate, { walletAddress: data.walletAddress, addedBy: req.siweAddress })
 
     return { members: await this.affiliateService.getMembers(affiliate) }
   }
@@ -105,14 +103,16 @@ export class AffiliateController {
     return { members: await this.affiliateService.getMembers(affiliate) }
   }
 
-  // :address is always the caller's own wallet; owner and admins both resolve to the one affiliate
-  private async resolveCaller(req: SiweRequest, address: string): Promise<ResolvedAffiliate> {
-    assertSiweMatches(req, address, 'Authenticated address does not match target address')
-
+  private async resolveOrThrow(address: string): Promise<ResolvedAffiliate> {
     const resolved = await this.affiliateService.resolveAffiliateByWalletAddress(address)
     if (!resolved) throw new NotFoundException('Affiliate not found')
-
     return resolved
+  }
+
+  // :address is the caller's own wallet; owner and admins both resolve to the one affiliate
+  private async resolveCaller(req: SiweRequest, address: string): Promise<ResolvedAffiliate> {
+    assertSiweMatches(req, address, 'Authenticated address does not match target address')
+    return this.resolveOrThrow(address)
   }
 }
 

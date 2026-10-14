@@ -1,5 +1,4 @@
--- Additional wallets that may manage a partner's affiliate config. The registering wallet
--- stays on affiliates.wallet_address as the owner and is never a row here.
+-- Extra wallets that may manage an affiliate; the registering (owner) wallet stays on affiliates.wallet_address
 CREATE TABLE "affiliate_members" (
   "id" TEXT PRIMARY KEY,
   "affiliate_id" TEXT NOT NULL,
