@@ -1,6 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
-import type { Affiliate } from '@prisma/client'
-import { Prisma } from '@prisma/client'
+import type { Affiliate, Prisma } from '@prisma/client'
 import { getAddress } from 'viem'
 
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
@@ -123,9 +122,13 @@ export class AffiliateService {
       if (claimed) {
         const here = claimed.affiliate.id === affiliate.id
         if (claimed.role === 'owner') {
-          throw new ConflictException(here ? 'Wallet is already the owner' : 'Wallet is already registered as an affiliate')
+          throw new ConflictException(
+            here ? 'Wallet is already the owner' : 'Wallet is already registered as an affiliate',
+          )
         }
-        throw new ConflictException(here ? 'Wallet is already a member' : 'Wallet is already a member of another partner')
+        throw new ConflictException(
+          here ? 'Wallet is already a member' : 'Wallet is already a member of another partner',
+        )
       }
 
       await tx.affiliateMember.create({ data: { affiliateId: affiliate.id, walletAddress, addedBy } })
@@ -133,7 +136,9 @@ export class AffiliateService {
   }
 
   async removeMember(affiliate: Affiliate, walletAddress: string): Promise<void> {
-    const { count } = await this.prisma.affiliateMember.deleteMany({ where: { walletAddress, affiliateId: affiliate.id } })
+    const { count } = await this.prisma.affiliateMember.deleteMany({
+      where: { walletAddress, affiliateId: affiliate.id },
+    })
     if (count === 0) throw new NotFoundException('Member not found')
   }
 
