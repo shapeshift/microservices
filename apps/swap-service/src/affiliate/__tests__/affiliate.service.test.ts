@@ -29,7 +29,7 @@ type PrismaMock = {
   affiliate: MockAffiliateDelegate
   affiliateMember: MockAffiliateMemberDelegate
   swap: { findMany: jest.Mock }
-  $queryRaw: jest.Mock
+  $executeRaw: jest.Mock
   $transaction: jest.Mock
 }
 
@@ -53,7 +53,7 @@ const makePrismaMock = (options: MockOptions = {}): PrismaService => {
     affiliate,
     affiliateMember,
     swap,
-    $queryRaw: jest.fn().mockResolvedValue([]),
+    $executeRaw: jest.fn().mockResolvedValue(1),
     $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
   }
   return prisma as unknown as PrismaService
@@ -93,11 +93,11 @@ const expectRejection = async (promise: Promise<unknown>, expected: HttpExceptio
   expect(error).toHaveProperty('message', expected.message)
 }
 
-// Each lock is a $queryRaw issued inside the one $transaction, parameterized as (namespace, key)
+// Each lock is a $executeRaw issued inside the one $transaction, parameterized as (namespace, key)
 const expectLockedOn = (prisma: PrismaService, keys: Array<[number, string]>) => {
-  const { $queryRaw, $transaction } = prisma as unknown as PrismaMock
+  const { $executeRaw, $transaction } = prisma as unknown as PrismaMock
   expect($transaction).toHaveBeenCalledTimes(1)
-  const locks = ($queryRaw.mock.calls as Array<[TemplateStringsArray, number, string]>).map(([strings, ns, key]) => {
+  const locks = ($executeRaw.mock.calls as Array<[TemplateStringsArray, number, string]>).map(([strings, ns, key]) => {
     expect(strings.join('?')).toContain('pg_advisory_xact_lock')
     return [ns, key]
   })

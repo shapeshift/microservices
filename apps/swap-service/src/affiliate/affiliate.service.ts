@@ -28,12 +28,13 @@ type Claims = { walletAddress: string; partnerCode?: string }
 export class AffiliateService {
   constructor(private prisma: PrismaService) {}
 
-  // Serializes every write that claims a wallet or partner code so the uniqueness checks cannot race
+  // Serializes every write that claims a wallet or partner code so the uniqueness checks cannot race.
+  // $executeRaw because the lock function returns void, which $queryRaw cannot deserialize
   private async withClaimLocks<T>(claims: Claims, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${WALLET_LOCK}::int, hashtext(${claims.walletAddress.toLowerCase()}))`
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${WALLET_LOCK}::int, hashtext(${claims.walletAddress.toLowerCase()}))`
       if (claims.partnerCode) {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${PARTNER_CODE_LOCK}::int, hashtext(${claims.partnerCode.toLowerCase()}))`
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PARTNER_CODE_LOCK}::int, hashtext(${claims.partnerCode.toLowerCase()}))`
       }
       return fn(tx)
     })
