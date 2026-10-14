@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
-import { Affiliate, Prisma } from '@prisma/client'
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { Affiliate, AffiliateMember, Prisma } from '@prisma/client'
 
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
@@ -8,8 +8,14 @@ import { SHAPESHIFT_BPS } from '../swaps/constants'
 import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../swaps/utils'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
-import type { AffiliateStatsResult, CreateAffiliateDto, UpdateAffiliateDto } from './types'
-import { isReservedPartnerCode } from './utils'
+import type {
+  AffiliateMemberResponse,
+  AffiliateStatsResult,
+  CreateAffiliateDto,
+  ResolvedAffiliate,
+  UpdateAffiliateDto,
+} from './types'
+import { isReservedPartnerCode, toChecksumAddress } from './utils'
 
 @Injectable()
 export class AffiliateService {
@@ -19,10 +25,18 @@ export class AffiliateService {
     return this.prisma.affiliate.findMany()
   }
 
-  async getAffiliateByWalletAddress(walletAddress: string): Promise<Affiliate | null> {
-    const affiliate = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
-    if (!affiliate) return null
-    return affiliate
+  // The registering wallet owns the affiliate; any wallet in affiliate_members is an admin of it
+  async resolveAffiliateByWalletAddress(walletAddress: string): Promise<ResolvedAffiliate | null> {
+    const owned = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
+    if (owned) return { affiliate: owned, role: 'owner' }
+
+    const member = await this.prisma.affiliateMember.findUnique({
+      where: { walletAddress },
+      include: { affiliate: true },
+    })
+    if (member) return { affiliate: member.affiliate, role: 'admin' }
+
+    return null
   }
 
   async getAffiliateByPartnerCode(partnerCode: string): Promise<Affiliate | null> {
@@ -32,10 +46,15 @@ export class AffiliateService {
   }
 
   async createAffiliate(data: CreateAffiliateDto): Promise<Affiliate> {
-    const { walletAddress, bps, partnerCode, receiveAddress } = data
+    const { bps, partnerCode } = data
+    const walletAddress = toChecksumAddress(data.walletAddress)
+    const receiveAddress = data.receiveAddress && toChecksumAddress(data.receiveAddress)
 
     const existing = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
     if (existing) throw new Error('Affiliate already registered')
+
+    const member = await this.prisma.affiliateMember.findUnique({ where: { walletAddress } })
+    if (member) throw new Error('Wallet is already a member of a partner')
 
     if (isReservedPartnerCode(partnerCode)) throw new Error('This partner code is reserved')
 
@@ -47,8 +66,8 @@ export class AffiliateService {
     })
   }
 
-  async updateAffiliate(walletAddress: string, data: UpdateAffiliateDto): Promise<Affiliate> {
-    const existing = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
+  async updateAffiliate(id: string, data: UpdateAffiliateDto): Promise<Affiliate> {
+    const existing = await this.prisma.affiliate.findUnique({ where: { id } })
     if (!existing) throw new NotFoundException('Affiliate not found')
 
     const updateData: Prisma.AffiliateUpdateInput = {
@@ -57,10 +76,50 @@ export class AffiliateService {
     }
 
     if (data.receiveAddress !== undefined) {
-      updateData.receiveAddress = data.receiveAddress
+      updateData.receiveAddress = toChecksumAddress(data.receiveAddress)
     }
 
-    return this.prisma.affiliate.update({ where: { walletAddress }, data: updateData })
+    return this.prisma.affiliate.update({ where: { id }, data: updateData })
+  }
+
+  async getMembers(affiliate: Affiliate): Promise<AffiliateMemberResponse[]> {
+    const members = await this.prisma.affiliateMember.findMany({
+      where: { affiliateId: affiliate.id },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    return [
+      { walletAddress: affiliate.walletAddress, role: 'owner', addedBy: null, createdAt: affiliate.createdAt },
+      ...members.map((m) => ({
+        walletAddress: m.walletAddress,
+        role: 'admin' as const,
+        addedBy: m.addedBy,
+        createdAt: m.createdAt,
+      })),
+    ]
+  }
+
+  // A wallet belongs to at most one affiliate across both tables so address lookups stay unambiguous
+  async addMember(affiliate: Affiliate, rawWalletAddress: string, rawAddedBy: string): Promise<AffiliateMember> {
+    const walletAddress = toChecksumAddress(rawWalletAddress)
+    const addedBy = toChecksumAddress(rawAddedBy)
+
+    const registered = await this.prisma.affiliate.findUnique({ where: { walletAddress } })
+    if (registered?.id === affiliate.id) throw new ConflictException('Wallet is already the owner')
+    if (registered) throw new ConflictException('Wallet is already registered as an affiliate')
+
+    const existing = await this.prisma.affiliateMember.findUnique({ where: { walletAddress } })
+    if (existing?.affiliateId === affiliate.id) throw new ConflictException('Wallet is already a member')
+    if (existing) throw new ConflictException('Wallet is already a member of another partner')
+
+    return this.prisma.affiliateMember.create({ data: { affiliateId: affiliate.id, walletAddress, addedBy } })
+  }
+
+  async removeMember(affiliate: Affiliate, walletAddress: string): Promise<void> {
+    const member = await this.prisma.affiliateMember.findUnique({ where: { walletAddress } })
+    if (member?.affiliateId !== affiliate.id) throw new NotFoundException('Member not found')
+
+    await this.prisma.affiliateMember.delete({ where: { id: member.id } })
   }
 
   async getAffiliateStats(

@@ -8,10 +8,23 @@ model Affiliate {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
   swaps          Swap[]
+  members        AffiliateMember[]
 
   @@index([partnerCode])
   @@index([isActive])
   @@map("affiliates")
+}
+
+model AffiliateMember {
+  id            String    @id @default(cuid())
+  affiliateId   String    @map("affiliate_id")
+  walletAddress String    @unique @map("wallet_address") @db.Citext
+  addedBy       String    @map("added_by") @db.Citext
+  createdAt     DateTime  @default(now()) @map("created_at")
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@map("affiliate_members")
 }
 
 model Swap {

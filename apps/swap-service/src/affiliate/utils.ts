@@ -1,4 +1,5 @@
-import { ForbiddenException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException } from '@nestjs/common'
+import { getAddress } from 'viem'
 
 import type { SiweRequest } from './siwe-auth.guard'
 
@@ -29,4 +30,13 @@ export function isReservedPartnerCode(partnerCode: string): boolean {
 
 export function assertSiweMatches(req: SiweRequest, target: string, message: string): void {
   if (req.siweAddress !== target.toLowerCase()) throw new ForbiddenException(message)
+}
+
+// Every address is stored in EIP-55 checksum form regardless of how the caller sent it
+export const toChecksumAddress = (address: string): string => {
+  try {
+    return getAddress(address)
+  } catch {
+    throw new BadRequestException(`Invalid address: ${address}`)
+  }
 }

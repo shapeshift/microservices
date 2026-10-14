@@ -1,4 +1,4 @@
-import type { Affiliate } from '@prisma/client'
+import type { Affiliate, AffiliateMember } from '@prisma/client'
 
 import type { PrismaService } from '../../prisma/prisma.service'
 import { AffiliateService } from '../affiliate.service'
@@ -8,14 +8,32 @@ type MockAffiliateDelegate = {
   create: jest.Mock
 }
 
-const makePrismaMock = (overrides?: Partial<MockAffiliateDelegate>, swapFindMany?: jest.Mock): PrismaService => {
+type MockAffiliateMemberDelegate = {
+  findUnique: jest.Mock
+  findMany: jest.Mock
+  create: jest.Mock
+  delete: jest.Mock
+}
+
+const makePrismaMock = (
+  overrides?: Partial<MockAffiliateDelegate>,
+  swapFindMany?: jest.Mock,
+  memberOverrides?: Partial<MockAffiliateMemberDelegate>,
+): PrismaService => {
   const affiliate: MockAffiliateDelegate = {
     findUnique: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
     ...overrides,
   }
+  const affiliateMember: MockAffiliateMemberDelegate = {
+    findUnique: jest.fn().mockResolvedValue(null),
+    findMany: jest.fn().mockResolvedValue([]),
+    create: jest.fn(),
+    delete: jest.fn(),
+    ...memberOverrides,
+  }
   const swap = { findMany: swapFindMany ?? jest.fn().mockResolvedValue([]) }
-  return { affiliate, swap } as unknown as PrismaService
+  return { affiliate, affiliateMember, swap } as unknown as PrismaService
 }
 
 const baseRow = (overrides?: Partial<Affiliate>): Affiliate => ({
@@ -66,6 +84,17 @@ describe('AffiliateService.createAffiliate', () => {
     )
   })
 
+  it('rejects when wallet is already a member of a partner', async () => {
+    const prisma = makePrismaMock(undefined, undefined, {
+      findUnique: jest.fn().mockResolvedValue(memberRow()),
+    })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'newcode', bps: 60 })).rejects.toThrow(
+      /already a member/,
+    )
+  })
+
   it('rejects reserved partner codes (case-insensitive)', async () => {
     const prisma = makePrismaMock()
     const service = new AffiliateService(prisma)
@@ -86,6 +115,137 @@ describe('AffiliateService.createAffiliate', () => {
     await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'goodcode', bps: 60 })).rejects.toThrow(
       /taken/,
     )
+  })
+})
+
+const memberRow = (overrides?: Partial<AffiliateMember>): AffiliateMember => ({
+  id: 'm1',
+  affiliateId: 'a1',
+  walletAddress: '0x2222222222222222222222222222222222222222',
+  addedBy: '0x1111111111111111111111111111111111111111',
+  createdAt: new Date('2026-10-14T00:00:00.000Z'),
+  ...overrides,
+})
+
+describe('AffiliateService.resolveAffiliateByWalletAddress', () => {
+  it('resolves the registering wallet as owner', async () => {
+    const prisma = makePrismaMock({ findUnique: jest.fn().mockResolvedValue(baseRow()) })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.resolveAffiliateByWalletAddress(baseRow().walletAddress)).resolves.toEqual({
+      affiliate: baseRow(),
+      role: 'owner',
+    })
+  })
+
+  it('resolves a member wallet as admin of the owning affiliate', async () => {
+    const prisma = makePrismaMock(undefined, undefined, {
+      findUnique: jest.fn().mockResolvedValue({ ...memberRow(), affiliate: baseRow() }),
+    })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.resolveAffiliateByWalletAddress(memberRow().walletAddress)).resolves.toEqual({
+      affiliate: baseRow(),
+      role: 'admin',
+    })
+  })
+
+  it('resolves nothing for an unknown wallet', async () => {
+    const service = new AffiliateService(makePrismaMock())
+
+    await expect(
+      service.resolveAffiliateByWalletAddress('0x3333333333333333333333333333333333333333'),
+    ).resolves.toBeNull()
+  })
+})
+
+describe('AffiliateService members', () => {
+  const owner = baseRow()
+  const other = baseRow({ id: 'a2', walletAddress: '0x9999999999999999999999999999999999999999', partnerCode: 'other' })
+  const newWallet = '0x2222222222222222222222222222222222222222'
+
+  it('lists the owner first, then admins', async () => {
+    const prisma = makePrismaMock(undefined, undefined, { findMany: jest.fn().mockResolvedValue([memberRow()]) })
+    const service = new AffiliateService(prisma)
+
+    const members = await service.getMembers(owner)
+
+    expect(members.map((m) => [m.walletAddress, m.role])).toEqual([
+      [owner.walletAddress, 'owner'],
+      [memberRow().walletAddress, 'admin'],
+    ])
+  })
+
+  it('adds a wallet that belongs to nobody, checksummed however it was sent', async () => {
+    const create = jest.fn().mockResolvedValue(memberRow())
+    const prisma = makePrismaMock(undefined, undefined, { create })
+    const service = new AffiliateService(prisma)
+
+    await service.addMember(
+      owner,
+      '0xd8da6bf26964af9d7eed9e03e53415d37aa96045',
+      '0xd8da6bf26964af9d7eed9e03e53415d37aa96044',
+    )
+
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        affiliateId: owner.id,
+        walletAddress: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+        addedBy: '0xd8dA6Bf26964AF9D7eed9e03e53415D37AA96044',
+      },
+    })
+  })
+
+  it('rejects adding the owner wallet', async () => {
+    const prisma = makePrismaMock({ findUnique: jest.fn().mockResolvedValue(owner) })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.addMember(owner, owner.walletAddress, owner.walletAddress)).rejects.toThrow(
+      /already the owner/,
+    )
+  })
+
+  it('rejects adding a wallet that owns another affiliate', async () => {
+    const prisma = makePrismaMock({ findUnique: jest.fn().mockResolvedValue(other) })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.addMember(owner, other.walletAddress, owner.walletAddress)).rejects.toThrow(
+      /already registered as an affiliate/,
+    )
+  })
+
+  it('rejects adding a wallet that is already a member elsewhere', async () => {
+    const prisma = makePrismaMock(undefined, undefined, {
+      findUnique: jest.fn().mockResolvedValue(memberRow({ affiliateId: other.id })),
+    })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.addMember(owner, newWallet, owner.walletAddress)).rejects.toThrow(/another partner/)
+  })
+
+  it('only removes members of the caller affiliate', async () => {
+    const del = jest.fn()
+    const prisma = makePrismaMock(undefined, undefined, {
+      findUnique: jest.fn().mockResolvedValue(memberRow({ affiliateId: other.id })),
+      delete: del,
+    })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.removeMember(owner, newWallet)).rejects.toThrow(/not found/)
+    expect(del).not.toHaveBeenCalled()
+  })
+
+  it('removes a member of the caller affiliate', async () => {
+    const del = jest.fn()
+    const prisma = makePrismaMock(undefined, undefined, {
+      findUnique: jest.fn().mockResolvedValue(memberRow()),
+      delete: del,
+    })
+    const service = new AffiliateService(prisma)
+
+    await service.removeMember(owner, newWallet)
+
+    expect(del).toHaveBeenCalledWith({ where: { id: memberRow().id } })
   })
 })
 
