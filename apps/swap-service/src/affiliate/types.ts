@@ -1,6 +1,6 @@
 import type { Affiliate } from '@prisma/client'
 import { Type } from 'class-transformer'
-import { IsBoolean, IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
+import { IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
 
 import { PaginationQueryDto } from '../swaps/types'
 
@@ -86,10 +86,6 @@ export class UpdateAffiliateDto {
   @Min(0)
   @Max(1000)
   bps?: number
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean
 }
 
 export class AddAffiliateMemberDto {

@@ -1,11 +1,16 @@
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
 import type { Affiliate, AffiliateMember } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 import type { PrismaService } from '../../prisma/prisma.service'
 import { AffiliateService } from '../affiliate.service'
+import type { UpdateAffiliateDto } from '../types'
 
 type MockAffiliateDelegate = {
   findUnique: jest.Mock
+  findFirst: jest.Mock
   create: jest.Mock
+  update: jest.Mock
 }
 
 type MockAffiliateMemberDelegate = {
@@ -22,7 +27,9 @@ const makePrismaMock = (
 ): PrismaService => {
   const affiliate: MockAffiliateDelegate = {
     findUnique: jest.fn().mockResolvedValue(null),
+    findFirst: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
+    update: jest.fn(),
     ...overrides,
   }
   const affiliateMember: MockAffiliateMemberDelegate = {
@@ -33,7 +40,29 @@ const makePrismaMock = (
     ...memberOverrides,
   }
   const swap = { findMany: swapFindMany ?? jest.fn().mockResolvedValue([]) }
-  return { affiliate, affiliateMember, swap } as unknown as PrismaService
+  // Interactive transactions hand the callback the same delegates so assertions see every call
+  const prisma = {
+    affiliate,
+    affiliateMember,
+    swap,
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
+  }
+  return prisma as unknown as PrismaService
+}
+
+const uniqueViolation = () =>
+  new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'test' })
+
+// The per-wallet advisory lock must be taken inside the transaction, before any read or write
+const expectLockedOn = (prisma: PrismaService, walletAddress: string) => {
+  const queryRaw = prisma.$queryRaw as unknown as jest.Mock
+  const transaction = prisma.$transaction as unknown as jest.Mock
+  expect(transaction).toHaveBeenCalledTimes(1)
+  expect(queryRaw).toHaveBeenCalledTimes(1)
+  const [strings, key] = queryRaw.mock.calls[0] as [TemplateStringsArray, string]
+  expect(strings.join('?')).toContain('pg_advisory_xact_lock')
+  expect(key).toBe(walletAddress.toLowerCase())
 }
 
 const baseRow = (overrides?: Partial<Affiliate>): Affiliate => ({
@@ -71,6 +100,7 @@ describe('AffiliateService.createAffiliate', () => {
       },
     })
     expect(result.walletAddress).toBe(wallet)
+    expectLockedOn(prisma, wallet)
   })
 
   it('rejects when wallet is already registered', async () => {
@@ -80,7 +110,7 @@ describe('AffiliateService.createAffiliate', () => {
     const service = new AffiliateService(prisma)
 
     await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'newcode', bps: 60 })).rejects.toThrow(
-      /already/,
+      ConflictException,
     )
   })
 
@@ -100,7 +130,27 @@ describe('AffiliateService.createAffiliate', () => {
     const service = new AffiliateService(prisma)
 
     await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'ADMIN', bps: 60 })).rejects.toThrow(
-      /reserved/,
+      BadRequestException,
+    )
+  })
+
+  it('maps a partner code unique violation raised by the insert to a conflict', async () => {
+    const create = jest.fn().mockRejectedValue(uniqueViolation())
+    const prisma = makePrismaMock({ create })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'goodcode', bps: 60 })).rejects.toThrow(
+      ConflictException,
+    )
+  })
+
+  it('does not swallow non-unique insert failures', async () => {
+    const create = jest.fn().mockRejectedValue(new Error('connection reset'))
+    const prisma = makePrismaMock({ create })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.createAffiliate({ walletAddress: wallet, partnerCode: 'goodcode', bps: 60 })).rejects.toThrow(
+      'connection reset',
     )
   })
 
@@ -128,20 +178,35 @@ const memberRow = (overrides?: Partial<AffiliateMember>): AffiliateMember => ({
 })
 
 describe('AffiliateService.resolveAffiliateByWalletAddress', () => {
-  it('resolves the registering wallet as owner', async () => {
-    const prisma = makePrismaMock({ findUnique: jest.fn().mockResolvedValue(baseRow()) })
+  it('resolves the registering wallet as owner in a single query', async () => {
+    const findFirst = jest.fn().mockResolvedValue(baseRow())
+    const prisma = makePrismaMock({ findFirst })
     const service = new AffiliateService(prisma)
 
     await expect(service.resolveAffiliateByWalletAddress(baseRow().walletAddress)).resolves.toEqual({
       affiliate: baseRow(),
       role: 'owner',
     })
+    expect(findFirst).toHaveBeenCalledTimes(1)
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [{ walletAddress: baseRow().walletAddress }, { members: { some: { walletAddress: baseRow().walletAddress } } }],
+      },
+    })
+    expect(prisma.affiliateMember.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('treats the owner match as case-insensitive like the citext column', async () => {
+    const prisma = makePrismaMock({ findFirst: jest.fn().mockResolvedValue(baseRow()) })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.resolveAffiliateByWalletAddress(baseRow().walletAddress.toUpperCase())).resolves.toMatchObject(
+      { role: 'owner' },
+    )
   })
 
   it('resolves a member wallet as admin of the owning affiliate', async () => {
-    const prisma = makePrismaMock(undefined, undefined, {
-      findUnique: jest.fn().mockResolvedValue({ ...memberRow(), affiliate: baseRow() }),
-    })
+    const prisma = makePrismaMock({ findFirst: jest.fn().mockResolvedValue(baseRow()) })
     const service = new AffiliateService(prisma)
 
     await expect(service.resolveAffiliateByWalletAddress(memberRow().walletAddress)).resolves.toEqual({
@@ -156,6 +221,40 @@ describe('AffiliateService.resolveAffiliateByWalletAddress', () => {
     await expect(
       service.resolveAffiliateByWalletAddress('0x3333333333333333333333333333333333333333'),
     ).resolves.toBeNull()
+  })
+})
+
+describe('AffiliateService.updateAffiliate', () => {
+  it('writes only the provided fields against the resolved affiliate without refetching it', async () => {
+    const update = jest.fn().mockResolvedValue(baseRow({ bps: 70 }))
+    const prisma = makePrismaMock({ update })
+    const service = new AffiliateService(prisma)
+
+    await service.updateAffiliate(baseRow(), { bps: 70 })
+
+    expect(update).toHaveBeenCalledWith({ where: { id: baseRow().id }, data: { bps: 70 } })
+    expect(prisma.affiliate.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('checksums a new receive address', async () => {
+    const update = jest.fn().mockResolvedValue(baseRow())
+    const service = new AffiliateService(makePrismaMock({ update }))
+
+    await service.updateAffiliate(baseRow(), { receiveAddress: '0xd8da6bf26964af9d7eed9e03e53415d37aa96045' })
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: baseRow().id },
+      data: { receiveAddress: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
+    })
+  })
+
+  it('never forwards isActive, which only ShapeShift controls', async () => {
+    const update = jest.fn().mockResolvedValue(baseRow())
+    const service = new AffiliateService(makePrismaMock({ update }))
+
+    await service.updateAffiliate(baseRow(), { bps: 70, isActive: false } as UpdateAffiliateDto)
+
+    expect(update).toHaveBeenCalledWith({ where: { id: baseRow().id }, data: { bps: 70 } })
   })
 })
 
@@ -194,6 +293,20 @@ describe('AffiliateService members', () => {
         addedBy: '0xd8dA6Bf26964AF9D7eed9e03e53415D37AA96044',
       },
     })
+    expectLockedOn(prisma, '0xd8da6bf26964af9d7eed9e03e53415d37aa96045')
+  })
+
+  it('rejects adding a wallet that is already an admin of this affiliate', async () => {
+    const create = jest.fn()
+    const prisma = makePrismaMock(undefined, undefined, {
+      findUnique: jest.fn().mockResolvedValue(memberRow({ affiliateId: owner.id })),
+      create,
+    })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.addMember(owner, newWallet, owner.walletAddress)).rejects.toThrow(ConflictException)
+    await expect(service.addMember(owner, newWallet, owner.walletAddress)).rejects.toThrow(/already a member$/)
+    expect(create).not.toHaveBeenCalled()
   })
 
   it('rejects adding the owner wallet', async () => {
@@ -231,7 +344,16 @@ describe('AffiliateService members', () => {
     })
     const service = new AffiliateService(prisma)
 
-    await expect(service.removeMember(owner, newWallet)).rejects.toThrow(/not found/)
+    await expect(service.removeMember(owner, newWallet)).rejects.toThrow(NotFoundException)
+    expect(del).not.toHaveBeenCalled()
+  })
+
+  it('cannot remove the owner, who is never a member row', async () => {
+    const del = jest.fn()
+    const prisma = makePrismaMock(undefined, undefined, { delete: del })
+    const service = new AffiliateService(prisma)
+
+    await expect(service.removeMember(owner, owner.walletAddress)).rejects.toThrow(NotFoundException)
     expect(del).not.toHaveBeenCalled()
   })
 

@@ -32,7 +32,6 @@ export function assertSiweMatches(req: SiweRequest, target: string, message: str
   if (req.siweAddress !== target.toLowerCase()) throw new ForbiddenException(message)
 }
 
-// Every address is stored in EIP-55 checksum form regardless of how the caller sent it
 export const toChecksumAddress = (address: string): string => {
   try {
     return getAddress(address)

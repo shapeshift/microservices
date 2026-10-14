@@ -1,7 +1,5 @@
 import {
-  BadRequestException,
   Body,
-  ConflictException,
   Controller,
   Delete,
   Get,
@@ -66,17 +64,7 @@ export class AffiliateController {
   async createAffiliate(@Req() req: SiweRequest, @Body() data: CreateAffiliateDto) {
     assertSiweMatches(req, data.walletAddress, 'Authenticated address does not match walletAddress')
 
-    try {
-      return toAffiliateResponse(await this.affiliateService.createAffiliate(data), 'owner')
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('reserved')) throw new BadRequestException(error.message)
-        if (error.message.includes('already') || error.message.includes('taken')) {
-          throw new ConflictException(error.message)
-        }
-      }
-      throw error
-    }
+    return toAffiliateResponse(await this.affiliateService.createAffiliate(data), 'owner')
   }
 
   @UseGuards(SiweAuthGuard)
@@ -84,7 +72,7 @@ export class AffiliateController {
   async updateAffiliate(@Req() req: SiweRequest, @Param('address') address: string, @Body() data: UpdateAffiliateDto) {
     const { affiliate, role } = await this.resolveCaller(req, address)
 
-    return toAffiliateResponse(await this.affiliateService.updateAffiliate(affiliate.id, data), role)
+    return toAffiliateResponse(await this.affiliateService.updateAffiliate(affiliate, data), role)
   }
 
   @UseGuards(SiweAuthGuard)
