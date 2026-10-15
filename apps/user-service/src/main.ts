@@ -8,7 +8,12 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || [/^http:\/\/(\w+\.)?localhost(:\d+)?$/, /\.shapeshift\.com$/],
+    origin: [
+      ...(process.env.ALLOWED_ORIGINS?.split(',') || [/^http:\/\/(\w+\.)?localhost(:\d+)?$/, /\.shapeshift\.com$/]),
+      ...(process.env.ONRAMPER_ALLOWED_ORIGINS?.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean) ?? []),
+    ],
     credentials: true,
   })
 
