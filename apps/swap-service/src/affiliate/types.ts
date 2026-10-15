@@ -1,11 +1,26 @@
+import type { Affiliate } from '@prisma/client'
 import { Type } from 'class-transformer'
-import { IsBoolean, IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
+import { IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
 
 import { PaginationQueryDto } from '../swaps/types'
 
 import { PARTNER_CODE_REGEX } from './utils'
 
 const PARTNER_CODE_MESSAGE = 'Partner code must be 3-32 lowercase letters or numbers (e.g. mypartnercode)'
+
+export type AffiliateRole = 'owner' | 'admin'
+
+export interface ResolvedAffiliate {
+  affiliate: Affiliate
+  role: AffiliateRole
+}
+
+export interface AffiliateMemberResponse {
+  walletAddress: string
+  role: AffiliateRole
+  addedBy: string | null
+  createdAt: Date
+}
 
 export interface AffiliateStatsResult {
   totalSwaps: number
@@ -64,15 +79,16 @@ export class CreateAffiliateDto {
 export class UpdateAffiliateDto {
   @IsOptional()
   @IsEthereumAddress()
-  receiveAddress?: string
+  receiveAddress?: string | null
 
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(1000)
   bps?: number
+}
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean
+export class AddAffiliateMemberDto {
+  @IsEthereumAddress()
+  walletAddress: string
 }
