@@ -1,5 +1,5 @@
 x-node-base: &node-base
-  image: node:22-alpine
+  image: node:22.23.4-alpine
   user: node
   working_dir: /workspace
   volumes:
