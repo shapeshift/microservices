@@ -1,3 +1,4 @@
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -31,7 +32,7 @@ type SafeTransactionData = {
   operation: number[]
 }
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) })
 
 const RFOX_STAKING_CONTRACT = process.env.RFOX_STAKING_CONTRACT || '0x...'
 

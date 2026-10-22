@@ -101,8 +101,9 @@ if (databaseUrl) {
   const url = new URL(databaseUrl)
   if (!['localhost', '127.0.0.1'].includes(url.hostname) || url.pathname !== '/onramper_authorization_test')
     throw new Error('Use a disposable local database named onramper_authorization_test')
+  process.env.DATABASE_URL = databaseUrl
 }
-const db = databaseUrl ? new PrismaService({ datasourceUrl: databaseUrl }) : (memoryDb as unknown as PrismaService)
+const db = databaseUrl ? new PrismaService() : (memoryDb as unknown as PrismaService)
 const consume = jest.fn()
 const catalogue = {
   get: jest.fn(() =>

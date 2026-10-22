@@ -1,3 +1,4 @@
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -13,7 +14,7 @@ if (!databaseUrl) {
   process.exit(1)
 }
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) })
 
 function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
   console.log('\n=== Affiliate Payout Summary ===')
