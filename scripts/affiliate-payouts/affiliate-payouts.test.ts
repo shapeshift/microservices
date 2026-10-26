@@ -1,6 +1,7 @@
-import type { Swap as PrismaSwap } from '@prisma/client'
 import BigNumber from 'bignumber.js'
 import { getAddress } from 'viem'
+
+import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type { FeeDeps, FeeResult, PartnerAccrual } from './types'
 import {

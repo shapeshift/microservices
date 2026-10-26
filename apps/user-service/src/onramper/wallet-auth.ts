@@ -15,12 +15,12 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common'
-import type { OnramperSession } from '@prisma/client'
 import type { Request } from 'express'
 import { createPublicClient, getAddress, http, verifyMessage } from 'viem'
 import { createSiweMessage } from 'viem/siwe'
 import { z } from 'zod'
 
+import type { OnramperSession } from '@shapeshift/prisma'
 import { clientIp, SecurityRateLimiter } from '@shapeshift/shared-utils'
 
 import { PrismaService } from '../prisma/prisma.service'

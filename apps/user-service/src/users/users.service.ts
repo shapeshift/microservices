@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { Device, User, UserAccount } from '@prisma/client'
 
+import { Device, User, UserAccount } from '@shapeshift/prisma'
 import { AddAccountIdDto, CreateUserDto, DeviceType, RegisterDeviceDto } from '@shapeshift/shared-types'
 import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils'
 

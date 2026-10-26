@@ -1,6 +1,7 @@
 import type { HttpException } from '@nestjs/common'
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
-import type { Affiliate, AffiliateMember } from '@prisma/client'
+
+import type { Affiliate, AffiliateMember } from '@shapeshift/prisma'
 
 import type { PrismaService } from '../../prisma/prisma.service'
 import { AffiliateService } from '../affiliate.service'

@@ -1,0 +1,14 @@
+{
+  "name": "@shapeshift/prisma",
+  "version": "0.0.1",
+  "description": "Generated Prisma client and connection setup for ShapeShift backend services",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "files": [
+    "dist"
+  ]
+}

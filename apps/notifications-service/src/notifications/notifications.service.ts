@@ -1,8 +1,8 @@
 import { HttpService } from '@nestjs/axios'
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
-import { Notification } from '@prisma/client'
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk'
 
+import { Notification } from '@shapeshift/prisma'
 import { CreateNotificationDto, Device, PushNotificationData } from '@shapeshift/shared-types'
 import { getRequiredEnvVar } from '@shapeshift/shared-utils'
 

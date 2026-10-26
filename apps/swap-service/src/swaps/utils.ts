@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common'
-import type { Swap as PrismaSwap } from '@prisma/client'
 import axios from 'axios'
 
+import type { Swap as PrismaSwap } from '@shapeshift/prisma'
 import type { CreateSwapDto, SwapStatus } from '@shapeshift/shared-types'
 import { baseUnitToPrecision } from '@shapeshift/shared-utils'
 import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'

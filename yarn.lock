@@ -5715,9 +5715,16 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@shapeshift/notifications-service@workspace:apps/notifications-service"
   dependencies:
+    "@shapeshift/prisma": "workspace:*"
     "@shapeshift/shared-types": "workspace:*"
     "@shapeshift/shared-utils": "workspace:*"
     expo-server-sdk: "npm:^3.15.0"
+  languageName: unknown
+  linkType: soft
+
+"@shapeshift/prisma@workspace:*, @shapeshift/prisma@workspace:packages/prisma":
+  version: 0.0.0-use.local
+  resolution: "@shapeshift/prisma@workspace:packages/prisma"
   languageName: unknown
   linkType: soft
 
@@ -5731,6 +5738,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@shapeshift/shared-utils@workspace:packages/shared-utils"
   dependencies:
+    "@shapeshift/prisma": "workspace:*"
     "@shapeshift/shared-types": "workspace:*"
   languageName: unknown
   linkType: soft
@@ -5739,6 +5747,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@shapeshift/swap-service@workspace:apps/swap-service"
   dependencies:
+    "@shapeshift/prisma": "workspace:*"
     "@shapeshift/shared-types": "workspace:*"
     "@shapeshift/shared-utils": "workspace:*"
     "@shapeshiftoss/contracts": "npm:^1.0.7"
@@ -5752,6 +5761,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@shapeshift/user-service@workspace:apps/user-service"
   dependencies:
+    "@shapeshift/prisma": "workspace:*"
     "@shapeshift/shared-types": "workspace:*"
     "@shapeshift/shared-utils": "workspace:*"
   languageName: unknown

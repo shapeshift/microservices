@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
-import { ReferralCode, ReferralUsage } from '@prisma/client'
 
+import { ReferralCode, ReferralUsage } from '@shapeshift/prisma'
 import { SwapServiceClient } from '@shapeshift/shared-utils'
 
 import { PrismaService } from '../prisma/prisma.service'

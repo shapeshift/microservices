@@ -4,9 +4,9 @@ import { generateKeyPairSync } from 'node:crypto'
 import type { INestApplication } from '@nestjs/common'
 import { HttpException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
-import type { OnramperChallenge, OnramperIntent, OnramperSession } from '@prisma/client'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
+import type { OnramperChallenge, OnramperIntent, OnramperSession } from '@shapeshift/prisma'
 import { SecurityRateLimiter } from '@shapeshift/shared-utils'
 
 import { PrismaService } from '../prisma/prisma.service'

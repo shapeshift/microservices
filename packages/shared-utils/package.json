@@ -9,6 +9,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@shapeshift/prisma": "workspace:*",
     "@shapeshift/shared-types": "workspace:*"
   },
   "files": [

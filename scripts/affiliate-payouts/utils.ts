@@ -1,6 +1,7 @@
-import type { Swap as PrismaSwap } from '@prisma/client'
 import BigNumber from 'bignumber.js'
 import { getAddress, isAddress, zeroAddress } from 'viem'
+
+import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
   AggregateResult,

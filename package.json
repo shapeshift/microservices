@@ -38,7 +38,7 @@
     "onramper:local": "ts-node scripts/onramper-local.ts",
     "onramper:smoke": "ts-node scripts/onramper-local-smoke.ts",
     "onramper:db": "node scripts/onramper-local-db.mjs",
-    "onramper:setup": "DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_local yarn db:migrate && yarn tsc -p packages/shared-types && yarn tsc -p packages/shared-utils",
+    "onramper:setup": "DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_local yarn db:migrate && yarn tsc -p packages/prisma && yarn tsc -p packages/shared-types && yarn tsc -p packages/shared-utils",
     "test:onramper:postgres": "ONRAMPER_TEST_DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_authorization_test yarn test:security"
   },
   "dependencies": {
