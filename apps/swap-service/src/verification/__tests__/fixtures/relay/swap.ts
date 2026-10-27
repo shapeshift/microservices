@@ -45,6 +45,7 @@ export default {
   buyTxHash: '0x77395ef0ae19f5fc083d305dec06f1fbc87afe34686b33a7648a56ca687315df',
   txLink: null,
   statusMessage: 'Swap complete',
+  settledAt: null,
   isStreaming: false,
   createdAt: new Date('2026-04-28T18:35:26.601Z'),
   updatedAt: new Date('2026-04-28T18:48:59.372Z'),

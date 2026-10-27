@@ -7,9 +7,9 @@ import type { Swap } from '../types'
 import {
   calculateFeeForSwap,
   describeError,
+  pollIntervalMs,
   resolveAttributionFromChain,
   resolveMissingPrices,
-  pollIntervalMs,
   resolveStalledSwap,
   stallTimeoutMs,
 } from '../utils'

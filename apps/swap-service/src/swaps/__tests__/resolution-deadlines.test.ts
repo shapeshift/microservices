@@ -1,5 +1,6 @@
 import { SwapsService } from '../swaps.service'
 import type { Swap } from '../types'
+import { getExternalPaymentSwappers } from '../utils'
 
 // unchained-client is ESM; ts-jest can't transform it and nothing here uses it.
 jest.mock('@shapeshiftoss/unchained-client', () => ({ TxStatus: {} }))
@@ -132,15 +133,11 @@ describe('attribution for a swap with no transaction', () => {
     await service.resolveAttribution(swapOf({ sellTxHash: null, quotedAt: null, status: 'FAILED' }))
 
     expect(lookups).toEqual([])
-    expect(updates).toEqual([
-      {
-        swapId: 'swap-1',
-        data: expect.objectContaining({
-          attributionStatus: 'REJECTED',
-          attributionDetails: { checked: false, reason: 'no-tx' },
-        }),
-      },
-    ])
+    expect(updates).toHaveLength(1)
+    expect(updates[0]).toMatchObject({
+      swapId: 'swap-1',
+      data: { attributionStatus: 'REJECTED', attributionDetails: { checked: false, reason: 'no-tx' } },
+    })
   })
 
   // a deposit may still arrive, so only a failed swap is closed
@@ -193,7 +190,7 @@ describe('polling queries and writes', () => {
       affiliateAssetUsd: null,
     } as unknown as Partial<Swap>)
 
-    const pricing = jest.requireMock('../../utils/pricing') as { getAssetPriceUsdAt: jest.Mock }
+    const pricing = jest.requireMock<{ getAssetPriceUsdAt: jest.Mock }>('../../utils/pricing')
     pricing.getAssetPriceUsdAt.mockResolvedValue(2500)
 
     await expect(service.fillMissingPrices(swap)).resolves.toBe(2)
@@ -235,7 +232,7 @@ describe('polling queries and writes', () => {
     expect(where).toMatchObject({
       status: { in: ['IDLE', 'PENDING'] },
       sellTxHash: null,
-      swapperName: { notIn: expect.any(Array) },
+      swapperName: { notIn: getExternalPaymentSwappers() },
     })
     expect(Date.now() - (where.createdAt as { lt: Date }).lt.getTime()).toBeGreaterThanOrEqual(
       24 * 60 * 60 * 1000 - 1000,

@@ -22,9 +22,10 @@ const swap = {
 const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap) => {
   const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
   const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
+  const checkSwapStatus = jest.fn().mockResolvedValue(statusUpdate)
   const swapsService = {
     getPendingTxSwaps: jest.fn().mockResolvedValue([polled]),
-    checkSwapStatus: jest.fn().mockResolvedValue(statusUpdate),
+    checkSwapStatus,
     updateSwapStatus,
     updateSwapTxHashes,
   } as unknown as SwapsService
@@ -32,7 +33,7 @@ const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap
   const websocketGateway = { sendSwapUpdateToUser } as unknown as WebsocketGateway
 
   return {
-    swapsService,
+    checkSwapStatus,
     service: new SwapPollingService(swapsService, websocketGateway),
     updateSwapStatus,
     updateSwapTxHashes,
@@ -144,21 +145,21 @@ describe('pollPendingTxStatus backoff', () => {
   it('polls a fresh swap on every tick', async () => {
     const start = Date.now()
     const fresh = { ...swap, createdAt: new Date(start) } as Swap
-    const { service, swapsService } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' }, fresh)
+    const { service, checkSwapStatus } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' }, fresh)
 
     await pollsAt(service, [start, start + 5_000, start + 10_000])
 
-    expect(swapsService.checkSwapStatus).toHaveBeenCalledTimes(3)
+    expect(checkSwapStatus).toHaveBeenCalledTimes(3)
   })
 
   // an unfunded deposit quote waits days, so it is checked every ten minutes rather than every tick
   it('polls a day-old swap once per ten minutes', async () => {
     const start = Date.now()
     const old = { ...swap, createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap
-    const { service, swapsService } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' }, old)
+    const { service, checkSwapStatus } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' }, old)
 
     await pollsAt(service, [start, start + 5_000, start + 9 * 60 * 1000, start + 10 * 60 * 1000])
 
-    expect(swapsService.checkSwapStatus).toHaveBeenCalledTimes(2)
+    expect(checkSwapStatus).toHaveBeenCalledTimes(2)
   })
 })

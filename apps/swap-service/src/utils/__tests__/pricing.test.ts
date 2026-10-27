@@ -1,11 +1,12 @@
 import { Logger } from '@nestjs/common'
-import axios from 'axios'
 
-jest.mock('axios')
+import type * as Pricing from '../pricing'
 
-const { getAssetPriceUsdAt } = jest.requireActual<typeof import('../pricing')>('../pricing')
+const mockedGet = jest.fn()
 
-const mockedGet = axios.get as jest.Mock
+jest.mock('axios', () => ({ __esModule: true, default: { get: mockedGet } }))
+
+const { getAssetPriceUsdAt } = jest.requireActual<typeof Pricing>('../pricing')
 
 const ETH = 'eip155:1/slip44:60'
 const hour = 60 * 60 * 1000
@@ -55,7 +56,8 @@ describe('getAssetPriceUsdAt', () => {
 
     await expect(getAssetPriceUsdAt(ETH, at)).resolves.toBe(2450)
     expect(mockedGet).toHaveBeenCalledTimes(2)
-    expect(mockedGet.mock.calls[1][1].params.from).toBe(Math.floor((at.getTime() - 24 * hour) / 1000))
+    const [, config] = mockedGet.mock.calls[1] as [string, { params: { from: number } }]
+    expect(config.params.from).toBe(Math.floor((at.getTime() - 24 * hour) / 1000))
   })
 
   it('returns null rather than a distant price when neither window has data', async () => {
