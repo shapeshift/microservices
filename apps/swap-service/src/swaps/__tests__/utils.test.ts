@@ -241,6 +241,34 @@ describe('resolveAttributionFromChain', () => {
     expect(resolveAttributionFromChain(found, at(-60_000), abandoned).status).toBe('ACCEPTED')
   })
 
+  // a week of unanswered lookups closes the claim unchecked, so nothing is held forever
+  it.each([
+    ['a successful swap on an unsupported chain', 'SUCCESS', { unavailable: 'unsupported' } as const],
+    ['a successful swap the chain cannot see', 'SUCCESS', { unavailable: 'not-found' } as const],
+    ['a successful swap still unmined', 'SUCCESS', { unavailable: 'unmined' } as const],
+    ['a failed swap whose lookup keeps failing', 'FAILED', { unavailable: 'error' } as const],
+  ])('rejects %s once the deadline passes', (_label, status, lookup) => {
+    const expired = { status: status as 'SUCCESS' | 'FAILED', createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }
+
+    expect(resolveAttributionFromChain(lookup, at(-60_000), expired)).toEqual({
+      status: 'REJECTED',
+      details: { checked: false, reason: `unresolved:${lookup.unavailable}` },
+    })
+  })
+
+  it('holds a settled swap inside the deadline', () => {
+    const recent = { status: 'SUCCESS' as const, createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) }
+
+    expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), recent).status).toBe('PENDING')
+  })
+
+  // the deadline closes out settled swaps only; one still in flight is the stall rule's to resolve
+  it('holds a swap that has not settled, however old', () => {
+    const stuck = { status: 'PENDING' as const, createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }
+
+    expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), stuck).status).toBe('PENDING')
+  })
+
   it('holds a row with no quote time, which cannot be checked at all', () => {
     expect(resolveAttributionFromChain(found, null, live)).toMatchObject({
       status: 'PENDING',

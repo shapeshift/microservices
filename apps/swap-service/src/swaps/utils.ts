@@ -13,7 +13,12 @@ import type { Asset } from '@shapeshiftoss/types'
 import type { BlockTimeLookup } from '../lib/block-time.service'
 import { getAssetPriceUsd, getAssetPriceUsdAt } from '../utils/pricing'
 
-import { PENDING_TIMEOUT_MS } from './constants'
+import {
+  ABANDONED_STATUS_PREFIX,
+  PENDING_TIMEOUT_MS,
+  RESOLUTION_DEADLINE_MS,
+  UNRESOLVED_ATTRIBUTION_PREFIX,
+} from './constants'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -57,7 +62,7 @@ export const resolveStalledSwap = (
 
   return {
     status: 'FAILED',
-    statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})`,
+    statusMessage: `${ABANDONED_STATUS_PREFIX} unsettled 24h after registration (last swapper status: ${last})`,
   }
 }
 
@@ -75,6 +80,17 @@ export const resolveAttributionFromChain = (
 
     if (lookup.unavailable === 'not-found' && abandoned) {
       return { status: 'REJECTED', details: { checked: true, reason: 'tx-not-found' } }
+    }
+
+    // a settled swap the chain still cannot answer for after a week is closed out unchecked, never held forever
+    const settled = swap.status === 'SUCCESS' || swap.status === 'FAILED'
+    const expired = Date.now() - swap.createdAt.getTime() > RESOLUTION_DEADLINE_MS
+
+    if (settled && expired) {
+      return {
+        status: 'REJECTED',
+        details: { checked: false, reason: `${UNRESOLVED_ATTRIBUTION_PREFIX}${lookup.unavailable}` },
+      }
     }
 
     return { status: 'PENDING', details: { checked: false, reason: lookup.unavailable } }

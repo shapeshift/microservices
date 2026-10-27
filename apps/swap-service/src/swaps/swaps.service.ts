@@ -28,7 +28,12 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE, RESOLUTION_DEADLINE_MS } from './constants'
+import {
+  ATTRIBUTION_BATCH_SIZE,
+  REFERRER_FEE_RATE,
+  RESOLUTION_DEADLINE_MS,
+  VERIFICATION_TIMEOUT_PREFIX,
+} from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -322,7 +327,13 @@ export class SwapsService {
 
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
+      where: {
+        attributionStatus: 'PENDING',
+        OR: [
+          { sellTxHash: { not: null }, quotedAt: { not: null } },
+          { sellTxHash: null, status: 'FAILED' },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: ATTRIBUTION_BATCH_SIZE,
     })
@@ -331,13 +342,8 @@ export class SwapsService {
   }
 
   async resolveAttribution(swap: Swap): Promise<Swap> {
-    if (!swap.sellTxHash) return swap
-
-    const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
-    const chainVerdict = resolveAttributionFromChain(lookup, swap.quotedAt, {
-      status: swap.status as SwapStatus,
-      createdAt: swap.createdAt,
-    })
+    const chainVerdict = await this.resolveChainVerdict(swap)
+    if (!chainVerdict) return swap
 
     const superseded = chainVerdict.status === 'ACCEPTED' && (await this.hasPrecedingQuote(swap))
     const attribution: AttributionVerdict = superseded
@@ -362,6 +368,21 @@ export class SwapsService {
         },
       }),
     )
+  }
+
+  // a failed swap that never had a transaction has nothing to attribute, so it is closed rather than left pending
+  private async resolveChainVerdict(swap: Swap): Promise<AttributionVerdict | undefined> {
+    if (!swap.sellTxHash) {
+      if (swap.status !== 'FAILED') return
+      return { status: 'REJECTED', details: { checked: false, reason: 'no-tx' } }
+    }
+
+    const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
+
+    return resolveAttributionFromChain(lookup, swap.quotedAt, {
+      status: swap.status as SwapStatus,
+      createdAt: swap.createdAt,
+    })
   }
 
   // a pre-EIP-155 transaction carries the same hash on every EVM chain, so a quote only contends with
@@ -439,10 +460,10 @@ export class SwapsService {
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
+      // a failed swap needs no transaction to verify, so one that never had a hash is closed out too
       where: {
-        sellTxHash: { not: null },
         verificationStatus: 'PENDING',
-        status: { in: ['SUCCESS', 'FAILED'] },
+        OR: [{ status: 'SUCCESS', sellTxHash: { not: null } }, { status: 'FAILED' }],
       },
     })
 
@@ -604,7 +625,24 @@ export class SwapsService {
     }
 
     const verificationResult = await this.swapVerificationService.verifySwap(swap)
-    if (verificationResult.verificationStatus === 'PENDING') return swap
+
+    if (verificationResult.verificationStatus === 'PENDING') {
+      if (Date.now() - swap.createdAt.getTime() <= RESOLUTION_DEADLINE_MS) return swap
+
+      // a verifier that still cannot answer after a week is closed out unverified, never retried forever
+      const reason = `${VERIFICATION_TIMEOUT_PREFIX} ${verificationResult.noAffiliateReason ?? 'no result'}`
+
+      return toSwap(
+        await this.prisma.swap.update({
+          where: { swapId: swap.swapId },
+          data: {
+            verificationStatus: 'FAILED',
+            isAffiliateVerified: false,
+            affiliateVerificationDetails: { hasAffiliate: false, reason } satisfies AffiliateVerificationDetails,
+          },
+        }),
+      )
+    }
 
     const isAffiliateVerified = verificationResult.verificationStatus === 'SUCCESS' && verificationResult.hasAffiliate
 
