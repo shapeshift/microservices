@@ -65,7 +65,9 @@ function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
     console.log('')
     record.deadlineResolved.forEach((d) => {
       const tx = d.sellTxHash ? ` tx ${d.sellTxHash}` : ' no tx'
-      console.log(`- [${d.stage}] ${d.partnerCode} [swap ${d.swapId}] ${d.swapperName} ${d.chainId ?? ''}${tx}: ${d.reason}`)
+      console.log(
+        `- [${d.stage}] ${d.partnerCode} [swap ${d.swapId}] ${d.swapperName} ${d.chainId ?? ''}${tx}: ${d.reason}`,
+      )
     })
   }
 }

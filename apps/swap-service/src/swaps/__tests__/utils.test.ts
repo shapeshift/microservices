@@ -248,7 +248,10 @@ describe('resolveAttributionFromChain', () => {
     ['a successful swap still unmined', 'SUCCESS', { unavailable: 'unmined' } as const],
     ['a failed swap whose lookup keeps failing', 'FAILED', { unavailable: 'error' } as const],
   ])('rejects %s once the deadline passes', (_label, status, lookup) => {
-    const expired = { status: status as 'SUCCESS' | 'FAILED', createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }
+    const expired = {
+      status: status as 'SUCCESS' | 'FAILED',
+      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    }
 
     expect(resolveAttributionFromChain(lookup, at(-60_000), expired)).toEqual({
       status: 'REJECTED',
@@ -292,9 +295,9 @@ describe('resolveMissingPrices', () => {
   it('prices only the missing fields, each at the moment the swap was registered', async () => {
     const priceAt = jest.fn().mockResolvedValue(2500)
 
-    await expect(resolveMissingPrices({ ...priced, sellAssetUsd: null, affiliateAssetUsd: null }, priceAt)).resolves.toEqual(
-      { sellAssetUsd: '2500', affiliateAssetUsd: '2500' },
-    )
+    await expect(
+      resolveMissingPrices({ ...priced, sellAssetUsd: null, affiliateAssetUsd: null }, priceAt),
+    ).resolves.toEqual({ sellAssetUsd: '2500', affiliateAssetUsd: '2500' })
     expect(priceAt).toHaveBeenCalledTimes(2)
     expect(priceAt).toHaveBeenCalledWith('eip155:1/slip44:60', createdAt)
     expect(priceAt).toHaveBeenCalledWith('eip155:8453/slip44:60', createdAt)
