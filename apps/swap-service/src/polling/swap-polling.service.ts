@@ -4,6 +4,7 @@ import { Cron, CronExpression } from '@nestjs/schedule'
 import { ATTRIBUTION_BATCH_SIZE } from '../swaps/constants'
 import { SwapsService } from '../swaps/swaps.service'
 import type { Swap } from '../swaps/types'
+import { pollIntervalMs } from '../swaps/utils'
 import { WebsocketGateway } from '../websocket/websocket.gateway'
 
 const POLL_CONCURRENCY = 10
@@ -19,6 +20,9 @@ export class SwapPollingService {
   private isPollingAttribution = false
   private isPollingPrices = false
 
+  // in memory is enough with one replica: a restart only costs each swap one early poll
+  private readonly lastTxPollAt = new Map<string, number>()
+
   constructor(
     private swapsService: SwapsService,
     private websocketGateway: WebsocketGateway,
@@ -30,8 +34,19 @@ export class SwapPollingService {
     this.isPollingTx = true
 
     try {
-      const swaps = await this.swapsService.getPendingTxSwaps()
+      const pending = await this.swapsService.getPendingTxSwaps()
+      const now = Date.now()
+
+      // swaps no longer pending are forgotten, so the map only ever holds the pending set
+      const pendingIds = new Set(pending.map((swap) => swap.swapId))
+      for (const swapId of this.lastTxPollAt.keys()) if (!pendingIds.has(swapId)) this.lastTxPollAt.delete(swapId)
+
+      const swaps = pending.filter(
+        (swap) => now - (this.lastTxPollAt.get(swap.swapId) ?? 0) >= pollIntervalMs(now - swap.createdAt.getTime()),
+      )
       if (swaps.length === 0) return
+
+      swaps.forEach((swap) => this.lastTxPollAt.set(swap.swapId, now))
 
       this.logger.log(`Polling tx status for ${swaps.length} swaps (${swapIds(swaps)})`)
       await this.runWorkers(swaps, (swap) => this.pollTxStatus(swap))

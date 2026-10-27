@@ -16,6 +16,7 @@ const swap = {
   statusMessage: 'Awaiting deposit',
   sellTxHash: null,
   buyTxHash: null,
+  createdAt: new Date(),
 } as unknown as Swap
 
 const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap) => {
@@ -31,6 +32,7 @@ const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap
   const websocketGateway = { sendSwapUpdateToUser } as unknown as WebsocketGateway
 
   return {
+    swapsService,
     service: new SwapPollingService(swapsService, websocketGateway),
     updateSwapStatus,
     updateSwapTxHashes,
@@ -124,5 +126,39 @@ describe('pollPendingTxStatus', () => {
     await service.pollPendingTxStatus()
 
     expect(updateSwapStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'SUCCESS', buyTxHash: '0xbuy' }))
+  })
+})
+
+describe('pollPendingTxStatus backoff', () => {
+  afterEach(() => jest.restoreAllMocks())
+
+  const pollsAt = async (service: SwapPollingService, times: number[]) => {
+    const now = jest.spyOn(Date, 'now')
+    for (const time of times) {
+      now.mockReturnValue(time)
+      await service.pollPendingTxStatus()
+    }
+  }
+
+  // a fresh swap is polled live while someone is likely watching it
+  it('polls a fresh swap on every tick', async () => {
+    const start = Date.now()
+    const fresh = { ...swap, createdAt: new Date(start) } as Swap
+    const { service, swapsService } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' }, fresh)
+
+    await pollsAt(service, [start, start + 5_000, start + 10_000])
+
+    expect(swapsService.checkSwapStatus).toHaveBeenCalledTimes(3)
+  })
+
+  // an unfunded deposit quote waits days, so it is checked every ten minutes rather than every tick
+  it('polls a day-old swap once per ten minutes', async () => {
+    const start = Date.now()
+    const old = { ...swap, createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap
+    const { service, swapsService } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' }, old)
+
+    await pollsAt(service, [start, start + 5_000, start + 9 * 60 * 1000, start + 10 * 60 * 1000])
+
+    expect(swapsService.checkSwapStatus).toHaveBeenCalledTimes(2)
   })
 })

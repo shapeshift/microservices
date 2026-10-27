@@ -9,6 +9,7 @@ import {
   describeError,
   resolveAttributionFromChain,
   resolveMissingPrices,
+  pollIntervalMs,
   resolveStalledSwap,
   stallTimeoutMs,
 } from '../utils'
@@ -374,5 +375,19 @@ describe('resolveMissingPrices', () => {
       resolveMissingPrices({ ...priced, affiliateFeeAssetId: null, affiliateAssetUsd: null }, priceAt),
     ).resolves.toEqual({})
     expect(priceAt).not.toHaveBeenCalled()
+  })
+})
+
+describe('pollIntervalMs', () => {
+  const minute = 60 * 1000
+
+  it.each([
+    ['a fresh swap', 0, 5_000],
+    ['a swap in its first ten minutes', 9 * minute, 5_000],
+    ['a swap within its first hour', 30 * minute, 30_000],
+    ['a swap within its first day', 5 * 60 * minute, 2 * minute],
+    ['a deposit swap still waiting days in', 50 * 60 * minute, 10 * minute],
+  ])('polls %s at its interval', (_label, ageMs, interval) => {
+    expect(pollIntervalMs(ageMs)).toBe(interval)
   })
 })

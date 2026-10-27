@@ -74,6 +74,20 @@ export const resolveStalledSwap = (
   }
 }
 
+const MINUTE_MS = 60 * 1000
+
+// [age below which the interval applies, interval]: live while someone is likely watching, then backing off
+const POLL_SCHEDULE: [number, number][] = [
+  [10 * MINUTE_MS, 5 * 1000],
+  [60 * MINUTE_MS, 30 * 1000],
+  [24 * 60 * MINUTE_MS, 2 * MINUTE_MS],
+]
+const POLL_INTERVAL_FLOOR_MS = 10 * MINUTE_MS
+
+// How often a pending swap is polled for status, by how long ago it was registered
+export const pollIntervalMs = (ageMs: number): number =>
+  POLL_SCHEDULE.find(([below]) => ageMs < below)?.[1] ?? POLL_INTERVAL_FLOOR_MS
+
 export const isSettledStatus = (status: string): boolean => status === 'SUCCESS' || status === 'FAILED'
 
 // When a swap's outcome was decided; rows settled before settledAt existed fall back to registration
