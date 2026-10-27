@@ -56,9 +56,12 @@ import {
   fetchUsdPrices,
   getExternalPaymentSwappers,
   isExternallyPaid,
+  isSettledStatus,
   resolveAttributionFromChain,
   resolveMissingPrices,
   resolveStalledSwap,
+  settlementTime,
+  stallTimeoutMs,
   toQuotedAt,
   toSwap,
   toSwapperSwap,
@@ -237,6 +240,7 @@ export class SwapsService {
             buyTxHash: data.buyTxHash,
             txLink: data.txLink,
             statusMessage: data.statusMessage,
+            ...(isSettledStatus(data.status) && { settledAt: new Date() }),
           },
         }),
       )
@@ -340,6 +344,7 @@ export class SwapsService {
       data: {
         status: 'FAILED',
         statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within 24h of registration`,
+        settledAt: new Date(),
       },
     })
 
@@ -406,6 +411,7 @@ export class SwapsService {
     return resolveAttributionFromChain(lookup, swap.quotedAt, {
       status: swap.status as SwapStatus,
       createdAt: swap.createdAt,
+      settledAt: swap.settledAt,
     })
   }
 
@@ -458,16 +464,22 @@ export class SwapsService {
     })
   }
 
-  // Older rows stop retrying here and are left to the backfill script
+  // A price still missing a week after settling stops retrying and is left to the payout report
   async getMissingPriceSwaps(): Promise<Swap[]> {
+    const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+
     const swaps = await this.prisma.swap.findMany({
       where: {
         status: 'SUCCESS',
-        createdAt: { gt: new Date(Date.now() - RESOLUTION_DEADLINE_MS) },
-        OR: [
-          { sellAssetUsd: null },
-          { buyAssetUsd: null },
-          { affiliateAssetUsd: null, affiliateFeeAssetId: { not: null } },
+        AND: [
+          { OR: [{ settledAt: { gt: since } }, { settledAt: null, createdAt: { gt: since } }] },
+          {
+            OR: [
+              { sellAssetUsd: null },
+              { buyAssetUsd: null },
+              { affiliateAssetUsd: null, affiliateFeeAssetId: { not: null } },
+            ],
+          },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -636,7 +648,12 @@ export class SwapsService {
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
-        ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
+        ...resolveStalledSwap(
+          swapStatus,
+          swap.createdAt,
+          typeof statusMessage === 'string' ? statusMessage : '',
+          stallTimeoutMs(isExternal),
+        ),
         sellTxHash,
         buyTxHash,
         txLink: swapperTxLink,
@@ -646,7 +663,12 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`)
+      return resolveStalledSwap(
+        'PENDING',
+        swap.createdAt,
+        `Error polling status: ${reason}`,
+        stallTimeoutMs(isExternal),
+      )
     }
   }
 
@@ -667,7 +689,7 @@ export class SwapsService {
     const verificationResult = await this.swapVerificationService.verifySwap(swap)
 
     if (verificationResult.verificationStatus === 'PENDING') {
-      if (Date.now() - swap.createdAt.getTime() <= RESOLUTION_DEADLINE_MS) return swap
+      if (Date.now() - settlementTime(swap).getTime() <= RESOLUTION_DEADLINE_MS) return swap
 
       // a verifier that still cannot answer after a week is closed out unverified, never retried forever
       const reason = `${VERIFICATION_TIMEOUT_PREFIX} ${verificationResult.noAffiliateReason ?? 'no result'}`

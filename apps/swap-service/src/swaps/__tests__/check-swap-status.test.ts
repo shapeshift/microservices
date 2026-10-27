@@ -165,15 +165,26 @@ describe('checkSwapStatus', () => {
     })
   })
 
-  it('abandons an externally paid swap that was never funded', async () => {
+  // a deposit address can stay open for days, so a day without funds is not yet abandonment
+  it('holds an externally paid swap inside its deposit window', async () => {
     checkTradeStatus.mockResolvedValue(pending)
     const createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    const { service } = buildService(row({ createdAt }), undefined)
+
+    await expect(service.checkSwapStatus('swap-1')).resolves.toMatchObject({ status: 'PENDING' })
+  })
+
+  it('abandons an externally paid swap that was never funded', async () => {
+    checkTradeStatus.mockResolvedValue(pending)
+    const createdAt = new Date(Date.now() - 97 * 60 * 60 * 1000)
     const { service } = buildService(row({ createdAt }), undefined)
 
     const result = await service.checkSwapStatus('swap-1')
 
     expect(result.status).toBe('FAILED')
-    expect(result.statusMessage).toContain('Waiting for deposit...')
+    expect(result.statusMessage).toBe(
+      'Abandoned: unsettled 4d after registration (last swapper status: Waiting for deposit...)',
+    )
   })
 
   it('replaces a hash found on chain with the one the provider later reports', async () => {

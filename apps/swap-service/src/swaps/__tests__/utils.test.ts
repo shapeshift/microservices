@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common'
 
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
+import { PENDING_TIMEOUT_MS } from '../constants'
 import type { Swap } from '../types'
 import {
   calculateFeeForSwap,
@@ -9,6 +10,7 @@ import {
   resolveAttributionFromChain,
   resolveMissingPrices,
   resolveStalledSwap,
+  stallTimeoutMs,
 } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
@@ -145,7 +147,7 @@ describe('resolveStalledSwap', () => {
   const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
 
   it('fails a swap the swapper still cannot settle past the timeout', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
       status: 'FAILED',
       statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: waiting)',
     })
@@ -153,21 +155,27 @@ describe('resolveStalledSwap', () => {
 
   // an unmined source tx leaves the swapper with nothing to report
   it('records why it failed when the swapper reported no status', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, '').statusMessage).toBe(
+    expect(resolveStalledSwap('PENDING', longAgo, '', PENDING_TIMEOUT_MS).statusMessage).toBe(
       'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
     )
   })
 
   it('leaves a swap pending inside the timeout', () => {
-    expect(resolveStalledSwap('PENDING', justNow, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', justNow, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
       status: 'PENDING',
       statusMessage: 'waiting',
     })
   })
 
+  it('gives a deposit swap its deposit window on top of the settlement window', () => {
+    expect(stallTimeoutMs(true)).toBe(96 * 60 * 60 * 1000)
+    expect(stallTimeoutMs(false)).toBe(PENDING_TIMEOUT_MS)
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', stallTimeoutMs(true)).status).toBe('PENDING')
+  })
+
   it('never overrides a terminal status, however old the swap', () => {
-    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete').status).toBe('SUCCESS')
-    expect(resolveStalledSwap('FAILED', longAgo, 'reverted').status).toBe('FAILED')
+    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', PENDING_TIMEOUT_MS).status).toBe('SUCCESS')
+    expect(resolveStalledSwap('FAILED', longAgo, 'reverted', PENDING_TIMEOUT_MS).status).toBe('FAILED')
   })
 })
 
@@ -175,9 +183,13 @@ describe('resolveAttributionFromChain', () => {
   const blockTime = Date.UTC(2026, 8, 1, 12, 0, 0)
   const found = { blockTime: blockTime / 1000 } as const
   const at = (offsetMs: number) => new Date(blockTime + offsetMs)
-  const live = { status: 'SUCCESS' as const, createdAt: new Date() }
-  const abandoned = { status: 'FAILED' as const, createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) }
-  const justFailed = { status: 'FAILED' as const, createdAt: new Date() }
+  const live = { status: 'SUCCESS' as const, createdAt: new Date(), settledAt: null }
+  const abandoned = {
+    status: 'FAILED' as const,
+    createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    settledAt: null,
+  }
+  const justFailed = { status: 'FAILED' as const, createdAt: new Date(), settledAt: null }
 
   it('accepts a quote minted before its transaction was mined', () => {
     const { status, details } = resolveAttributionFromChain(found, at(-60_000), live)
@@ -251,6 +263,7 @@ describe('resolveAttributionFromChain', () => {
     const expired = {
       status: status as 'SUCCESS' | 'FAILED',
       createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+      settledAt: null,
     }
 
     expect(resolveAttributionFromChain(lookup, at(-60_000), expired)).toEqual({
@@ -260,21 +273,44 @@ describe('resolveAttributionFromChain', () => {
   })
 
   it('holds a settled swap inside the deadline', () => {
-    const recent = { status: 'SUCCESS' as const, createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) }
+    const recent = {
+      status: 'SUCCESS' as const,
+      createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+      settledAt: null,
+    }
 
     expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), recent).status).toBe('PENDING')
   })
 
+  // a swap that settled late, e.g. a deposit funded days in, gets its full week from settling
+  it('counts the deadline from settlement, not registration', () => {
+    const lateSettled = {
+      status: 'SUCCESS' as const,
+      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      settledAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+    }
+
+    expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), lateSettled).status).toBe('PENDING')
+  })
+
   // the deadline closes out settled swaps only; one still in flight is the stall rule's to resolve
   it('holds a swap that has not settled, however old', () => {
-    const stuck = { status: 'PENDING' as const, createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }
+    const stuck = {
+      status: 'PENDING' as const,
+      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+      settledAt: null,
+    }
 
     expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), stuck).status).toBe('PENDING')
   })
 
   // with nothing to check the claim against, the deadline closes it like any other unanswerable one
   it('rejects a settled row with no quote time once the deadline passes', () => {
-    const expired = { status: 'SUCCESS' as const, createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }
+    const expired = {
+      status: 'SUCCESS' as const,
+      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+      settledAt: null,
+    }
 
     expect(resolveAttributionFromChain(found, null, expired)).toEqual({
       status: 'REJECTED',

@@ -65,6 +65,7 @@ const swapOf = (overrides: Partial<Swap> = {}): Swap =>
     quotedAt: new Date(Date.now() - 9 * DAY),
     status: 'SUCCESS',
     createdAt: new Date(),
+    settledAt: null,
     attributionStatus: 'PENDING',
     attributionDetails: null,
     verificationStatus: 'PENDING',
@@ -101,6 +102,17 @@ describe('verification deadline', () => {
         },
       },
     ])
+  })
+
+  // a deposit funded days in still gets a full week to verify
+  it('counts the verification deadline from settlement', async () => {
+    const { service, updates } = buildService(pending)
+
+    await service.verifySwap(
+      swapOf({ createdAt: new Date(Date.now() - 10 * DAY), settledAt: new Date(Date.now() - 2 * DAY) }),
+    )
+
+    expect(updates).toEqual([])
   })
 
   it('never times out a verifier that answered', async () => {

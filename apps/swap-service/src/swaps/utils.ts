@@ -15,6 +15,7 @@ import { getAssetPriceUsd, getAssetPriceUsdAt } from '../utils/pricing'
 
 import {
   ABANDONED_STATUS_PREFIX,
+  DEPOSIT_WINDOW_MS,
   PENDING_TIMEOUT_MS,
   RESOLUTION_DEADLINE_MS,
   UNRESOLVED_ATTRIBUTION_PREFIX,
@@ -50,30 +51,43 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
 
+// A deposit swap first waits for the user to fund it, then gets the usual window to settle
+export const stallTimeoutMs = (isExternallyPaid: boolean): number =>
+  isExternallyPaid ? DEPOSIT_WINDOW_MS + PENDING_TIMEOUT_MS : PENDING_TIMEOUT_MS
+
 export const resolveStalledSwap = (
   status: SwapStatus,
   createdAt: Date,
   statusMessage: string,
+  timeoutMs: number,
 ): { status: SwapStatus; statusMessage: string } => {
   if (status !== 'PENDING') return { status, statusMessage }
-  if (Date.now() - createdAt.getTime() < PENDING_TIMEOUT_MS) return { status, statusMessage }
+  if (Date.now() - createdAt.getTime() < timeoutMs) return { status, statusMessage }
 
   const last = statusMessage || 'none reported'
+  const hours = timeoutMs / (60 * 60 * 1000)
+  const window = hours >= 48 ? `${hours / 24}d` : `${hours}h`
 
   return {
     status: 'FAILED',
-    statusMessage: `${ABANDONED_STATUS_PREFIX} unsettled 24h after registration (last swapper status: ${last})`,
+    statusMessage: `${ABANDONED_STATUS_PREFIX} unsettled ${window} after registration (last swapper status: ${last})`,
   }
 }
+
+export const isSettledStatus = (status: string): boolean => status === 'SUCCESS' || status === 'FAILED'
+
+// When a swap's outcome was decided; rows settled before settledAt existed fall back to registration
+export const settlementTime = (swap: { settledAt: Date | null; createdAt: Date }): Date =>
+  swap.settledAt ?? swap.createdAt
 
 export const resolveAttributionFromChain = (
   lookup: BlockTimeLookup,
   quotedAt: Date | null,
-  swap: { status: SwapStatus; createdAt: Date },
+  swap: { status: SwapStatus; createdAt: Date; settledAt: Date | null },
 ): AttributionVerdict => {
   // a settled swap the chain still cannot answer for after a week is closed out unchecked, never held forever
-  const settled = swap.status === 'SUCCESS' || swap.status === 'FAILED'
-  const expired = Date.now() - swap.createdAt.getTime() > RESOLUTION_DEADLINE_MS
+  const settled = isSettledStatus(swap.status)
+  const expired = Date.now() - settlementTime(swap).getTime() > RESOLUTION_DEADLINE_MS
 
   if (!quotedAt) {
     if (settled && expired) {

@@ -124,8 +124,9 @@ async function generate(monthArg: string | undefined, force: boolean, allowUnset
 
     if (!allowUnsettled) {
       throw new Error(
-        'Refusing to generate a payout with unsettled swaps - every swap settles within a week of registration, ' +
-          'so run on or after the 8th, or pass --allow-unsettled to pay without them',
+        'Refusing to generate a payout with unsettled swaps - every stage resolves within 11 days of registration ' +
+          '(up to 4 to settle a deposit swap, then 7 to verify), so run on or after the 12th, ' +
+          'or pass --allow-unsettled to pay without them',
       )
     }
   }
