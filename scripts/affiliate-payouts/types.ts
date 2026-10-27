@@ -64,6 +64,12 @@ export type PartnerBpsUnsetSwap = {
   partnerBps: number
 }
 
+// A verified swap whose fee could not be valued at all (e.g. a USD price or verified amount is missing).
+export type UnpriceableSwap = {
+  swapId: string
+  partnerCode: string
+}
+
 // A verified swap with no resolvable on-chain fee (e.g. fee asset/price unavailable).
 export type UnresolvedFeeSwap = {
   swapId: string
@@ -90,7 +96,7 @@ export type UnsettledSwap = {
 
 export type AggregateResult = {
   partners: Map<string, PartnerAccrual>
-  unpriceableSwaps: number
+  unpriceable: UnpriceableSwap[]
   anomalies: FeeAnomaly[]
   unverified: UnverifiedSwap[]
   unattributed: UnattributedSwap[]
@@ -106,7 +112,14 @@ export type FeeDeps<S> = {
 }
 
 export type PayoutWarning = {
-  type: 'fee-anomaly' | 'address' | 'unverified' | 'unattributed' | 'partner-bps-unset' | 'no-verified-fee'
+  type:
+    | 'fee-anomaly'
+    | 'address'
+    | 'unverified'
+    | 'unattributed'
+    | 'partner-bps-unset'
+    | 'no-verified-fee'
+    | 'unpriceable'
   partnerCode: string
   swapId: string | null
   reason: string | null

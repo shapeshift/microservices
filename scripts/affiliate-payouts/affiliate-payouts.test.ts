@@ -84,9 +84,9 @@ describe('resolveWindow', () => {
 
 describe('aggregateByPartner', () => {
   it('sums a partner share across swaps', () => {
-    const { partners, unpriceableSwaps, anomalies } = aggregateByPartner([makeRow(), makeRow()], stubDeps)
+    const { partners, unpriceable, anomalies } = aggregateByPartner([makeRow(), makeRow()], stubDeps)
     const acme = partners.get('acme')
-    expect(unpriceableSwaps).toBe(0)
+    expect(unpriceable).toEqual([])
     expect(anomalies).toHaveLength(0)
     expect(acme?.swapCount).toBe(2)
     expect(acme?.volumeUsd.toNumber()).toBeCloseTo(4000)
@@ -109,8 +109,8 @@ describe('aggregateByPartner', () => {
   })
 
   it('skips swaps that cannot be priced', () => {
-    const { partners, unpriceableSwaps } = aggregateByPartner([makeRow({ priceable: false })], stubDeps)
-    expect(unpriceableSwaps).toBe(1)
+    const { partners, unpriceable } = aggregateByPartner([makeRow({ priceable: false })], stubDeps)
+    expect(unpriceable).toEqual([{ swapId: 's1', partnerCode: 'acme' }])
     expect(partners.size).toBe(0)
   })
 
@@ -313,7 +313,10 @@ describe('buildRecord', () => {
       window,
       payouts,
       generatedAt: '2026-07-01T00:00:00.000Z',
-      unpriceableSwaps: 2,
+      unpriceable: [
+        { swapId: 'q1', partnerCode: 'acme' },
+        { swapId: 'q2', partnerCode: 'acme' },
+      ],
       anomalies: [
         {
           swapId: 'a1',
@@ -367,6 +370,8 @@ describe('buildRecord', () => {
       'no-verified-fee',
       'partner-bps-unset',
       'unattributed',
+      'unpriceable',
+      'unpriceable',
       'unverified',
     ])
     const warnedSwapIds = record.warnings.map((w) => w.swapId)

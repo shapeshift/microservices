@@ -22,6 +22,7 @@ import type {
   PayoutWarning,
   PayoutWindow,
   UnattributedSwap,
+  UnpriceableSwap,
   UnresolvedFeeSwap,
   UnsettledSwap,
   UnverifiedSwap,
@@ -94,7 +95,7 @@ export function checkFeeAnomaly(
 //   verificationStatus PENDING     → unverified 'pending'  (not verified yet; may still settle)
 //   verificationStatus FAILED      → unverified 'failed'   (verification failed; investigate)
 //   verified, no affiliate fee     → noAffiliateFee        (not ours, or ours @ 0 bps)
-//   fee math returns null          → unpriceableSwaps      (can't price the swap)
+//   fee math returns null          → unpriceable           (can't price the swap)
 //   on-chain fee is null           → unresolvedFee         (nothing verified to pay on)
 //   fails the deviation guard      → anomalies             (on-chain fee looks wrong)
 //   partner share rate ≤ 0         → partnerBpsUnset       (no partner share configured)
@@ -113,7 +114,7 @@ export function aggregateByPartner<S>(
   const partnerBpsUnset: PartnerBpsUnsetSwap[] = []
   const unresolvedFee: UnresolvedFeeSwap[] = []
 
-  let unpriceableSwaps = 0
+  const unpriceable: UnpriceableSwap[] = []
 
   for (const row of rows) {
     if (!row.partnerCode) continue
@@ -148,7 +149,7 @@ export function aggregateByPartner<S>(
 
     const fee = deps.calculateFeeForSwap(deps.toSwap(row))
     if (!fee) {
-      unpriceableSwaps++
+      unpriceable.push({ swapId: row.swapId, partnerCode })
       continue
     }
 
@@ -192,7 +193,7 @@ export function aggregateByPartner<S>(
 
   return {
     partners,
-    unpriceableSwaps,
+    unpriceable,
     anomalies,
     unverified,
     unattributed,
@@ -316,7 +317,7 @@ export function buildRecord(input: {
   window: PayoutWindow
   payouts: PartnerPayout[]
   generatedAt: string
-  unpriceableSwaps: number
+  unpriceable: UnpriceableSwap[]
   anomalies: FeeAnomaly[]
   unverified: UnverifiedSwap[]
   unattributed: UnattributedSwap[]
@@ -329,7 +330,7 @@ export function buildRecord(input: {
     window,
     payouts,
     generatedAt,
-    unpriceableSwaps,
+    unpriceable,
     anomalies,
     unverified,
     unattributed,
@@ -369,6 +370,13 @@ export function buildRecord(input: {
       swapId: u.swapId,
       reason: `partnerBps is 0 (verifiedBps ${u.verifiedBps}) — no partner share configured, excluded`,
     })),
+    ...unpriceable.map((u) => ({
+      type: 'unpriceable' as const,
+      partnerCode: u.partnerCode,
+      swapId: u.swapId,
+      reason:
+        'fee could not be valued (a USD price or verified amount is missing) — not paid, fix the row and regenerate',
+    })),
     ...unresolvedFee.map((n) => ({
       type: 'no-verified-fee' as const,
       partnerCode: n.partnerCode,
@@ -385,7 +393,7 @@ export function buildRecord(input: {
       partnersPaid: included.length,
       totalUsdc: totalUsdc.toFixed(USDC_DECIMALS),
       paidSwaps: included.reduce((sum, p) => sum + p.swapCount, 0),
-      unpriceableSwaps,
+      unpriceableSwaps: unpriceable.length,
       feeAnomalySwaps: anomalies.length,
       unverifiedSwaps: unverified.length,
       unattributedSwaps: unattributed.length,

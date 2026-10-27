@@ -130,16 +130,8 @@ async function generate(monthArg: string | undefined, force: boolean, allowUnset
     }
   }
 
-  const {
-    partners,
-    unpriceableSwaps,
-    anomalies,
-    unverified,
-    unattributed,
-    noAffiliateFee,
-    partnerBpsUnset,
-    unresolvedFee,
-  } = aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
+  const { partners, unpriceable, anomalies, unverified, unattributed, noAffiliateFee, partnerBpsUnset, unresolvedFee } =
+    aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
 
   const affiliates = await prisma.affiliate.findMany({
     where: { partnerCode: { in: Array.from(partners.keys()) } },
@@ -154,7 +146,7 @@ async function generate(monthArg: string | undefined, force: boolean, allowUnset
     window,
     payouts,
     generatedAt: new Date().toISOString(),
-    unpriceableSwaps,
+    unpriceable,
     anomalies,
     unverified,
     unattributed,
