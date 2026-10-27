@@ -20,6 +20,7 @@ import {
   RESOLUTION_DEADLINE_MS,
   UNRESOLVED_ATTRIBUTION_PREFIX,
 } from './constants'
+import { isSettledStatus } from './status'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -82,13 +83,13 @@ const POLL_SCHEDULE: [number, number][] = [
   [60 * MINUTE_MS, 30 * 1000],
   [24 * 60 * MINUTE_MS, 2 * MINUTE_MS],
 ]
-const POLL_INTERVAL_FLOOR_MS = 10 * MINUTE_MS
+export const POLL_INTERVAL_CEILING_MS = 10 * MINUTE_MS
 
 // How often a pending swap is polled for status, by how long ago it was registered
 export const pollIntervalMs = (ageMs: number): number =>
-  POLL_SCHEDULE.find(([below]) => ageMs < below)?.[1] ?? POLL_INTERVAL_FLOOR_MS
+  POLL_SCHEDULE.find(([below]) => ageMs < below)?.[1] ?? POLL_INTERVAL_CEILING_MS
 
-export const isSettledStatus = (status: string): boolean => status === 'SUCCESS' || status === 'FAILED'
+export { isSettledStatus }
 
 // When a swap's outcome was decided; rows settled before settledAt existed fall back to registration
 export const settlementTime = (swap: { settledAt: Date | null; createdAt: Date }): Date =>

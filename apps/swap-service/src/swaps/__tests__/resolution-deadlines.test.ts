@@ -219,16 +219,30 @@ describe('polling queries and writes', () => {
     expect(swaps.map((swap) => swap.swapId)).toEqual(['new-1', 'mid', 'old-1'])
   })
 
+  // through updateSwapStatus, so each is notified and stamped settled like any other failure
   it('abandons only unfunded swaps that never reported a transaction for 24h', async () => {
     let where: Record<string, unknown> = {}
+    const updates: { swapId: string; data: Record<string, unknown> }[] = []
     const service = build({
-      updateMany: (args: { where: Record<string, unknown> }) => {
+      findMany: (args: { where: Record<string, unknown> }) => {
         where = args.where
-        return Promise.resolve({ count: 3 })
+        return Promise.resolve([{ swapId: 'stalled-1' }, { swapId: 'stalled-2' }])
+      },
+      update: (args: { where: { swapId: string }; data: Record<string, unknown> }) => {
+        updates.push({ swapId: args.where.swapId, data: args.data })
+        return Promise.resolve({ ...args.data, swapId: args.where.swapId })
       },
     })
+    jest
+      .spyOn(
+        service as unknown as { sendStatusUpdateNotification: () => Promise<void> },
+        'sendStatusUpdateNotification',
+      )
+      .mockResolvedValue()
 
-    await expect(service.abandonUnbroadcastSwaps()).resolves.toBe(3)
+    const abandoned = await service.abandonUnbroadcastSwaps()
+
+    expect(abandoned.map((swap) => swap.swapId)).toEqual(['stalled-1', 'stalled-2'])
     expect(where).toMatchObject({
       status: { in: ['IDLE', 'PENDING'] },
       sellTxHash: null,
@@ -237,5 +251,6 @@ describe('polling queries and writes', () => {
     expect(Date.now() - (where.createdAt as { lt: Date }).lt.getTime()).toBeGreaterThanOrEqual(
       24 * 60 * 60 * 1000 - 1000,
     )
+    expect(updates[0].data).toMatchObject({ status: 'FAILED', settledAt: expect.any(Date) as Date })
   })
 })

@@ -57,6 +57,7 @@ import {
   getExternalPaymentSwappers,
   isExternallyPaid,
   isSettledStatus,
+  POLL_INTERVAL_CEILING_MS,
   resolveAttributionFromChain,
   resolveMissingPrices,
   resolveStalledSwap,
@@ -319,43 +320,68 @@ export class SwapsService {
   }
 
   // Externally paid swaps are tracked from registration, before any deposit hash is known
-  async getPendingTxSwaps(): Promise<Swap[]> {
-    const swaps = await this.prisma.swap.findMany({
+  // Just enough to decide which are due, so a large pending set isn't loaded whole on every tick
+  async getPendingTxSwapRefs(): Promise<{ swapId: string; createdAt: Date }[]> {
+    return this.prisma.swap.findMany({
       where: {
         OR: [
           { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
           { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
         ],
       },
+      select: { swapId: true, createdAt: true },
     })
+  }
+
+  async getSwapsByIds(swapIds: string[]): Promise<Swap[]> {
+    if (swapIds.length === 0) return []
+
+    const swaps = await this.prisma.swap.findMany({ where: { swapId: { in: swapIds } } })
 
     return swaps.map(toSwap)
   }
 
   // A swap with no transaction is never polled, so one that never reported a hash is abandoned here instead
-  async abandonUnbroadcastSwaps(): Promise<number> {
-    const { count } = await this.prisma.swap.updateMany({
+  async abandonUnbroadcastSwaps(): Promise<Swap[]> {
+    const stalled = await this.prisma.swap.findMany({
       where: {
         status: { in: ['IDLE', 'PENDING'] },
         sellTxHash: null,
         swapperName: { notIn: getExternalPaymentSwappers() },
         createdAt: { lt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
       },
-      data: {
-        status: 'FAILED',
-        statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within 24h of registration`,
-        settledAt: new Date(),
-      },
+      select: { swapId: true },
     })
 
-    return count
+    // through updateSwapStatus so the user is notified and settledAt is set, like any other failure
+    return Promise.all(
+      stalled.map(({ swapId }) =>
+        this.updateSwapStatus({
+          swapId,
+          status: 'FAILED',
+          statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within 24h of registration`,
+        }),
+      ),
+    )
   }
 
   // the newest keep new swaps from waiting behind a backlog, the oldest keep the deadline reachable under one
   async getPendingAttributionSwaps(): Promise<Swap[]> {
+    const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+
+    // a claim with no quote time has nothing to check, so it only takes a slot once its deadline is due
     const where: Prisma.SwapWhereInput = {
       attributionStatus: 'PENDING',
-      OR: [{ sellTxHash: { not: null } }, { sellTxHash: null, status: 'FAILED' }],
+      OR: [
+        { sellTxHash: { not: null }, quotedAt: { not: null } },
+        {
+          sellTxHash: { not: null },
+          quotedAt: null,
+          status: { in: ['SUCCESS', 'FAILED'] },
+          OR: [{ settledAt: { lt: since } }, { settledAt: null, createdAt: { lt: since } }],
+        },
+        { sellTxHash: null, status: 'FAILED' },
+      ],
     }
 
     const oldestTake = Math.floor(ATTRIBUTION_BATCH_SIZE / 4)
@@ -406,7 +432,10 @@ export class SwapsService {
       return { status: 'REJECTED', details: { checked: false, reason: 'no-tx' } }
     }
 
-    const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
+    // with no quote time there is nothing to check the chain against, so the lookup is skipped
+    const lookup = swap.quotedAt
+      ? await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
+      : ({ unavailable: 'unsupported' } as const)
 
     return resolveAttributionFromChain(lookup, swap.quotedAt, {
       status: swap.status as SwapStatus,
@@ -467,10 +496,13 @@ export class SwapsService {
   // A price still missing a week after settling stops retrying and is left to the payout report
   async getMissingPriceSwaps(): Promise<Swap[]> {
     const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+    // a swap settles at most a deposit window after registering, which bounds the scan by createdAt
+    const registeredSince = new Date(since.getTime() - stallTimeoutMs(true) - POLL_INTERVAL_CEILING_MS)
 
     const swaps = await this.prisma.swap.findMany({
       where: {
         status: 'SUCCESS',
+        createdAt: { gt: registeredSince },
         AND: [
           { OR: [{ settledAt: { gt: since } }, { settledAt: null, createdAt: { gt: since } }] },
           {
@@ -489,8 +521,7 @@ export class SwapsService {
     return swaps.map(toSwap)
   }
 
-  // Writes only fields still empty, and the fee price only for the fee asset it was fetched for, since
-  // verification may record the actual fee asset while this runs
+  // Fills only empty fields, and the fee price only for the asset it was fetched for in case verification changed it
   async fillMissingPrices(swap: Swap): Promise<number> {
     const prices = await resolveMissingPrices(swap)
 

@@ -1,7 +1,14 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
-import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../../apps/swap-service/src/swaps/utils'
+import { RESOLUTION_DEADLINE_MS } from '../../apps/swap-service/src/swaps/constants'
+import {
+  calculateFeeForSwap,
+  getPartnerFeeUsd,
+  POLL_INTERVAL_CEILING_MS,
+  stallTimeoutMs,
+  toSwap,
+} from '../../apps/swap-service/src/swaps/utils'
 import { createPrismaAdapter, PrismaClient } from '../../packages/prisma'
 
 import type { PartnerPayout, PayoutRecord } from './types'
@@ -20,6 +27,11 @@ if (!databaseUrl) {
   console.error('DATABASE_URL is not set. Run with DATABASE_URL=<url> yarn affiliate-payouts …')
   process.exit(1)
 }
+
+// the slowest swap: a deposit settling at the end of its window, then a week to verify, each seen a poll late
+const SETTLE_DAYS = Math.ceil(
+  (stallTimeoutMs(true) + RESOLUTION_DEADLINE_MS + 2 * POLL_INTERVAL_CEILING_MS) / (24 * 60 * 60 * 1000),
+)
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter(2, databaseUrl) })
 
@@ -124,9 +136,8 @@ async function generate(monthArg: string | undefined, force: boolean, allowUnset
 
     if (!allowUnsettled) {
       throw new Error(
-        'Refusing to generate a payout with unsettled swaps - every stage resolves within 11 days of registration ' +
-          '(up to 4 to settle a deposit swap, then 7 to verify), so run on or after the 12th, ' +
-          'or pass --allow-unsettled to pay without them',
+        `Refusing to generate a payout with unsettled swaps - every stage resolves within ${SETTLE_DAYS} days of ` +
+          `registration, so run on or after day ${SETTLE_DAYS + 1} of the month, or pass --allow-unsettled to pay without them`,
       )
     }
   }

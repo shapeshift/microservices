@@ -75,6 +75,7 @@ model Swap {
   @@index([partnerAddress])
   @@index([partnerCode])
   @@index([status, sellTxHash])
+  @@index([status, createdAt])
   @@index([sellTxHash])
   @@index([attributionStatus, createdAt])
   @@index([verificationStatus, status])

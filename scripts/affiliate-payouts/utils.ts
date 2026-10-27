@@ -6,6 +6,7 @@ import {
   UNRESOLVED_ATTRIBUTION_PREFIX,
   VERIFICATION_TIMEOUT_PREFIX,
 } from '../../apps/swap-service/src/swaps/constants'
+import { isSettledStatus } from '../../apps/swap-service/src/swaps/status'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
@@ -211,11 +212,7 @@ const detailReason = (details: unknown): string | null => {
   return typeof reason === 'string' ? reason : null
 }
 
-// Partner swaps a deadline closed out rather than evidence. Rows are every partner swap in the window:
-//   abandoned by the stall rule with a transaction that was not disowned → status       (it may have settled)
-//   verification timed out                                            → verification (the fee was never checked)
-//   attribution unresolved                                            → attribution  (the claim was never checked)
-// A swap can appear once per stage. None of these are paid; each needs a person to confirm that is right.
+// Partner swaps a deadline closed out rather than evidence, once per stage, none paid until a person confirms
 export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[] {
   return rows.flatMap((row) => {
     if (!row.partnerCode) return []
@@ -230,8 +227,7 @@ export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[]
 
     const resolved: DeadlineResolvedSwap[] = []
 
-    // a transaction the chain disowned or the quote postdates can never be paid, so only a plausible one is
-    // worth a look - including one with no hash, whose deposit may simply have gone undetected
+    // a disowned or out-of-order transaction can never be paid; a missing hash may be an undetected deposit
     const abandoned = row.status === 'FAILED' && row.statusMessage?.startsWith(ABANDONED_STATUS_PREFIX)
     const disowned =
       row.attributionStatus === 'REJECTED' && EVIDENCED_REJECTIONS.has(detailReason(row.attributionDetails) ?? '')
@@ -253,13 +249,13 @@ export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[]
   })
 }
 
-// Partner swaps with a stage still pending; the deadlines resolve every swap within 11 days of registration
+// Partner swaps with a stage still pending, which the deadlines resolve within days of registration
 export function findUnsettled(rows: PrismaSwap[]): UnsettledSwap[] {
   return rows.flatMap((row) => {
     if (!row.partnerCode) return []
 
     const stages: UnsettledSwap['stages'] = []
-    if (row.status !== 'SUCCESS' && row.status !== 'FAILED') stages.push('status')
+    if (!isSettledStatus(row.status)) stages.push('status')
     if (row.verificationStatus === 'PENDING') stages.push('verification')
     if (row.attributionStatus === 'PENDING') stages.push('attribution')
 

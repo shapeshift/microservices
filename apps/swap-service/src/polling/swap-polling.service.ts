@@ -22,6 +22,8 @@ export class SwapPollingService {
 
   // in memory is enough with one replica: a restart only costs each swap one early poll
   private readonly lastTxPollAt = new Map<string, number>()
+  // the last time a swap showed progress, so a deposit funded days in is polled live again
+  private readonly lastProgressAt = new Map<string, number>()
 
   constructor(
     private swapsService: SwapsService,
@@ -34,19 +36,24 @@ export class SwapPollingService {
     this.isPollingTx = true
 
     try {
-      const pending = await this.swapsService.getPendingTxSwaps()
+      const pending = await this.swapsService.getPendingTxSwapRefs()
       const now = Date.now()
 
-      // swaps no longer pending are forgotten, so the map only ever holds the pending set
-      const pendingIds = new Set(pending.map((swap) => swap.swapId))
-      for (const swapId of this.lastTxPollAt.keys()) if (!pendingIds.has(swapId)) this.lastTxPollAt.delete(swapId)
+      // swaps no longer pending are forgotten, so the maps only ever hold the pending set
+      const pendingIds = new Set(pending.map((ref) => ref.swapId))
+      for (const map of [this.lastTxPollAt, this.lastProgressAt]) {
+        for (const swapId of map.keys()) if (!pendingIds.has(swapId)) map.delete(swapId)
+      }
 
-      const swaps = pending.filter(
-        (swap) => now - (this.lastTxPollAt.get(swap.swapId) ?? 0) >= pollIntervalMs(now - swap.createdAt.getTime()),
-      )
-      if (swaps.length === 0) return
+      const due = pending.filter((ref) => {
+        const activeSince = this.lastProgressAt.get(ref.swapId) ?? ref.createdAt.getTime()
+        return now - (this.lastTxPollAt.get(ref.swapId) ?? 0) >= pollIntervalMs(now - activeSince)
+      })
+      if (due.length === 0) return
 
-      swaps.forEach((swap) => this.lastTxPollAt.set(swap.swapId, now))
+      due.forEach((ref) => this.lastTxPollAt.set(ref.swapId, now))
+
+      const swaps = await this.swapsService.getSwapsByIds(due.map((ref) => ref.swapId))
 
       this.logger.log(`Polling tx status for ${swaps.length} swaps (${swapIds(swaps)})`)
       await this.runWorkers(swaps, (swap) => this.pollTxStatus(swap))
@@ -86,7 +93,7 @@ export class SwapPollingService {
 
       if (swaps.length === ATTRIBUTION_BATCH_SIZE) {
         this.logger.warn(
-          `Attribution backlog is at capacity (${ATTRIBUTION_BATCH_SIZE}); oldest pending swaps are unchecked`,
+          `Attribution backlog fills the batch (${ATTRIBUTION_BATCH_SIZE}); pending swaps between the newest and oldest wait for a later pass`,
         )
       }
 
@@ -102,14 +109,18 @@ export class SwapPollingService {
   @Cron(CronExpression.EVERY_10_MINUTES)
   async abandonUnbroadcastSwaps() {
     try {
-      const count = await this.swapsService.abandonUnbroadcastSwaps()
-      if (count > 0) this.logger.log(`Abandoned ${count} swaps that never reported a transaction`)
+      const abandoned = await this.swapsService.abandonUnbroadcastSwaps()
+      if (abandoned.length === 0) return
+
+      this.logger.log(`Abandoned ${abandoned.length} swaps that never reported a transaction (${swapIds(abandoned)})`)
+      abandoned.forEach((swap) => this.websocketGateway.sendSwapUpdateToUser(swap.userId, swap))
     } catch (err) {
       this.logger.error('Failed to abandon unbroadcast swaps:', err)
     }
   }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  // hourly is plenty for a price that failed once, and keeps a price that never resolves off the shared quota
+  @Cron(CronExpression.EVERY_HOUR)
   async pollMissingPrices() {
     if (this.isPollingPrices) return
     this.isPollingPrices = true
@@ -164,6 +175,8 @@ export class SwapPollingService {
       const hasNewStatusMessage = !!statusUpdate.statusMessage && statusUpdate.statusMessage !== swap.statusMessage
 
       if (hasNewSellTxHash || hasNewBuyTxHash || hasNewTxLink || hasNewStatusMessage) {
+        this.lastProgressAt.set(swap.swapId, Date.now())
+
         const updated = await this.swapsService.updateSwapTxHashes({
           swapId: swap.swapId,
           sellTxHash: statusUpdate.sellTxHash,

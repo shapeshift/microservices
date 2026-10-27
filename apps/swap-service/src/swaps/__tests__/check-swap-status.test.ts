@@ -215,11 +215,11 @@ describe('checkSwapStatus', () => {
   })
 })
 
-describe('getPendingTxSwaps', () => {
+describe('getPendingTxSwapRefs', () => {
   it('includes externally paid swaps that have no sell tx hash yet', async () => {
     const { service, findManyCalls } = buildService(row(), undefined)
 
-    await service.getPendingTxSwaps()
+    await service.getPendingTxSwapRefs()
 
     expect(findManyCalls[0]).toEqual({
       where: {
@@ -228,6 +228,7 @@ describe('getPendingTxSwaps', () => {
           { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: ['Chainflip', 'NEAR Intents'] } },
         ],
       },
+      select: { swapId: true, createdAt: true },
     })
   })
 })
