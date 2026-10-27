@@ -33,7 +33,6 @@ export type AffiliateVerificationDetails = {
   affiliateAddress?: string
   verifiedSellAmountCryptoBaseUnit?: string
   hasAffiliate: boolean
-  // why a swap ended unverified, recorded when verification timed out
   reason?: string
 }
 

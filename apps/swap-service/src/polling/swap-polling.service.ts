@@ -92,7 +92,7 @@ export class SwapPollingService {
       const swaps = await this.swapsService.getPendingAttributionSwaps()
       if (swaps.length === 0) return
 
-      if (swaps.length === ATTRIBUTION_BATCH_SIZE) {
+      if (swaps.length >= ATTRIBUTION_BATCH_SIZE) {
         this.logger.warn(
           `Attribution backlog fills the batch (${ATTRIBUTION_BATCH_SIZE}); pending swaps between the newest and oldest wait for a later pass`,
         )

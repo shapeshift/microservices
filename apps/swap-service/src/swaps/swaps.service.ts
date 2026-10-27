@@ -32,10 +32,12 @@ import {
   ABANDON_BATCH_SIZE,
   ABANDONED_STATUS_PREFIX,
   ATTRIBUTION_BATCH_SIZE,
+  ATTRIBUTION_DEADLINE_BATCH_SIZE,
   MISSING_PRICE_BATCH_SIZE,
   PENDING_TIMEOUT_MS,
   REFERRER_FEE_RATE,
   RESOLUTION_DEADLINE_MS,
+  SETTLED_STATUSES,
   VERIFICATION_TIMEOUT_PREFIX,
 } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
@@ -76,6 +78,16 @@ const pendingTxWhere = (): Prisma.SwapWhereInput => ({
     { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
     { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
   ],
+})
+
+// rows settled before settledAt existed are judged by registration time instead
+const settledBefore = (date: Date): Prisma.SwapWhereInput => ({
+  status: { in: SETTLED_STATUSES },
+  OR: [{ settledAt: { lt: date } }, { settledAt: null, createdAt: { lt: date } }],
+})
+
+const settledSince = (date: Date): Prisma.SwapWhereInput => ({
+  OR: [{ settledAt: { gt: date } }, { settledAt: null, createdAt: { gt: date } }],
 })
 
 @Injectable()
@@ -371,12 +383,11 @@ export class SwapsService {
     return abandoned.map(toSwap)
   }
 
-  // newest keep new swaps moving under a backlog; claims past their deadline close the same pass
+  // claims past their deadline get their own slots, so a backlog of newer ones can't hold them beyond it
   async getPendingAttributionSwaps(): Promise<Swap[]> {
-    const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
-    const dueTake = Math.floor(ATTRIBUTION_BATCH_SIZE / 4)
+    const deadline = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
 
-    const [newest, due] = await Promise.all([
+    const [newest, pastDeadline] = await Promise.all([
       this.prisma.swap.findMany({
         where: {
           attributionStatus: 'PENDING',
@@ -386,23 +397,18 @@ export class SwapsService {
           ],
         },
         orderBy: { createdAt: 'desc' },
-        take: ATTRIBUTION_BATCH_SIZE - dueTake,
+        take: ATTRIBUTION_BATCH_SIZE,
       }),
       this.prisma.swap.findMany({
-        where: {
-          attributionStatus: 'PENDING',
-          sellTxHash: { not: null },
-          status: { in: ['SUCCESS', 'FAILED'] },
-          OR: [{ settledAt: { lt: since } }, { settledAt: null, createdAt: { lt: since } }],
-        },
+        where: { attributionStatus: 'PENDING', sellTxHash: { not: null }, ...settledBefore(deadline) },
         orderBy: { createdAt: 'asc' },
-        take: dueTake,
+        take: ATTRIBUTION_DEADLINE_BATCH_SIZE,
       }),
     ])
 
-    const seen = new Set(newest.map((swap) => swap.swapId))
+    const unique = new Map([...newest, ...pastDeadline].map((swap) => [swap.swapId, swap]))
 
-    return [...newest, ...due.filter((swap) => !seen.has(swap.swapId))].map(toSwap)
+    return [...unique.values()].map(toSwap)
   }
 
   async resolveAttribution(swap: Swap): Promise<Swap> {
@@ -503,16 +509,16 @@ export class SwapsService {
 
   // A price still missing a week after settling stops retrying and is left to the payout report
   async getMissingPriceSwaps(): Promise<Swap[]> {
-    const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+    const deadline = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
     // a swap settles at most a deposit window after registering, which bounds the scan
-    const registeredSince = new Date(since.getTime() - stallTimeoutMs(true) - POLL_INTERVAL_CEILING_MS)
+    const registeredSince = new Date(deadline.getTime() - stallTimeoutMs(true) - POLL_INTERVAL_CEILING_MS)
 
     const swaps = await this.prisma.swap.findMany({
       where: {
         status: 'SUCCESS',
         createdAt: { gt: registeredSince },
         AND: [
-          { OR: [{ settledAt: { gt: since } }, { settledAt: null, createdAt: { gt: since } }] },
+          settledSince(deadline),
           {
             OR: [
               { sellAssetUsd: null },
