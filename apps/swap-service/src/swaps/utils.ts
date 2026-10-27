@@ -18,9 +18,9 @@ import {
   DEPOSIT_WINDOW_MS,
   PENDING_TIMEOUT_MS,
   RESOLUTION_DEADLINE_MS,
+  SETTLED_STATUSES,
   UNRESOLVED_ATTRIBUTION_PREFIX,
 } from './constants'
-import { isSettledStatus } from './status'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -87,7 +87,7 @@ export const POLL_INTERVAL_CEILING_MS = 10 * MINUTE_MS
 export const pollIntervalMs = (ageMs: number): number =>
   POLL_SCHEDULE.find(([below]) => ageMs < below)?.[1] ?? POLL_INTERVAL_CEILING_MS
 
-export { isSettledStatus }
+export const isSettledStatus = (status: string): boolean => SETTLED_STATUSES.includes(status)
 
 // When a swap's outcome was decided; rows settled before settledAt existed fall back to registration
 export const settlementTime = (swap: { settledAt: Date | null; createdAt: Date }): Date =>

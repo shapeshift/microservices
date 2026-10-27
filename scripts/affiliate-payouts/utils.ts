@@ -3,10 +3,10 @@ import { getAddress, isAddress, zeroAddress } from 'viem'
 
 import {
   ABANDONED_STATUS_PREFIX,
+  SETTLED_STATUSES,
   UNRESOLVED_ATTRIBUTION_PREFIX,
   VERIFICATION_TIMEOUT_PREFIX,
 } from '../../apps/swap-service/src/swaps/constants'
-import { isSettledStatus } from '../../apps/swap-service/src/swaps/status'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
@@ -255,7 +255,7 @@ export function findUnsettled(rows: PrismaSwap[]): UnsettledSwap[] {
     if (!row.partnerCode) return []
 
     const stages: UnsettledSwap['stages'] = []
-    if (!isSettledStatus(row.status)) stages.push('status')
+    if (!SETTLED_STATUSES.includes(row.status)) stages.push('status')
     if (row.verificationStatus === 'PENDING') stages.push('verification')
     if (row.attributionStatus === 'PENDING') stages.push('attribution')
 
