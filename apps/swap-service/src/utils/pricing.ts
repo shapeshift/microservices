@@ -4,6 +4,8 @@ import axios from 'axios'
 import { adapters } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
+import { DAY_MS, HOUR_MS } from '../swaps/constants'
+
 const logger = new Logger('Pricing')
 
 const priceCache = new Map<string, number>()
@@ -50,10 +52,8 @@ type CoinGeckoMarketChart = {
   prices: [number, number][]
 }
 
-const HOUR_MS = 60 * 60 * 1000
-
 // widened only when the narrow window holds no points, so a swap is never priced off a distant day
-const HISTORICAL_WINDOWS_MS = [HOUR_MS, 24 * HOUR_MS]
+const HISTORICAL_WINDOWS_MS = [HOUR_MS, DAY_MS]
 
 // The price nearest a past instant, so a retried price matches when the swap happened
 export async function getAssetPriceUsdAt(assetId: string, at: Date): Promise<number | null> {

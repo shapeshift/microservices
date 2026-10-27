@@ -449,14 +449,18 @@ describe('findDeadlineResolved', () => {
       ...settled,
       verificationStatus: 'FAILED',
       isAffiliateVerified: false,
-      affiliateVerificationDetails: { hasAffiliate: false, reason: 'timeout: No request data returned from Relay API' },
+      affiliateVerificationDetails: {
+        hasAffiliate: false,
+        reason: 'No request data returned from Relay API',
+        resolvedBy: 'deadline',
+      },
       attributionStatus: 'REJECTED',
-      attributionDetails: { checked: false, reason: 'unresolved:error' },
+      attributionDetails: { checked: false, reason: 'error', resolvedBy: 'deadline' },
     })
 
     expect(findDeadlineResolved([row]).map((d) => [d.stage, d.reason])).toEqual([
-      ['verification', 'timeout: No request data returned from Relay API'],
-      ['attribution', 'unresolved:error'],
+      ['verification', 'No request data returned from Relay API'],
+      ['attribution', 'error'],
     ])
   })
 

@@ -1,12 +1,7 @@
 import BigNumber from 'bignumber.js'
 import { getAddress, isAddress, zeroAddress } from 'viem'
 
-import {
-  ABANDONED_STATUS_PREFIX,
-  SETTLED_STATUSES,
-  UNRESOLVED_ATTRIBUTION_PREFIX,
-  VERIFICATION_TIMEOUT_PREFIX,
-} from '../../apps/swap-service/src/swaps/constants'
+import { ABANDONED_STATUS_PREFIX, SETTLED_STATUSES } from '../../apps/swap-service/src/swaps/constants'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
@@ -36,6 +31,10 @@ export const USDC_DECIMALS = 6
 function monthLabel(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
+
+type ResolutionDetails = { reason?: string; checked?: boolean; resolvedBy?: 'deadline' } | null
+
+const readDetails = (details: unknown): ResolutionDetails => details as ResolutionDetails
 
 export function resolveWindow(date?: string, now: Date = new Date()): PayoutWindow {
   const { year, monthIndex } = ((): { year: number; monthIndex: number } => {
@@ -128,7 +127,7 @@ export function aggregateByPartner<S>(
         swapId: row.swapId,
         partnerCode,
         status: row.attributionStatus,
-        reason: (row.attributionDetails as { reason?: string } | null)?.reason ?? null,
+        reason: readDetails(row.attributionDetails)?.reason ?? null,
       })
       continue
     }
@@ -204,14 +203,6 @@ export function aggregateByPartner<S>(
   }
 }
 
-// rejections the chain itself answered, as opposed to ones closed for lack of a transaction or an answer
-const EVIDENCED_REJECTIONS = new Set(['tx-not-found', 'quote-postdates-tx'])
-
-const detailReason = (details: unknown): string | null => {
-  const reason = (details as { reason?: unknown } | null)?.reason
-  return typeof reason === 'string' ? reason : null
-}
-
 // Partner swaps a deadline closed out rather than evidence, once per stage, none paid until a person confirms
 export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[] {
   return rows.flatMap((row) => {
@@ -227,22 +218,22 @@ export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[]
 
     const resolved: DeadlineResolvedSwap[] = []
 
-    // a disowned or out-of-order transaction can never be paid; a missing hash may be an undetected deposit
+    const attribution = readDetails(row.attributionDetails)
+    const verification = readDetails(row.affiliateVerificationDetails)
+
+    // a transaction the chain itself ruled out can never be paid; a missing hash may be an undetected deposit
     const abandoned = row.status === 'FAILED' && row.statusMessage?.startsWith(ABANDONED_STATUS_PREFIX)
-    const disowned =
-      row.attributionStatus === 'REJECTED' && EVIDENCED_REJECTIONS.has(detailReason(row.attributionDetails) ?? '')
+    const disowned = row.attributionStatus === 'REJECTED' && attribution?.checked === true
     if (abandoned && !disowned) {
       resolved.push({ ...base, stage: 'status', reason: row.statusMessage ?? '' })
     }
 
-    const verificationReason = detailReason(row.affiliateVerificationDetails)
-    if (row.verificationStatus === 'FAILED' && verificationReason?.startsWith(VERIFICATION_TIMEOUT_PREFIX)) {
-      resolved.push({ ...base, stage: 'verification', reason: verificationReason })
+    if (row.verificationStatus === 'FAILED' && verification?.resolvedBy === 'deadline') {
+      resolved.push({ ...base, stage: 'verification', reason: verification.reason ?? '' })
     }
 
-    const attributionReason = detailReason(row.attributionDetails)
-    if (row.attributionStatus === 'REJECTED' && attributionReason?.startsWith(UNRESOLVED_ATTRIBUTION_PREFIX)) {
-      resolved.push({ ...base, stage: 'attribution', reason: attributionReason })
+    if (row.attributionStatus === 'REJECTED' && attribution?.resolvedBy === 'deadline') {
+      resolved.push({ ...base, stage: 'attribution', reason: attribution.reason ?? '' })
     }
 
     return resolved

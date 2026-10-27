@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
-import { RESOLUTION_DEADLINE_MS } from '../../apps/swap-service/src/swaps/constants'
+import { DAY_MS, RESOLUTION_DEADLINE_MS } from '../../apps/swap-service/src/swaps/constants'
 import {
   calculateFeeForSwap,
   getPartnerFeeUsd,
@@ -29,9 +29,7 @@ if (!databaseUrl) {
 }
 
 // the slowest swap: a deposit settling at the end of its window, then a week to verify, each seen a poll late
-const SETTLE_DAYS = Math.ceil(
-  (stallTimeoutMs(true) + RESOLUTION_DEADLINE_MS + 2 * POLL_INTERVAL_CEILING_MS) / (24 * 60 * 60 * 1000),
-)
+const SETTLE_DAYS = Math.ceil((stallTimeoutMs(true) + RESOLUTION_DEADLINE_MS + 2 * POLL_INTERVAL_CEILING_MS) / DAY_MS)
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter(2, databaseUrl) })
 
@@ -68,7 +66,7 @@ function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
     // grouped so a swapper or chain that keeps timing out reads as a bug rather than a window to tune
     const groups = new Map<string, number>()
     record.deadlineResolved.forEach((d) => {
-      const kind = d.stage === 'attribution' ? d.reason : d.stage === 'status' ? 'abandoned' : 'timeout'
+      const kind = { status: 'abandoned', verification: 'timeout', attribution: `unresolved: ${d.reason}` }[d.stage]
       const key = `${d.stage} | ${d.swapperName} | ${d.chainId ?? 'unknown chain'} | ${kind}`
       groups.set(key, (groups.get(key) ?? 0) + 1)
     })

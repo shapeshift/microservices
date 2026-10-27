@@ -182,7 +182,7 @@ describe('checkSwapStatus', () => {
 
     expect(result.status).toBe('FAILED')
     expect(result.statusMessage).toBe(
-      'Abandoned: unsettled 4d after registration (last swapper status: Waiting for deposit...)',
+      'Abandoned: unsettled 96h after registration (last swapper status: Waiting for deposit...)',
     )
   })
 
@@ -214,20 +214,17 @@ describe('checkSwapStatus', () => {
   })
 })
 
-describe('getPendingTxSwapRefs', () => {
+describe('getPendingTxSwaps', () => {
   it('includes externally paid swaps that have no sell tx hash yet', async () => {
     const { service, findManyCalls } = buildService(row(), undefined)
 
-    await service.getPendingTxSwapRefs()
+    await service.getPendingTxSwaps()
 
     expect(findManyCalls[0]).toEqual({
       where: {
-        OR: [
-          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
-          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: ['Chainflip', 'NEAR Intents'] } },
-        ],
+        status: { in: ['IDLE', 'PENDING'] },
+        OR: [{ sellTxHash: { not: null } }, { swapperName: { in: ['Chainflip', 'NEAR Intents'] } }],
       },
-      select: { swapId: true, createdAt: true },
     })
   })
 })

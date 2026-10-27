@@ -15,11 +15,13 @@ import { getAssetPriceUsd, getAssetPriceUsdAt } from '../utils/pricing'
 
 import {
   ABANDONED_STATUS_PREFIX,
+  DAY_MS,
   DEPOSIT_WINDOW_MS,
+  HOUR_MS,
+  MINUTE_MS,
   PENDING_TIMEOUT_MS,
   RESOLUTION_DEADLINE_MS,
   SETTLED_STATUSES,
-  UNRESOLVED_ATTRIBUTION_PREFIX,
 } from './constants'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
@@ -53,34 +55,32 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
 })
 
 export const stallTimeoutMs = (isExternallyPaid: boolean): number =>
-  isExternallyPaid ? DEPOSIT_WINDOW_MS + PENDING_TIMEOUT_MS : PENDING_TIMEOUT_MS
+  (isExternallyPaid ? DEPOSIT_WINDOW_MS : 0) + PENDING_TIMEOUT_MS
 
 export const resolveStalledSwap = (
   status: SwapStatus,
   createdAt: Date,
   statusMessage: string,
-  timeoutMs: number,
+  isExternallyPaid: boolean,
 ): { status: SwapStatus; statusMessage: string } => {
+  const timeoutMs = stallTimeoutMs(isExternallyPaid)
+
   if (status !== 'PENDING') return { status, statusMessage }
   if (Date.now() - createdAt.getTime() < timeoutMs) return { status, statusMessage }
 
   const last = statusMessage || 'none reported'
-  const hours = timeoutMs / (60 * 60 * 1000)
-  const window = hours >= 48 ? `${hours / 24}d` : `${hours}h`
 
   return {
     status: 'FAILED',
-    statusMessage: `${ABANDONED_STATUS_PREFIX} unsettled ${window} after registration (last swapper status: ${last})`,
+    statusMessage: `${ABANDONED_STATUS_PREFIX} unsettled ${timeoutMs / HOUR_MS}h after registration (last swapper status: ${last})`,
   }
 }
-
-const MINUTE_MS = 60 * 1000
 
 // [age below which the interval applies, interval]: live while someone is likely watching, then backing off
 const POLL_SCHEDULE: [number, number][] = [
   [10 * MINUTE_MS, 5 * 1000],
-  [60 * MINUTE_MS, 30 * 1000],
-  [24 * 60 * MINUTE_MS, 2 * MINUTE_MS],
+  [HOUR_MS, 30 * 1000],
+  [DAY_MS, 2 * MINUTE_MS],
 ]
 export const POLL_INTERVAL_CEILING_MS = 10 * MINUTE_MS
 
@@ -89,27 +89,17 @@ export const pollIntervalMs = (ageMs: number): number =>
 
 export const isSettledStatus = (status: string): boolean => SETTLED_STATUSES.includes(status)
 
-// When a swap's outcome was decided; rows settled before settledAt existed fall back to registration
-export const settlementTime = (swap: { settledAt: Date | null; createdAt: Date }): Date =>
-  swap.settledAt ?? swap.createdAt
+export const resolutionCutoff = (): Date => new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+
+// a settled stage its outside source still can't answer for is closed out once this passes
+export const isPastResolutionDeadline = (swap: { settledAt: Date | null }): boolean =>
+  !!swap.settledAt && swap.settledAt < resolutionCutoff()
 
 export const resolveAttributionFromChain = (
   lookup: BlockTimeLookup,
-  quotedAt: Date | null,
-  swap: { status: SwapStatus; createdAt: Date; settledAt: Date | null },
+  quotedAt: Date,
+  swap: { status: SwapStatus; createdAt: Date },
 ): AttributionVerdict => {
-  // a settled swap the chain can't answer for is closed out unchecked at the deadline
-  const settled = isSettledStatus(swap.status)
-  const expired = Date.now() - settlementTime(swap).getTime() > RESOLUTION_DEADLINE_MS
-
-  if (!quotedAt) {
-    if (settled && expired) {
-      return { status: 'REJECTED', details: { checked: false, reason: `${UNRESOLVED_ATTRIBUTION_PREFIX}no-quoted-at` } }
-    }
-
-    return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
-  }
-
   if ('unavailable' in lookup) {
     // rejection cannot be walked back, and a node briefly behind also reports not-found, so this waits
     // until the swap is both abandoned and old enough that a real transaction would have been indexed
@@ -117,13 +107,6 @@ export const resolveAttributionFromChain = (
 
     if (lookup.unavailable === 'not-found' && abandoned) {
       return { status: 'REJECTED', details: { checked: true, reason: 'tx-not-found' } }
-    }
-
-    if (settled && expired) {
-      return {
-        status: 'REJECTED',
-        details: { checked: false, reason: `${UNRESOLVED_ATTRIBUTION_PREFIX}${lookup.unavailable}` },
-      }
     }
 
     return { status: 'PENDING', details: { checked: false, reason: lookup.unavailable } }

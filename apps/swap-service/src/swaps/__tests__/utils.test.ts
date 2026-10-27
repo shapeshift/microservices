@@ -2,7 +2,6 @@ import { Logger } from '@nestjs/common'
 
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
-import { PENDING_TIMEOUT_MS } from '../constants'
 import type { Swap } from '../types'
 import {
   calculateFeeForSwap,
@@ -146,7 +145,7 @@ describe('resolveStalledSwap', () => {
   const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
 
   it('fails a swap the swapper still cannot settle past the timeout', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', false)).toEqual({
       status: 'FAILED',
       statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: waiting)',
     })
@@ -154,21 +153,21 @@ describe('resolveStalledSwap', () => {
 
   // an unmined source tx leaves the swapper with nothing to report
   it('records why it failed when the swapper reported no status', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, '', PENDING_TIMEOUT_MS).statusMessage).toBe(
+    expect(resolveStalledSwap('PENDING', longAgo, '', false).statusMessage).toBe(
       'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
     )
   })
 
   it('leaves a swap pending inside the timeout', () => {
-    expect(resolveStalledSwap('PENDING', justNow, 'waiting', PENDING_TIMEOUT_MS)).toEqual({
+    expect(resolveStalledSwap('PENDING', justNow, 'waiting', false)).toEqual({
       status: 'PENDING',
       statusMessage: 'waiting',
     })
   })
 
   it('never overrides a terminal status, however old the swap', () => {
-    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', PENDING_TIMEOUT_MS).status).toBe('SUCCESS')
-    expect(resolveStalledSwap('FAILED', longAgo, 'reverted', PENDING_TIMEOUT_MS).status).toBe('FAILED')
+    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', false).status).toBe('SUCCESS')
+    expect(resolveStalledSwap('FAILED', longAgo, 'reverted', false).status).toBe('FAILED')
   })
 })
 
@@ -244,72 +243,6 @@ describe('resolveAttributionFromChain', () => {
   // a failed swap whose transaction is real is still attributable, it simply cannot be paid
   it('resolves a failed swap normally when its transaction exists', () => {
     expect(resolveAttributionFromChain(found, at(-60_000), abandoned).status).toBe('ACCEPTED')
-  })
-
-  it.each([
-    ['a successful swap on an unsupported chain', 'SUCCESS', { unavailable: 'unsupported' } as const],
-    ['a failed swap whose lookup keeps failing', 'FAILED', { unavailable: 'error' } as const],
-  ])('rejects %s once the deadline passes', (_label, status, lookup) => {
-    const expired = {
-      status: status as 'SUCCESS' | 'FAILED',
-      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-      settledAt: null,
-    }
-
-    expect(resolveAttributionFromChain(lookup, at(-60_000), expired)).toEqual({
-      status: 'REJECTED',
-      details: { checked: false, reason: `unresolved:${lookup.unavailable}` },
-    })
-  })
-
-  it('holds a settled swap inside the deadline', () => {
-    const recent = {
-      status: 'SUCCESS' as const,
-      createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
-      settledAt: null,
-    }
-
-    expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), recent).status).toBe('PENDING')
-  })
-
-  it('counts the deadline from settlement, not registration', () => {
-    const lateSettled = {
-      status: 'SUCCESS' as const,
-      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-      settledAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
-    }
-
-    expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), lateSettled).status).toBe('PENDING')
-  })
-
-  it('holds a swap that has not settled, however old', () => {
-    const stuck = {
-      status: 'PENDING' as const,
-      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-      settledAt: null,
-    }
-
-    expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), stuck).status).toBe('PENDING')
-  })
-
-  it('rejects a settled row with no quote time once the deadline passes', () => {
-    const expired = {
-      status: 'SUCCESS' as const,
-      createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-      settledAt: null,
-    }
-
-    expect(resolveAttributionFromChain(found, null, expired)).toEqual({
-      status: 'REJECTED',
-      details: { checked: false, reason: 'unresolved:no-quoted-at' },
-    })
-  })
-
-  it('holds a row with no quote time, which cannot be checked at all', () => {
-    expect(resolveAttributionFromChain(found, null, live)).toMatchObject({
-      status: 'PENDING',
-      details: { checked: false, reason: 'no-quoted-at' },
-    })
   })
 })
 

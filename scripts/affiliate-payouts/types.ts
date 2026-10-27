@@ -76,11 +76,13 @@ export type UnresolvedFeeSwap = {
   partnerCode: string
 }
 
+export type ResolutionStage = 'status' | 'verification' | 'attribution'
+
 // A partner swap whose outcome a deadline decided rather than evidence, so a person should confirm it
 export type DeadlineResolvedSwap = {
   swapId: string
   partnerCode: string
-  stage: 'status' | 'verification' | 'attribution'
+  stage: ResolutionStage
   reason: string
   swapperName: string
   chainId: string | null
@@ -91,7 +93,7 @@ export type DeadlineResolvedSwap = {
 export type UnsettledSwap = {
   swapId: string
   partnerCode: string
-  stages: ('status' | 'verification' | 'attribution')[]
+  stages: ResolutionStage[]
 }
 
 export type AggregateResult = {

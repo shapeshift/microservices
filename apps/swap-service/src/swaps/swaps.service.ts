@@ -31,14 +31,13 @@ import { SwapVerificationService } from '../verification/swap-verification.servi
 import {
   ABANDON_BATCH_SIZE,
   ABANDONED_STATUS_PREFIX,
+  ACTIVE_STATUSES,
   ATTRIBUTION_BATCH_SIZE,
   ATTRIBUTION_DEADLINE_BATCH_SIZE,
+  HOUR_MS,
   MISSING_PRICE_BATCH_SIZE,
   PENDING_TIMEOUT_MS,
   REFERRER_FEE_RATE,
-  RESOLUTION_DEADLINE_MS,
-  SETTLED_STATUSES,
-  VERIFICATION_TIMEOUT_PREFIX,
 } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
@@ -59,12 +58,13 @@ import {
   fetchUsdPrices,
   getExternalPaymentSwappers,
   isExternallyPaid,
+  isPastResolutionDeadline,
   isSettledStatus,
   POLL_INTERVAL_CEILING_MS,
+  resolutionCutoff,
   resolveAttributionFromChain,
   resolveMissingPrices,
   resolveStalledSwap,
-  settlementTime,
   stallTimeoutMs,
   toQuotedAt,
   toSwap,
@@ -72,23 +72,6 @@ import {
 } from './utils'
 
 const logger = new Logger('SwapsService')
-
-const pendingTxWhere = (): Prisma.SwapWhereInput => ({
-  OR: [
-    { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
-    { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
-  ],
-})
-
-// rows settled before settledAt existed are judged by registration time instead
-const settledBefore = (date: Date): Prisma.SwapWhereInput => ({
-  status: { in: SETTLED_STATUSES },
-  OR: [{ settledAt: { lt: date } }, { settledAt: null, createdAt: { lt: date } }],
-})
-
-const settledSince = (date: Date): Prisma.SwapWhereInput => ({
-  OR: [{ settledAt: { gt: date } }, { settledAt: null, createdAt: { gt: date } }],
-})
 
 @Injectable()
 export class SwapsService {
@@ -340,16 +323,13 @@ export class SwapsService {
   }
 
   // Externally paid swaps are tracked from registration, before any deposit hash is known
-  // Only what's needed to decide which swaps are due, so the pending set isn't loaded whole every tick
-  async getPendingTxSwapRefs(): Promise<{ swapId: string; createdAt: Date }[]> {
-    return this.prisma.swap.findMany({ where: pendingTxWhere(), select: { swapId: true, createdAt: true } })
-  }
-
-  // re-checks pending, as a swap may have settled since its ref was read
-  async getPendingTxSwapsByIds(swapIds: string[]): Promise<Swap[]> {
-    if (swapIds.length === 0) return []
-
-    const swaps = await this.prisma.swap.findMany({ where: { ...pendingTxWhere(), swapId: { in: swapIds } } })
+  async getPendingTxSwaps(): Promise<Swap[]> {
+    const swaps = await this.prisma.swap.findMany({
+      where: {
+        status: { in: ACTIVE_STATUSES },
+        OR: [{ sellTxHash: { not: null } }, { swapperName: { in: getExternalPaymentSwappers() } }],
+      },
+    })
 
     return swaps.map(toSwap)
   }
@@ -357,7 +337,7 @@ export class SwapsService {
   // Never polled without a transaction, so closed here; no push, since nothing happened
   async abandonUnbroadcastSwaps(): Promise<Swap[]> {
     const where: Prisma.SwapWhereInput = {
-      status: { in: ['IDLE', 'PENDING'] },
+      status: { in: ACTIVE_STATUSES },
       sellTxHash: null,
       swapperName: { notIn: getExternalPaymentSwappers() },
       createdAt: { lt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
@@ -366,27 +346,21 @@ export class SwapsService {
     const stalled = await this.prisma.swap.findMany({ where, select: { swapId: true }, take: ABANDON_BATCH_SIZE })
     if (stalled.length === 0) return []
 
-    const swapIds = stalled.map(({ swapId }) => swapId)
-
     // re-applying the guard leaves alone a row that moved on since the select
-    await this.prisma.swap.updateMany({
-      where: { ...where, swapId: { in: swapIds } },
+    const abandoned = await this.prisma.swap.updateManyAndReturn({
+      where: { ...where, swapId: { in: stalled.map(({ swapId }) => swapId) } },
       data: {
         status: 'FAILED',
-        statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within 24h of registration`,
+        statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within ${PENDING_TIMEOUT_MS / HOUR_MS}h of registration`,
         settledAt: new Date(),
       },
     })
-
-    const abandoned = await this.prisma.swap.findMany({ where: { swapId: { in: swapIds }, status: 'FAILED' } })
 
     return abandoned.map(toSwap)
   }
 
   // claims past their deadline get their own slots, so a backlog of newer ones can't hold them beyond it
   async getPendingAttributionSwaps(): Promise<Swap[]> {
-    const deadline = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
-
     const [newest, pastDeadline] = await Promise.all([
       this.prisma.swap.findMany({
         where: {
@@ -400,7 +374,7 @@ export class SwapsService {
         take: ATTRIBUTION_BATCH_SIZE,
       }),
       this.prisma.swap.findMany({
-        where: { attributionStatus: 'PENDING', ...settledBefore(deadline) },
+        where: { attributionStatus: 'PENDING', settledAt: { lt: resolutionCutoff() } },
         orderBy: { createdAt: 'asc' },
         take: ATTRIBUTION_DEADLINE_BATCH_SIZE,
       }),
@@ -446,16 +420,17 @@ export class SwapsService {
       return { status: 'REJECTED', details: { checked: false, reason: 'no-tx' } }
     }
 
-    // with no quote time there is nothing to check, so the lookup is skipped
-    const lookup = swap.quotedAt
-      ? await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
-      : ({ unavailable: 'unsupported' } as const)
+    const verdict: AttributionVerdict = swap.quotedAt
+      ? resolveAttributionFromChain(
+          await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash),
+          swap.quotedAt,
+          { status: swap.status as SwapStatus, createdAt: swap.createdAt },
+        )
+      : { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
 
-    return resolveAttributionFromChain(lookup, swap.quotedAt, {
-      status: swap.status as SwapStatus,
-      createdAt: swap.createdAt,
-      settledAt: swap.settledAt,
-    })
+    if (verdict.status !== 'PENDING' || !isPastResolutionDeadline(swap)) return verdict
+
+    return { status: 'REJECTED', details: { ...verdict.details, resolvedBy: 'deadline' } }
   }
 
   // a pre-EIP-155 transaction carries the same hash on every EVM chain, so a quote only contends with
@@ -509,23 +484,19 @@ export class SwapsService {
 
   // A price still missing a week after settling stops retrying and is left to the payout report
   async getMissingPriceSwaps(): Promise<Swap[]> {
-    const deadline = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+    const cutoff = resolutionCutoff()
     // a swap settles at most a deposit window after registering, which bounds the scan
-    const registeredSince = new Date(deadline.getTime() - stallTimeoutMs(true) - POLL_INTERVAL_CEILING_MS)
+    const registeredSince = new Date(cutoff.getTime() - stallTimeoutMs(true) - POLL_INTERVAL_CEILING_MS)
 
     const swaps = await this.prisma.swap.findMany({
       where: {
         status: 'SUCCESS',
         createdAt: { gt: registeredSince },
-        AND: [
-          settledSince(deadline),
-          {
-            OR: [
-              { sellAssetUsd: null },
-              { buyAssetUsd: null },
-              { affiliateAssetUsd: null, affiliateFeeAssetId: { not: null } },
-            ],
-          },
+        settledAt: { gt: cutoff },
+        OR: [
+          { sellAssetUsd: null },
+          { buyAssetUsd: null },
+          { affiliateAssetUsd: null, affiliateFeeAssetId: { not: null } },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -697,7 +668,7 @@ export class SwapsService {
           swapStatus,
           swap.createdAt,
           typeof statusMessage === 'string' ? statusMessage : '',
-          stallTimeoutMs(isExternal),
+          isExternal,
         ),
         sellTxHash,
         buyTxHash,
@@ -708,12 +679,7 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return resolveStalledSwap(
-        'PENDING',
-        swap.createdAt,
-        `Error polling status: ${reason}`,
-        stallTimeoutMs(isExternal),
-      )
+      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`, isExternal)
     }
   }
 
@@ -734,18 +700,18 @@ export class SwapsService {
     const verificationResult = await this.swapVerificationService.verifySwap(swap)
 
     if (verificationResult.verificationStatus === 'PENDING') {
-      if (Date.now() - settlementTime(swap).getTime() <= RESOLUTION_DEADLINE_MS) return swap
+      if (!isPastResolutionDeadline(swap)) return swap
 
-      const reason = `${VERIFICATION_TIMEOUT_PREFIX} ${verificationResult.noAffiliateReason ?? 'no result'}`
+      const affiliateVerificationDetails: AffiliateVerificationDetails = {
+        hasAffiliate: false,
+        reason: verificationResult.noAffiliateReason ?? 'no result',
+        resolvedBy: 'deadline',
+      }
 
       return toSwap(
         await this.prisma.swap.update({
           where: { swapId: swap.swapId },
-          data: {
-            verificationStatus: 'FAILED',
-            isAffiliateVerified: false,
-            affiliateVerificationDetails: { hasAffiliate: false, reason } satisfies AffiliateVerificationDetails,
-          },
+          data: { verificationStatus: 'FAILED', isAffiliateVerified: false, affiliateVerificationDetails },
         }),
       )
     }

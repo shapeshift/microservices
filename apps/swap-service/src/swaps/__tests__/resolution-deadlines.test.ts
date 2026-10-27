@@ -79,7 +79,7 @@ describe('verification deadline', () => {
   it('keeps retrying a verifier that cannot answer yet', async () => {
     const { service, updates } = buildService(pending)
 
-    await service.verifySwap(swapOf({ createdAt: new Date(Date.now() - 6 * DAY) }))
+    await service.verifySwap(swapOf({ settledAt: new Date(Date.now() - 6 * DAY) }))
 
     expect(updates).toEqual([])
   })
@@ -87,7 +87,7 @@ describe('verification deadline', () => {
   it('fails verification once the deadline passes, recording why', async () => {
     const { service, updates } = buildService(pending)
 
-    await service.verifySwap(swapOf({ createdAt: new Date(Date.now() - 8 * DAY) }))
+    await service.verifySwap(swapOf({ settledAt: new Date(Date.now() - 8 * DAY) }))
 
     expect(updates).toEqual([
       {
@@ -97,7 +97,8 @@ describe('verification deadline', () => {
           isAffiliateVerified: false,
           affiliateVerificationDetails: {
             hasAffiliate: false,
-            reason: 'timeout: No request data returned from Relay API',
+            reason: 'No request data returned from Relay API',
+            resolvedBy: 'deadline',
           },
         },
       },
@@ -112,6 +113,39 @@ describe('verification deadline', () => {
     )
 
     expect(updates).toEqual([])
+  })
+})
+
+describe('attribution deadline', () => {
+  it('closes out a settled claim the chain still cannot answer for once the deadline passes', async () => {
+    const { service, updates } = buildService()
+
+    await service.resolveAttribution(swapOf({ settledAt: new Date(Date.now() - 8 * DAY) }))
+
+    expect(updates[0].data).toMatchObject({
+      attributionStatus: 'REJECTED',
+      attributionDetails: { checked: false, reason: 'error', resolvedBy: 'deadline' },
+    })
+  })
+
+  it('keeps a settled claim pending inside the deadline', async () => {
+    const { service, updates } = buildService()
+
+    await service.resolveAttribution(swapOf({ settledAt: new Date(Date.now() - 6 * DAY) }))
+
+    expect(updates[0].data).toMatchObject({ attributionStatus: 'PENDING' })
+  })
+
+  it('closes out a claim with no quote time at the deadline without a chain lookup', async () => {
+    const { service, updates, lookups } = buildService()
+
+    await service.resolveAttribution(swapOf({ quotedAt: null, settledAt: new Date(Date.now() - 8 * DAY) }))
+
+    expect(lookups).toEqual([])
+    expect(updates[0].data).toMatchObject({
+      attributionStatus: 'REJECTED',
+      attributionDetails: { checked: false, reason: 'no-quoted-at', resolvedBy: 'deadline' },
+    })
   })
 })
 
@@ -213,11 +247,9 @@ describe('polling queries and writes', () => {
         { sellTxHash: null, status: 'FAILED' },
       ],
     })
-    expect(queries.asc.where).toMatchObject({ attributionStatus: 'PENDING', status: { in: ['SUCCESS', 'FAILED'] } })
     expect(queries.asc.where).not.toHaveProperty('sellTxHash')
-    const [settled, unsettled] = queries.asc.where.OR as [{ settledAt: { lt: Date } }, { createdAt: { lt: Date } }]
-    expect(Date.now() - settled.settledAt.lt.getTime()).toBeGreaterThanOrEqual(7 * DAY - 1000)
-    expect(Date.now() - unsettled.createdAt.lt.getTime()).toBeGreaterThanOrEqual(7 * DAY - 1000)
+    const { settledAt } = queries.asc.where as { settledAt: { lt: Date } }
+    expect(Date.now() - settledAt.lt.getTime()).toBeGreaterThanOrEqual(7 * DAY - 1000)
   })
 
   it('abandons non-deposit swaps that never reported a transaction for 24h', async () => {
@@ -226,13 +258,12 @@ describe('polling queries and writes', () => {
     const service = build({
       findMany: (args: { where: Record<string, unknown> }) => {
         finds.push(args.where)
-        return Promise.resolve(
-          finds.length === 1 ? [{ swapId: 'stalled-1' }, { swapId: 'stalled-2' }] : [{ swapId: 'stalled-1' }],
-        )
+        return Promise.resolve([{ swapId: 'stalled-1' }, { swapId: 'stalled-2' }])
       },
-      updateMany: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      // a row that moved on since the select fails the re-applied guard, so only one comes back
+      updateManyAndReturn: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         write = args
-        return Promise.resolve({ count: 1 })
+        return Promise.resolve([{ swapId: 'stalled-1' }])
       },
     })
 
@@ -248,7 +279,6 @@ describe('polling queries and writes', () => {
     )
     expect(write?.where).toMatchObject({ ...finds[0], swapId: { in: ['stalled-1', 'stalled-2'] } })
     expect(write?.data).toMatchObject({ status: 'FAILED', settledAt: expect.any(Date) as Date })
-    // the re-read only finds rows the guarded write actually moved
     expect(abandoned.map((swap) => swap.swapId)).toEqual(['stalled-1'])
   })
 
