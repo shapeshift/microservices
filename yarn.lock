@@ -5725,6 +5725,9 @@ __metadata:
 "@shapeshift/prisma@workspace:*, @shapeshift/prisma@workspace:packages/prisma":
   version: 0.0.0-use.local
   resolution: "@shapeshift/prisma@workspace:packages/prisma"
+  dependencies:
+    "@prisma/adapter-pg": "npm:7.10.1"
+    "@prisma/client": "npm:7.10.1"
   languageName: unknown
   linkType: soft
 
@@ -18537,8 +18540,6 @@ __metadata:
     "@nestjs/schematics": "npm:^11.0.0"
     "@nestjs/testing": "npm:^11.0.1"
     "@nestjs/websockets": "npm:^11.1.6"
-    "@prisma/adapter-pg": "npm:7.10.1"
-    "@prisma/client": "npm:7.10.1"
     "@pulumi/kubernetes": "npm:4.23.0"
     "@pulumi/pulumi": "npm:3.160.0"
     "@shapeshiftoss/caip": "npm:8.16.10"

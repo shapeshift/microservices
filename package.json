@@ -54,8 +54,6 @@
     "@nestjs/platform-socket.io": "^11.1.6",
     "@nestjs/schedule": "^6.0.0",
     "@nestjs/websockets": "^11.1.6",
-    "@prisma/adapter-pg": "7.10.1",
-    "@prisma/client": "7.10.1",
     "@pulumi/kubernetes": "4.23.0",
     "@pulumi/pulumi": "3.160.0",
     "@shapeshiftoss/caip": "8.16.10",

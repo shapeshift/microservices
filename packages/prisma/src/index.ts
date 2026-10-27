@@ -2,13 +2,13 @@ import { PrismaPg } from '@prisma/adapter-pg'
 
 export * from './generated/client'
 
-// Each service runs a single replica, so its pool size is its total share of the database's connections
-export const createPrismaAdapter = (max: number, connectionString = process.env.DATABASE_URL) =>
-  new PrismaPg({
+export const createPrismaAdapter = (max: number, connectionString = process.env.DATABASE_URL) => {
+  if (!connectionString) throw new Error('DATABASE_URL is not set')
+
+  return new PrismaPg({
     connectionString,
     max,
-    // bounds both new connections and waiting for a free one; pg waits forever by default
-    connectionTimeoutMillis: 5_000,
-    // matches prisma 6; pg's 10s default churns connections between bursts
+    connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 300_000,
   })
+}
