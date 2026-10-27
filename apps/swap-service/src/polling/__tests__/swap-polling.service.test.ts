@@ -154,6 +154,16 @@ describe('pollPendingTxStatus backoff', () => {
     expect(checkSwapStatus).toHaveBeenCalledTimes(3)
   })
 
+  it('still polls a fresh swap on a tick that lands just short of its interval', async () => {
+    const start = Date.now()
+    const fresh = { ...swap, createdAt: new Date(start) } as Swap
+    const { service, checkSwapStatus } = buildService({ status: 'PENDING', statusMessage: 'Awaiting deposit' }, fresh)
+
+    await pollsAt(service, [start, start + 4_990, start + 9_985])
+
+    expect(checkSwapStatus).toHaveBeenCalledTimes(3)
+  })
+
   it('polls a day-old swap once per ten minutes', async () => {
     const start = Date.now()
     const old = { ...swap, createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap

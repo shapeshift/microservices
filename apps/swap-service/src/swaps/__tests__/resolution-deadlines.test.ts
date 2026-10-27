@@ -213,7 +213,8 @@ describe('polling queries and writes', () => {
         { sellTxHash: null, status: 'FAILED' },
       ],
     })
-    expect(queries.asc.where).toMatchObject({ status: { in: ['SUCCESS', 'FAILED'] }, sellTxHash: { not: null } })
+    expect(queries.asc.where).toMatchObject({ attributionStatus: 'PENDING', status: { in: ['SUCCESS', 'FAILED'] } })
+    expect(queries.asc.where).not.toHaveProperty('sellTxHash')
     const [settled, unsettled] = queries.asc.where.OR as [{ settledAt: { lt: Date } }, { createdAt: { lt: Date } }]
     expect(Date.now() - settled.settledAt.lt.getTime()).toBeGreaterThanOrEqual(7 * DAY - 1000)
     expect(Date.now() - unsettled.createdAt.lt.getTime()).toBeGreaterThanOrEqual(7 * DAY - 1000)

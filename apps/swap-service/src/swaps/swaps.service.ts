@@ -400,7 +400,7 @@ export class SwapsService {
         take: ATTRIBUTION_BATCH_SIZE,
       }),
       this.prisma.swap.findMany({
-        where: { attributionStatus: 'PENDING', sellTxHash: { not: null }, ...settledBefore(deadline) },
+        where: { attributionStatus: 'PENDING', ...settledBefore(deadline) },
         orderBy: { createdAt: 'asc' },
         take: ATTRIBUTION_DEADLINE_BATCH_SIZE,
       }),

@@ -8,6 +8,8 @@ import { pollIntervalMs } from '../swaps/utils'
 import { WebsocketGateway } from '../websocket/websocket.gateway'
 
 const POLL_CONCURRENCY = 10
+// ticks drift by a few ms, so a swap due on every tick isn't skipped when one lands just short of it
+const POLL_TICK_SLACK_MS = 1000
 
 const swapIds = (swaps: Swap[]): string => swaps.map((swap) => swap.swapId).join(', ')
 
@@ -47,7 +49,7 @@ export class SwapPollingService {
 
       const due = pending.filter((ref) => {
         const activeSince = this.lastProgressAt.get(ref.swapId) ?? ref.createdAt.getTime()
-        return now - (this.lastTxPollAt.get(ref.swapId) ?? 0) >= pollIntervalMs(now - activeSince)
+        return now - (this.lastTxPollAt.get(ref.swapId) ?? 0) >= pollIntervalMs(now - activeSince) - POLL_TICK_SLACK_MS
       })
       if (due.length === 0) return
 
