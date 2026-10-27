@@ -165,7 +165,6 @@ describe('checkSwapStatus', () => {
     })
   })
 
-  // a deposit address can stay open for days, so a day without funds is not yet abandonment
   it('holds an externally paid swap inside its deposit window', async () => {
     checkTradeStatus.mockResolvedValue(pending)
     const createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)

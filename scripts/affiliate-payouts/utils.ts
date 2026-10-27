@@ -249,7 +249,7 @@ export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[]
   })
 }
 
-// Partner swaps with a stage still pending, which the deadlines resolve within days of registration
+// Partner swaps with a stage still pending
 export function findUnsettled(rows: PrismaSwap[]): UnsettledSwap[] {
   return rows.flatMap((row) => {
     if (!row.partnerCode) return []

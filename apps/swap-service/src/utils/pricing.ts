@@ -55,7 +55,7 @@ const HOUR_MS = 60 * 60 * 1000
 // widened only when the narrow window holds no points, so a swap is never priced off a distant day
 const HISTORICAL_WINDOWS_MS = [HOUR_MS, 24 * HOUR_MS]
 
-// The spot price nearest a past instant, so a retried price matches when the swap happened
+// The price nearest a past instant, so a retried price matches when the swap happened
 export async function getAssetPriceUsdAt(assetId: string, at: Date): Promise<number | null> {
   const url = adapters.makeCoingeckoAssetUrl(assetId)
   if (!url) {

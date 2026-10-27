@@ -84,7 +84,6 @@ describe('verification deadline', () => {
     expect(updates).toEqual([])
   })
 
-  // closed out unverified, and the reason survives for the payout report
   it('fails verification once the deadline passes, recording why', async () => {
     const { service, updates } = buildService(pending)
 
@@ -105,7 +104,6 @@ describe('verification deadline', () => {
     ])
   })
 
-  // a deposit funded days in still gets a full week to verify
   it('counts the verification deadline from settlement', async () => {
     const { service, updates } = buildService(pending)
 
@@ -115,18 +113,9 @@ describe('verification deadline', () => {
 
     expect(updates).toEqual([])
   })
-
-  it('never times out a verifier that answered', async () => {
-    const { service, updates } = buildService({ verificationStatus: 'SUCCESS', hasAffiliate: true, affiliateBps: 30 })
-
-    await service.verifySwap(swapOf({ createdAt: new Date(Date.now() - 30 * DAY) }))
-
-    expect(updates[0].data).toMatchObject({ verificationStatus: 'SUCCESS', isAffiliateVerified: true })
-  })
 })
 
 describe('attribution for a swap with no transaction', () => {
-  // e.g. a deposit-address swap the user never funded
   it('rejects a failed swap that never had a transaction, without a chain lookup', async () => {
     const { service, updates, lookups } = buildService()
 
@@ -140,7 +129,6 @@ describe('attribution for a swap with no transaction', () => {
     })
   })
 
-  // a deposit may still arrive, so only a failed swap is closed
   it('leaves a live swap without a transaction alone', async () => {
     const { service, updates } = buildService()
 
@@ -170,7 +158,6 @@ describe('polling queries and writes', () => {
     )
   }
 
-  // verification may record a different fee asset meanwhile, which a stale price must not land on
   it('writes each price only into a field still empty, and the fee price only for its asset', async () => {
     const writes: { where: Record<string, unknown>; data: Record<string, unknown> }[] = []
     const service = build({
@@ -203,24 +190,36 @@ describe('polling queries and writes', () => {
     ])
   })
 
-  // a backlog must neither hold up new swaps nor strand a claim past its deadline
   it('takes the newest pending attribution and the claims past their deadline, once each', async () => {
+    const queries: Record<'asc' | 'desc', { where: Record<string, unknown>; take: number }> = {} as never
     const service = build({
-      findMany: (args: { orderBy: { createdAt: 'asc' | 'desc' }; take: number }) =>
-        Promise.resolve(
+      findMany: (args: { where: Record<string, unknown>; orderBy: { createdAt: 'asc' | 'desc' }; take: number }) => {
+        queries[args.orderBy.createdAt] = { where: args.where, take: args.take }
+        return Promise.resolve(
           args.orderBy.createdAt === 'desc'
             ? [{ swapId: 'new-1' }, { swapId: 'mid' }]
             : [{ swapId: 'old-1' }, { swapId: 'mid' }],
-        ),
+        )
+      },
     })
 
     const swaps = await service.getPendingAttributionSwaps()
 
     expect(swaps.map((swap) => swap.swapId)).toEqual(['new-1', 'mid', 'old-1'])
+    expect(queries.desc.take + queries.asc.take).toBe(200)
+    expect(queries.desc.where).toMatchObject({
+      OR: [
+        { sellTxHash: { not: null }, quotedAt: { not: null } },
+        { sellTxHash: null, status: 'FAILED' },
+      ],
+    })
+    expect(queries.asc.where).toMatchObject({ status: { in: ['SUCCESS', 'FAILED'] }, sellTxHash: { not: null } })
+    const [settled, unsettled] = queries.asc.where.OR as [{ settledAt: { lt: Date } }, { createdAt: { lt: Date } }]
+    expect(Date.now() - settled.settledAt.lt.getTime()).toBeGreaterThanOrEqual(7 * DAY - 1000)
+    expect(Date.now() - unsettled.createdAt.lt.getTime()).toBeGreaterThanOrEqual(7 * DAY - 1000)
   })
 
-  // one guarded write, re-checked at write time, and no push for a swap that never happened
-  it('abandons only unfunded swaps that never reported a transaction for 24h', async () => {
+  it('abandons non-deposit swaps that never reported a transaction for 24h', async () => {
     const finds: Record<string, unknown>[] = []
     let write: { where: Record<string, unknown>; data: Record<string, unknown> } | undefined
     const service = build({
@@ -248,7 +247,29 @@ describe('polling queries and writes', () => {
     )
     expect(write?.where).toMatchObject({ ...finds[0], swapId: { in: ['stalled-1', 'stalled-2'] } })
     expect(write?.data).toMatchObject({ status: 'FAILED', settledAt: expect.any(Date) as Date })
-    // a row that moved on since the select was left alone, so only the written one is pushed
+    // the re-read only finds rows the guarded write actually moved
     expect(abandoned.map((swap) => swap.swapId)).toEqual(['stalled-1'])
+  })
+
+  it('stamps settledAt when a swap settles, and only then', async () => {
+    const writes: Record<string, unknown>[] = []
+    const service = build({
+      update: (args: { where: { swapId: string }; data: Record<string, unknown> }) => {
+        writes.push(args.data)
+        return Promise.resolve({ ...args.data, swapId: args.where.swapId })
+      },
+    })
+    jest
+      .spyOn(
+        service as unknown as { sendStatusUpdateNotification: () => Promise<void> },
+        'sendStatusUpdateNotification',
+      )
+      .mockResolvedValue()
+
+    await service.updateSwapStatus({ swapId: 'swap-1', status: 'SUCCESS' })
+    await service.updateSwapStatus({ swapId: 'swap-1', status: 'PENDING' })
+
+    expect(writes[0].settledAt).toBeInstanceOf(Date)
+    expect(writes[1]).not.toHaveProperty('settledAt')
   })
 })

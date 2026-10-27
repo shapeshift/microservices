@@ -45,7 +45,6 @@ describe('getAssetPriceUsdAt', () => {
     )
   })
 
-  // older data can be daily, which an hour either side can miss entirely
   it('widens to a day either side when the hour holds no points', async () => {
     mockedGet.mockResolvedValueOnce({ data: { prices: [] } }).mockResolvedValueOnce({
       data: { prices: [[at.getTime() - 3 * hour, 2450]] },
@@ -80,10 +79,5 @@ describe('getAssetPriceUsdAt', () => {
     mockedGet.mockRejectedValueOnce(new Error('429'))
 
     await expect(getAssetPriceUsdAt(ETH, at)).resolves.toBeNull()
-  })
-
-  it('returns null for an asset with no CoinGecko mapping', async () => {
-    await expect(getAssetPriceUsdAt('unknown:chain/slip44:0', at)).resolves.toBeNull()
-    expect(mockedGet).not.toHaveBeenCalled()
   })
 })

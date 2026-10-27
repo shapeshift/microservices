@@ -23,7 +23,7 @@ export class SwapPollingService {
 
   // in memory is enough with one replica: a restart only costs each swap one early poll
   private readonly lastTxPollAt = new Map<string, number>()
-  // the last status change or newly reported hash, so a deposit funded days in is polled live again
+  // last status change or new hash, which restarts the backoff
   private readonly lastProgressAt = new Map<string, number>()
 
   constructor(
@@ -40,7 +40,6 @@ export class SwapPollingService {
       const pending = await this.swapsService.getPendingTxSwapRefs()
       const now = Date.now()
 
-      // swaps no longer pending are forgotten, so the maps only ever hold the pending set
       const pendingIds = new Set(pending.map((ref) => ref.swapId))
       for (const map of [this.lastTxPollAt, this.lastProgressAt]) {
         for (const swapId of map.keys()) if (!pendingIds.has(swapId)) map.delete(swapId)
@@ -126,7 +125,7 @@ export class SwapPollingService {
     }
   }
 
-  // hourly is plenty for a price that failed once, and keeps a price that never resolves off the shared quota
+  // hourly keeps a price that never resolves off the shared CoinGecko quota
   @Cron(CronExpression.EVERY_HOUR)
   async pollMissingPrices() {
     if (this.isPollingPrices) return
@@ -160,7 +159,7 @@ export class SwapPollingService {
     try {
       const statusUpdate = await this.swapsService.checkSwapStatus(swap.swapId)
 
-      // only real milestones count; a message can change every poll (errors, confirmation counts)
+      // messages can change every poll (errors, confirmation counts), so only these count as progress
       const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
       const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
 

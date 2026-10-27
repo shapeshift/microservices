@@ -23,9 +23,10 @@ const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap
   const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
   const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
   const checkSwapStatus = jest.fn().mockResolvedValue(statusUpdate)
+  const getPendingTxSwapsByIds = jest.fn().mockResolvedValue([polled])
   const swapsService = {
     getPendingTxSwapRefs: jest.fn().mockResolvedValue([{ swapId: polled.swapId, createdAt: polled.createdAt }]),
-    getPendingTxSwapsByIds: jest.fn().mockResolvedValue([polled]),
+    getPendingTxSwapsByIds,
     checkSwapStatus,
     updateSwapStatus,
     updateSwapTxHashes,
@@ -35,6 +36,7 @@ const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap
 
   return {
     checkSwapStatus,
+    getPendingTxSwapsByIds,
     service: new SwapPollingService(swapsService, websocketGateway),
     updateSwapStatus,
     updateSwapTxHashes,
@@ -142,7 +144,6 @@ describe('pollPendingTxStatus backoff', () => {
     }
   }
 
-  // a fresh swap is polled live while someone is likely watching it
   it('polls a fresh swap on every tick', async () => {
     const start = Date.now()
     const fresh = { ...swap, createdAt: new Date(start) } as Swap
@@ -153,7 +154,6 @@ describe('pollPendingTxStatus backoff', () => {
     expect(checkSwapStatus).toHaveBeenCalledTimes(3)
   })
 
-  // an unfunded deposit quote waits days, so it is checked every ten minutes rather than every tick
   it('polls a day-old swap once per ten minutes', async () => {
     const start = Date.now()
     const old = { ...swap, createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap
@@ -164,21 +164,34 @@ describe('pollPendingTxStatus backoff', () => {
     expect(checkSwapStatus).toHaveBeenCalledTimes(2)
   })
 
-  // a deposit funded days in is likely being watched again, so it goes back to live polling
   it('polls a day-old swap live again once its deposit is detected', async () => {
     const start = Date.now()
     const old = { ...swap, createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap
-    const { service, checkSwapStatus } = buildService(
+    const { service, checkSwapStatus, getPendingTxSwapsByIds } = buildService(
       { status: 'PENDING', statusMessage: 'Awaiting deposit', sellTxHash: '0xdeposit' },
       old,
     )
+    getPendingTxSwapsByIds.mockResolvedValueOnce([old]).mockResolvedValue([{ ...old, sellTxHash: '0xdeposit' }])
 
     await pollsAt(service, [start, start + 5_000, start + 10_000])
 
     expect(checkSwapStatus).toHaveBeenCalledTimes(3)
   })
 
-  // a message can change every poll (errors, confirmation counts), so it alone is not progress
+  it('polls a day-old swap live again once its status changes', async () => {
+    const start = Date.now()
+    const idle = { ...swap, status: 'IDLE', createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap
+    const { service, checkSwapStatus, getPendingTxSwapsByIds } = buildService(
+      { status: 'PENDING', statusMessage: 'Awaiting deposit' },
+      idle,
+    )
+    getPendingTxSwapsByIds.mockResolvedValueOnce([idle]).mockResolvedValue([{ ...idle, status: 'PENDING' }])
+
+    await pollsAt(service, [start, start + 5_000, start + 10_000])
+
+    expect(checkSwapStatus).toHaveBeenCalledTimes(3)
+  })
+
   it('keeps backing off a swap whose message changes but nothing else does', async () => {
     const start = Date.now()
     const old = { ...swap, createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap

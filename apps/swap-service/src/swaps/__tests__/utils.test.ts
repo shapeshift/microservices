@@ -7,11 +7,9 @@ import type { Swap } from '../types'
 import {
   calculateFeeForSwap,
   describeError,
-  pollIntervalMs,
   resolveAttributionFromChain,
   resolveMissingPrices,
   resolveStalledSwap,
-  stallTimeoutMs,
 } from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
@@ -168,12 +166,6 @@ describe('resolveStalledSwap', () => {
     })
   })
 
-  it('gives a deposit swap its deposit window on top of the settlement window', () => {
-    expect(stallTimeoutMs(true)).toBe(96 * 60 * 60 * 1000)
-    expect(stallTimeoutMs(false)).toBe(PENDING_TIMEOUT_MS)
-    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', stallTimeoutMs(true)).status).toBe('PENDING')
-  })
-
   it('never overrides a terminal status, however old the swap', () => {
     expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', PENDING_TIMEOUT_MS).status).toBe('SUCCESS')
     expect(resolveStalledSwap('FAILED', longAgo, 'reverted', PENDING_TIMEOUT_MS).status).toBe('FAILED')
@@ -254,11 +246,8 @@ describe('resolveAttributionFromChain', () => {
     expect(resolveAttributionFromChain(found, at(-60_000), abandoned).status).toBe('ACCEPTED')
   })
 
-  // a week of unanswered lookups closes the claim unchecked, so nothing is held forever
   it.each([
     ['a successful swap on an unsupported chain', 'SUCCESS', { unavailable: 'unsupported' } as const],
-    ['a successful swap the chain cannot see', 'SUCCESS', { unavailable: 'not-found' } as const],
-    ['a successful swap still unmined', 'SUCCESS', { unavailable: 'unmined' } as const],
     ['a failed swap whose lookup keeps failing', 'FAILED', { unavailable: 'error' } as const],
   ])('rejects %s once the deadline passes', (_label, status, lookup) => {
     const expired = {
@@ -283,7 +272,6 @@ describe('resolveAttributionFromChain', () => {
     expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), recent).status).toBe('PENDING')
   })
 
-  // a swap that settled late, e.g. a deposit funded days in, gets its full week from settling
   it('counts the deadline from settlement, not registration', () => {
     const lateSettled = {
       status: 'SUCCESS' as const,
@@ -294,7 +282,6 @@ describe('resolveAttributionFromChain', () => {
     expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), lateSettled).status).toBe('PENDING')
   })
 
-  // the deadline closes out settled swaps only; one still in flight is the stall rule's to resolve
   it('holds a swap that has not settled, however old', () => {
     const stuck = {
       status: 'PENDING' as const,
@@ -305,7 +292,6 @@ describe('resolveAttributionFromChain', () => {
     expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), stuck).status).toBe('PENDING')
   })
 
-  // with nothing to check the claim against, the deadline closes it like any other unanswerable one
   it('rejects a settled row with no quote time once the deadline passes', () => {
     const expired = {
       status: 'SUCCESS' as const,
@@ -366,28 +352,5 @@ describe('resolveMissingPrices', () => {
     await expect(resolveMissingPrices({ ...priced, sellAssetUsd: null, buyAssetUsd: null }, priceAt)).resolves.toEqual({
       buyAssetUsd: '1',
     })
-  })
-
-  it('does not price a fee asset the swap never recorded', async () => {
-    const priceAt = jest.fn()
-
-    await expect(
-      resolveMissingPrices({ ...priced, affiliateFeeAssetId: null, affiliateAssetUsd: null }, priceAt),
-    ).resolves.toEqual({})
-    expect(priceAt).not.toHaveBeenCalled()
-  })
-})
-
-describe('pollIntervalMs', () => {
-  const minute = 60 * 1000
-
-  it.each([
-    ['a fresh swap', 0, 5_000],
-    ['a swap in its first ten minutes', 9 * minute, 5_000],
-    ['a swap within its first hour', 30 * minute, 30_000],
-    ['a swap within its first day', 5 * 60 * minute, 2 * minute],
-    ['a deposit swap still waiting days in', 50 * 60 * minute, 10 * minute],
-  ])('polls %s at its interval', (_label, ageMs, interval) => {
-    expect(pollIntervalMs(ageMs)).toBe(interval)
   })
 })

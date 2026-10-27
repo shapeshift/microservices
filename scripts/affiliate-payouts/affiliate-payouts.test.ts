@@ -395,7 +395,6 @@ describe('findDeadlineResolved', () => {
     expect(findDeadlineResolved([makeRow(settled)])).toEqual([])
   })
 
-  // the swap may have settled after all, so it is the case most worth a look
   it('flags an abandoned swap whose transaction was not disowned', () => {
     const row = makeRow({
       ...settled,
@@ -416,7 +415,6 @@ describe('findDeadlineResolved', () => {
     ])
   })
 
-  // a transaction the chain never saw, or one quoted after it was mined, can never be paid
   it('skips an abandoned swap whose transaction was rejected', () => {
     const row = makeRow({
       ...settled,
@@ -429,7 +427,6 @@ describe('findDeadlineResolved', () => {
     expect(findDeadlineResolved([row])).toEqual([])
   })
 
-  // with no hash the deposit may simply have gone undetected, so it still needs a look
   it('flags an abandoned swap with no transaction', () => {
     const row = makeRow({
       ...settled,
@@ -463,7 +460,6 @@ describe('findDeadlineResolved', () => {
     ])
   })
 
-  // verification failing on a real answer is the verifier's verdict, not a timeout
   it('skips a verification that failed on an answer', () => {
     const row = makeRow({
       ...settled,

@@ -52,7 +52,6 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
 
-// A deposit swap first waits for the user to fund it, then gets the usual window to settle
 export const stallTimeoutMs = (isExternallyPaid: boolean): number =>
   isExternallyPaid ? DEPOSIT_WINDOW_MS + PENDING_TIMEOUT_MS : PENDING_TIMEOUT_MS
 
@@ -85,7 +84,6 @@ const POLL_SCHEDULE: [number, number][] = [
 ]
 export const POLL_INTERVAL_CEILING_MS = 10 * MINUTE_MS
 
-// How often a pending swap is polled for status, by how long ago it was registered
 export const pollIntervalMs = (ageMs: number): number =>
   POLL_SCHEDULE.find(([below]) => ageMs < below)?.[1] ?? POLL_INTERVAL_CEILING_MS
 
@@ -100,7 +98,7 @@ export const resolveAttributionFromChain = (
   quotedAt: Date | null,
   swap: { status: SwapStatus; createdAt: Date; settledAt: Date | null },
 ): AttributionVerdict => {
-  // a settled swap the chain still cannot answer for after a week is closed out unchecked, never held forever
+  // a settled swap the chain can't answer for is closed out unchecked at the deadline
   const settled = isSettledStatus(swap.status)
   const expired = Date.now() - settlementTime(swap).getTime() > RESOLUTION_DEADLINE_MS
 
@@ -224,7 +222,7 @@ type PricedSwap = Pick<
   'createdAt' | 'sellAsset' | 'buyAsset' | 'affiliateFeeAssetId' | 'sellAssetUsd' | 'buyAssetUsd' | 'affiliateAssetUsd'
 >
 
-// Prices the swap is missing, each at the moment it was registered; a price still unavailable is left out
+// Missing prices at the swap's registration time; one still unavailable is left out
 export const resolveMissingPrices = async (
   swap: PricedSwap,
   priceAt: (assetId: string, at: Date) => Promise<number | null> = getAssetPriceUsdAt,

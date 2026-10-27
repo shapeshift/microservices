@@ -328,12 +328,12 @@ export class SwapsService {
   }
 
   // Externally paid swaps are tracked from registration, before any deposit hash is known
-  // Just enough to decide which are due, so a large pending set isn't loaded whole on every tick
+  // Only what's needed to decide which swaps are due, so the pending set isn't loaded whole every tick
   async getPendingTxSwapRefs(): Promise<{ swapId: string; createdAt: Date }[]> {
     return this.prisma.swap.findMany({ where: pendingTxWhere(), select: { swapId: true, createdAt: true } })
   }
 
-  // re-checks pending, so a swap that settled since its ref was read isn't polled again
+  // re-checks pending, as a swap may have settled since its ref was read
   async getPendingTxSwapsByIds(swapIds: string[]): Promise<Swap[]> {
     if (swapIds.length === 0) return []
 
@@ -342,7 +342,7 @@ export class SwapsService {
     return swaps.map(toSwap)
   }
 
-  // A swap that never reported a transaction is never polled, so it is closed here; nothing happened, so no push
+  // Never polled without a transaction, so closed here; no push, since nothing happened
   async abandonUnbroadcastSwaps(): Promise<Swap[]> {
     const where: Prisma.SwapWhereInput = {
       status: { in: ['IDLE', 'PENDING'] },
@@ -356,7 +356,7 @@ export class SwapsService {
 
     const swapIds = stalled.map(({ swapId }) => swapId)
 
-    // the guard is re-applied at write time, so a row that moved on since the select is left alone
+    // re-applying the guard leaves alone a row that moved on since the select
     await this.prisma.swap.updateMany({
       where: { ...where, swapId: { in: swapIds } },
       data: {
@@ -371,7 +371,7 @@ export class SwapsService {
     return abandoned.map(toSwap)
   }
 
-  // the newest keep new swaps moving under a backlog; claims past their deadline close the same pass
+  // newest keep new swaps moving under a backlog; claims past their deadline close the same pass
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
     const dueTake = Math.floor(ATTRIBUTION_BATCH_SIZE / 4)
@@ -434,14 +434,13 @@ export class SwapsService {
     )
   }
 
-  // a failed swap that never had a transaction has nothing to attribute, so it is closed rather than left pending
   private async resolveChainVerdict(swap: Swap): Promise<AttributionVerdict | undefined> {
     if (!swap.sellTxHash) {
       if (swap.status !== 'FAILED') return
       return { status: 'REJECTED', details: { checked: false, reason: 'no-tx' } }
     }
 
-    // with no quote time there is nothing to check the chain against, so the lookup is skipped
+    // with no quote time there is nothing to check, so the lookup is skipped
     const lookup = swap.quotedAt
       ? await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
       : ({ unavailable: 'unsupported' } as const)
@@ -505,7 +504,7 @@ export class SwapsService {
   // A price still missing a week after settling stops retrying and is left to the payout report
   async getMissingPriceSwaps(): Promise<Swap[]> {
     const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
-    // a swap settles at most a deposit window after registering, which bounds the scan by createdAt
+    // a swap settles at most a deposit window after registering, which bounds the scan
     const registeredSince = new Date(since.getTime() - stallTimeoutMs(true) - POLL_INTERVAL_CEILING_MS)
 
     const swaps = await this.prisma.swap.findMany({
@@ -530,7 +529,7 @@ export class SwapsService {
     return swaps.map(toSwap)
   }
 
-  // Fills only empty fields, and the fee price only for the asset it was fetched for in case verification changed it
+  // Fills only empty fields, and the fee price only if verification hasn't since changed the fee asset
   async fillMissingPrices(swap: Swap): Promise<number> {
     const prices = await resolveMissingPrices(swap)
 
@@ -552,7 +551,7 @@ export class SwapsService {
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      // a failed swap needs no transaction to verify, so one that never had a hash is closed out too
+      // a failed swap needs no transaction to close out
       where: {
         verificationStatus: 'PENDING',
         OR: [{ status: 'SUCCESS', sellTxHash: { not: null } }, { status: 'FAILED' }],
@@ -731,7 +730,6 @@ export class SwapsService {
     if (verificationResult.verificationStatus === 'PENDING') {
       if (Date.now() - settlementTime(swap).getTime() <= RESOLUTION_DEADLINE_MS) return swap
 
-      // a verifier that still cannot answer after a week is closed out unverified, never retried forever
       const reason = `${VERIFICATION_TIMEOUT_PREFIX} ${verificationResult.noAffiliateReason ?? 'no result'}`
 
       return toSwap(
