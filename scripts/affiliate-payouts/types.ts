@@ -70,6 +70,24 @@ export type UnresolvedFeeSwap = {
   partnerCode: string
 }
 
+// A partner swap whose outcome a deadline decided rather than evidence, so a person should confirm it
+export type DeadlineResolvedSwap = {
+  swapId: string
+  partnerCode: string
+  stage: 'status' | 'verification' | 'attribution'
+  reason: string
+  swapperName: string
+  chainId: string | null
+  sellTxHash: string | null
+}
+
+// A partner swap with a stage still unresolved, which would leave the month's payout incomplete
+export type UnsettledSwap = {
+  swapId: string
+  partnerCode: string
+  stages: ('status' | 'verification' | 'attribution')[]
+}
+
 export type AggregateResult = {
   partners: Map<string, PartnerAccrual>
   unpriceableSwaps: number
@@ -109,6 +127,7 @@ export type PayoutRecord = {
     noAffiliateFeeSwaps: number
     partnerBpsUnsetSwaps: number
     noVerifiedFeeSwaps: number
+    deadlineResolvedSwaps: number
   }
   partners: {
     partnerCode: string
@@ -121,4 +140,5 @@ export type PayoutRecord = {
     excludedReason: string | null
   }[]
   warnings: PayoutWarning[]
+  deadlineResolved: DeadlineResolvedSwap[]
 }
