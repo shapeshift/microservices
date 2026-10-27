@@ -23,6 +23,7 @@ jest.mock('../../env', () => ({
 
 jest.mock('../../utils/pricing', () => ({
   getAssetPriceUsd: jest.fn(),
+  getAssetPriceUsdAt: jest.fn(),
 }))
 
 // chain-adapters transitively imports p-queue (ESM-only) which Jest's CJS loader can't parse.

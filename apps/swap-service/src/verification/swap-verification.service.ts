@@ -13,7 +13,7 @@ import {
 
 import { env } from '../env'
 import type { Swap } from '../swaps/types'
-import { getAssetPriceUsd } from '../utils/pricing'
+import { getAssetPriceUsdAt } from '../utils/pricing'
 
 import {
   AcrossDepositStatusResponse,
@@ -204,7 +204,7 @@ export class SwapVerificationService {
       if (actualAffiliateFeeAssetId === swap.sellAsset.assetId) return swap.sellAssetUsd
       if (actualAffiliateFeeAssetId === swap.buyAsset.assetId) return swap.buyAssetUsd
 
-      const priceUsd = await getAssetPriceUsd(actualAffiliateFeeAssetId)
+      const priceUsd = await getAssetPriceUsdAt(actualAffiliateFeeAssetId, swap.createdAt)
 
       return priceUsd?.toString()
     })()

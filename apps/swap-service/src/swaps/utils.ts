@@ -11,7 +11,7 @@ import { swappers } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
 import type { BlockTimeLookup } from '../lib/block-time.service'
-import { getAssetPriceUsd } from '../utils/pricing'
+import { getAssetPriceUsd, getAssetPriceUsdAt } from '../utils/pricing'
 
 import { PENDING_TIMEOUT_MS } from './constants'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
@@ -166,6 +166,31 @@ export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: s
     logger.warn(`Failed to fetch USD prices for swap ${data.swapId}:`, err)
     return { sellAssetUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
   }
+}
+
+type PricedSwap = Pick<
+  Swap,
+  'createdAt' | 'sellAsset' | 'buyAsset' | 'affiliateFeeAssetId' | 'sellAssetUsd' | 'buyAssetUsd' | 'affiliateAssetUsd'
+>
+
+// Prices the swap is missing, each at the moment it was registered; a price still unavailable is left out
+export const resolveMissingPrices = async (
+  swap: PricedSwap,
+  priceAt: (assetId: string, at: Date) => Promise<number | null> = getAssetPriceUsdAt,
+): Promise<Partial<UsdPrices>> => {
+  const missing: [keyof UsdPrices, string][] = []
+
+  if (!swap.sellAssetUsd) missing.push(['sellAssetUsd', swap.sellAsset.assetId])
+  if (!swap.buyAssetUsd) missing.push(['buyAssetUsd', swap.buyAsset.assetId])
+  if (!swap.affiliateAssetUsd && swap.affiliateFeeAssetId) missing.push(['affiliateAssetUsd', swap.affiliateFeeAssetId])
+
+  const resolved = await Promise.all(
+    missing.map(async ([field, assetId]) => [field, await priceAt(assetId, swap.createdAt)] as const),
+  )
+
+  return Object.fromEntries(
+    resolved.flatMap(([field, price]) => (price === null ? [] : [[field, price.toString()]])),
+  ) as Partial<UsdPrices>
 }
 
 export const buildStatusNotification = (swap: Swap): StatusNotification | null => {

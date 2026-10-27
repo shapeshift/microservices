@@ -3,7 +3,13 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
-import { calculateFeeForSwap, describeError, resolveAttributionFromChain, resolveStalledSwap } from '../utils'
+import {
+  calculateFeeForSwap,
+  describeError,
+  resolveAttributionFromChain,
+  resolveMissingPrices,
+  resolveStalledSwap,
+} from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
 // '0' fee amount resolves to actualFeeUsd = 0 (the real 0-bps case this branch introduced).
@@ -240,5 +246,46 @@ describe('resolveAttributionFromChain', () => {
       status: 'PENDING',
       details: { checked: false, reason: 'no-quoted-at' },
     })
+  })
+})
+
+describe('resolveMissingPrices', () => {
+  const createdAt = new Date(Date.UTC(2026, 8, 8, 14, 40, 31))
+  const priced = {
+    createdAt,
+    sellAsset: { assetId: 'eip155:1/slip44:60' },
+    buyAsset: { assetId: 'eip155:1/erc20:0xusdc' },
+    affiliateFeeAssetId: 'eip155:8453/slip44:60',
+    sellAssetUsd: '2400',
+    buyAssetUsd: '1',
+    affiliateAssetUsd: '2400',
+  } as unknown as Parameters<typeof resolveMissingPrices>[0]
+
+  it('prices only the missing fields, each at the moment the swap was registered', async () => {
+    const priceAt = jest.fn().mockResolvedValue(2500)
+
+    await expect(resolveMissingPrices({ ...priced, sellAssetUsd: null, affiliateAssetUsd: null }, priceAt)).resolves.toEqual(
+      { sellAssetUsd: '2500', affiliateAssetUsd: '2500' },
+    )
+    expect(priceAt).toHaveBeenCalledTimes(2)
+    expect(priceAt).toHaveBeenCalledWith('eip155:1/slip44:60', createdAt)
+    expect(priceAt).toHaveBeenCalledWith('eip155:8453/slip44:60', createdAt)
+  })
+
+  it('leaves out a price that is still unavailable', async () => {
+    const priceAt = jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(1)
+
+    await expect(resolveMissingPrices({ ...priced, sellAssetUsd: null, buyAssetUsd: null }, priceAt)).resolves.toEqual({
+      buyAssetUsd: '1',
+    })
+  })
+
+  it('does not price a fee asset the swap never recorded', async () => {
+    const priceAt = jest.fn()
+
+    await expect(
+      resolveMissingPrices({ ...priced, affiliateFeeAssetId: null, affiliateAssetUsd: null }, priceAt),
+    ).resolves.toEqual({})
+    expect(priceAt).not.toHaveBeenCalled()
   })
 })

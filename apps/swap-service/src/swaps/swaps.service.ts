@@ -28,7 +28,7 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
+import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE, RESOLUTION_DEADLINE_MS } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -49,6 +49,7 @@ import {
   getExternalPaymentSwappers,
   isExternallyPaid,
   resolveAttributionFromChain,
+  resolveMissingPrices,
   resolveStalledSwap,
   toQuotedAt,
   toSwap,
@@ -410,6 +411,30 @@ export class SwapsService {
         attributionResolvedAt: new Date(),
       },
     })
+  }
+
+  // Older rows stop retrying here and are left to the backfill script
+  async getMissingPriceSwaps(): Promise<Swap[]> {
+    const swaps = await this.prisma.swap.findMany({
+      where: {
+        status: 'SUCCESS',
+        createdAt: { gt: new Date(Date.now() - RESOLUTION_DEADLINE_MS) },
+        OR: [
+          { sellAssetUsd: null },
+          { buyAssetUsd: null },
+          { affiliateAssetUsd: null, affiliateFeeAssetId: { not: null } },
+        ],
+      },
+    })
+
+    return swaps.map(toSwap)
+  }
+
+  async fillMissingPrices(swap: Swap): Promise<Swap> {
+    const prices = await resolveMissingPrices(swap)
+    if (Object.keys(prices).length === 0) return swap
+
+    return toSwap(await this.prisma.swap.update({ where: { swapId: swap.swapId }, data: prices }))
   }
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {

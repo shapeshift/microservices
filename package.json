@@ -34,6 +34,7 @@
     "referral-rewards": "ts-node scripts/referral-rewards.ts",
     "affiliate-payouts": "ts-node --transpile-only scripts/affiliate-payouts/affiliate-payouts.ts",
     "affiliate-payouts:test": "jest --config scripts/jest.config.ts",
+    "price-backfill": "ts-node --transpile-only scripts/price-backfill.ts",
     "test:security": "jest --config jest.security.config.cjs --runInBand",
     "onramper:local": "ts-node scripts/onramper-local.ts",
     "onramper:smoke": "ts-node scripts/onramper-local-smoke.ts",
