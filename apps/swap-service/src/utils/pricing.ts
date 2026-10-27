@@ -53,15 +53,39 @@ type CoinGeckoMarketChart = {
 // widened only when the narrow window holds no points, so a swap is never priced off a distant day
 const HISTORICAL_WINDOWS_MS = [60 * 60 * 1000, 24 * 60 * 60 * 1000]
 
-// The spot price nearest a past instant, so a retried or backfilled price matches when the swap happened
+const HOUR_MS = 60 * 60 * 1000
+const HISTORICAL_HIT_TTL_MS = 24 * HOUR_MS
+// a miss is retried hourly at most, so a price that never resolves doesn't spend the shared quota
+const HISTORICAL_MISS_TTL_MS = HOUR_MS
+
+const historicalPriceCache = new Map<string, number | null>()
+
+// The spot price nearest a past instant, so a retried price matches when the swap happened
 export async function getAssetPriceUsdAt(assetId: string, at: Date): Promise<number | null> {
+  const time = at.getTime()
+  const key = `${assetId}:${Math.floor(time / HOUR_MS)}`
+
+  if (historicalPriceCache.has(key)) return historicalPriceCache.get(key) ?? null
+
+  const price = await fetchAssetPriceUsdAt(assetId, time)
+
+  historicalPriceCache.set(key, price)
+  setTimeout(
+    () => historicalPriceCache.delete(key),
+    price === null ? HISTORICAL_MISS_TTL_MS : HISTORICAL_HIT_TTL_MS,
+  ).unref()
+
+  return price
+}
+
+async function fetchAssetPriceUsdAt(assetId: string, time: number): Promise<number | null> {
+  const at = new Date(time)
+
   const url = adapters.makeCoingeckoAssetUrl(assetId)
   if (!url) {
     logger.warn(`No CoinGecko URL mapping for assetId: ${assetId}`)
     return null
   }
-
-  const time = at.getTime()
 
   try {
     for (const windowMs of HISTORICAL_WINDOWS_MS) {

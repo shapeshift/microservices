@@ -429,6 +429,20 @@ describe('findDeadlineResolved', () => {
     expect(findDeadlineResolved([row])).toEqual([])
   })
 
+  // with no hash the deposit may simply have gone undetected, so it still needs a look
+  it('flags an abandoned swap with no transaction', () => {
+    const row = makeRow({
+      ...settled,
+      sellTxHash: null,
+      status: 'FAILED',
+      statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: Waiting for deposit...)',
+      attributionStatus: 'REJECTED',
+      attributionDetails: { checked: false, reason: 'no-tx' },
+    })
+
+    expect(findDeadlineResolved([row]).map((d) => [d.stage, d.sellTxHash])).toEqual([['status', null]])
+  })
+
   it('skips a swap that failed on the swapper reporting it', () => {
     expect(findDeadlineResolved([makeRow({ ...settled, status: 'FAILED', statusMessage: 'Refunded' })])).toEqual([])
   })

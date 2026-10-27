@@ -85,6 +85,16 @@ export class SwapPollingService {
   }
 
   @Cron(CronExpression.EVERY_10_MINUTES)
+  async abandonUnbroadcastSwaps() {
+    try {
+      const count = await this.swapsService.abandonUnbroadcastSwaps()
+      if (count > 0) this.logger.log(`Abandoned ${count} swaps that never reported a transaction`)
+    } catch (err) {
+      this.logger.error('Failed to abandon unbroadcast swaps:', err)
+    }
+  }
+
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async pollMissingPrices() {
     if (this.isPollingPrices) return
     this.isPollingPrices = true
@@ -171,8 +181,8 @@ export class SwapPollingService {
 
   private async fillPrices(swap: Swap): Promise<void> {
     try {
-      const updated = await this.swapsService.fillMissingPrices(swap)
-      if (updated !== swap) this.logger.log(`USD prices filled for swap ${swap.swapId}`)
+      const filled = await this.swapsService.fillMissingPrices(swap)
+      if (filled > 0) this.logger.log(`Filled ${filled} USD prices for swap ${swap.swapId}`)
     } catch (err) {
       this.logger.error(`Failed to fill USD prices for swap ${swap.swapId}:`, err)
     }

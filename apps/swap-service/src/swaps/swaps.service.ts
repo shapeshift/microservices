@@ -29,7 +29,10 @@ import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import {
+  ABANDONED_STATUS_PREFIX,
   ATTRIBUTION_BATCH_SIZE,
+  MISSING_PRICE_BATCH_SIZE,
+  PENDING_TIMEOUT_MS,
   REFERRER_FEE_RATE,
   RESOLUTION_DEADLINE_MS,
   VERIFICATION_TIMEOUT_PREFIX,
@@ -325,20 +328,41 @@ export class SwapsService {
     return swaps.map(toSwap)
   }
 
-  async getPendingAttributionSwaps(): Promise<Swap[]> {
-    const swaps = await this.prisma.swap.findMany({
+  // A swap with no transaction is never polled, so one that never reported a hash is abandoned here instead
+  async abandonUnbroadcastSwaps(): Promise<number> {
+    const { count } = await this.prisma.swap.updateMany({
       where: {
-        attributionStatus: 'PENDING',
-        OR: [
-          { sellTxHash: { not: null }, quotedAt: { not: null } },
-          { sellTxHash: null, status: 'FAILED' },
-        ],
+        status: { in: ['IDLE', 'PENDING'] },
+        sellTxHash: null,
+        swapperName: { notIn: getExternalPaymentSwappers() },
+        createdAt: { lt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
       },
-      orderBy: { createdAt: 'desc' },
-      take: ATTRIBUTION_BATCH_SIZE,
+      data: {
+        status: 'FAILED',
+        statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within 24h of registration`,
+      },
     })
 
-    return swaps.map(toSwap)
+    return count
+  }
+
+  // the newest keep new swaps from waiting behind a backlog, the oldest keep the deadline reachable under one
+  async getPendingAttributionSwaps(): Promise<Swap[]> {
+    const where: Prisma.SwapWhereInput = {
+      attributionStatus: 'PENDING',
+      OR: [{ sellTxHash: { not: null } }, { sellTxHash: null, status: 'FAILED' }],
+    }
+
+    const oldestTake = Math.floor(ATTRIBUTION_BATCH_SIZE / 4)
+
+    const [newest, oldest] = await Promise.all([
+      this.prisma.swap.findMany({ where, orderBy: { createdAt: 'desc' }, take: ATTRIBUTION_BATCH_SIZE - oldestTake }),
+      this.prisma.swap.findMany({ where, orderBy: { createdAt: 'asc' }, take: oldestTake }),
+    ])
+
+    const seen = new Set(newest.map((swap) => swap.swapId))
+
+    return [...newest, ...oldest.filter((swap) => !seen.has(swap.swapId))].map(toSwap)
   }
 
   async resolveAttribution(swap: Swap): Promise<Swap> {
@@ -446,16 +470,32 @@ export class SwapsService {
           { affiliateAssetUsd: null, affiliateFeeAssetId: { not: null } },
         ],
       },
+      orderBy: { createdAt: 'desc' },
+      take: MISSING_PRICE_BATCH_SIZE,
     })
 
     return swaps.map(toSwap)
   }
 
-  async fillMissingPrices(swap: Swap): Promise<Swap> {
+  // Writes only fields still empty, and the fee price only for the fee asset it was fetched for, since
+  // verification may record the actual fee asset while this runs
+  async fillMissingPrices(swap: Swap): Promise<number> {
     const prices = await resolveMissingPrices(swap)
-    if (Object.keys(prices).length === 0) return swap
 
-    return toSwap(await this.prisma.swap.update({ where: { swapId: swap.swapId }, data: prices }))
+    const writes = (Object.entries(prices) as [keyof typeof prices, string][]).map(([field, price]) =>
+      this.prisma.swap.updateMany({
+        where: {
+          swapId: swap.swapId,
+          [field]: null,
+          ...(field === 'affiliateAssetUsd' && { affiliateFeeAssetId: swap.affiliateFeeAssetId }),
+        },
+        data: { [field]: price },
+      }),
+    )
+
+    const results = await Promise.all(writes)
+
+    return results.reduce((filled, { count }) => filled + count, 0)
   }
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {

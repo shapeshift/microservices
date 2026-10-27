@@ -203,6 +203,9 @@ export function aggregateByPartner<S>(
   }
 }
 
+// rejections the chain itself answered, as opposed to ones closed for lack of a transaction or an answer
+const EVIDENCED_REJECTIONS = new Set(['tx-not-found', 'quote-postdates-tx'])
+
 const detailReason = (details: unknown): string | null => {
   const reason = (details as { reason?: unknown } | null)?.reason
   return typeof reason === 'string' ? reason : null
@@ -227,9 +230,12 @@ export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[]
 
     const resolved: DeadlineResolvedSwap[] = []
 
-    // a disowned or out-of-order transaction can never be paid, so only a plausible one is worth a look
+    // a transaction the chain disowned or the quote postdates can never be paid, so only a plausible one is
+    // worth a look - including one with no hash, whose deposit may simply have gone undetected
     const abandoned = row.status === 'FAILED' && row.statusMessage?.startsWith(ABANDONED_STATUS_PREFIX)
-    if (abandoned && row.attributionStatus !== 'REJECTED') {
+    const disowned =
+      row.attributionStatus === 'REJECTED' && EVIDENCED_REJECTIONS.has(detailReason(row.attributionDetails) ?? '')
+    if (abandoned && !disowned) {
       resolved.push({ ...base, stage: 'status', reason: row.statusMessage ?? '' })
     }
 

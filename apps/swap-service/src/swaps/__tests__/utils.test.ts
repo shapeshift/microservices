@@ -272,6 +272,16 @@ describe('resolveAttributionFromChain', () => {
     expect(resolveAttributionFromChain({ unavailable: 'error' }, at(-60_000), stuck).status).toBe('PENDING')
   })
 
+  // with nothing to check the claim against, the deadline closes it like any other unanswerable one
+  it('rejects a settled row with no quote time once the deadline passes', () => {
+    const expired = { status: 'SUCCESS' as const, createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }
+
+    expect(resolveAttributionFromChain(found, null, expired)).toEqual({
+      status: 'REJECTED',
+      details: { checked: false, reason: 'unresolved:no-quoted-at' },
+    })
+  })
+
   it('holds a row with no quote time, which cannot be checked at all', () => {
     expect(resolveAttributionFromChain(found, null, live)).toMatchObject({
       status: 'PENDING',
@@ -301,6 +311,16 @@ describe('resolveMissingPrices', () => {
     expect(priceAt).toHaveBeenCalledTimes(2)
     expect(priceAt).toHaveBeenCalledWith('eip155:1/slip44:60', createdAt)
     expect(priceAt).toHaveBeenCalledWith('eip155:8453/slip44:60', createdAt)
+  })
+
+  it('fetches an asset once when it prices two fields', async () => {
+    const priceAt = jest.fn().mockResolvedValue(2500)
+    const sameAsset = { ...priced, affiliateFeeAssetId: 'eip155:1/slip44:60' }
+
+    await expect(
+      resolveMissingPrices({ ...sameAsset, sellAssetUsd: null, affiliateAssetUsd: null }, priceAt),
+    ).resolves.toEqual({ sellAssetUsd: '2500', affiliateAssetUsd: '2500' })
+    expect(priceAt).toHaveBeenCalledTimes(1)
   })
 
   it('leaves out a price that is still unavailable', async () => {

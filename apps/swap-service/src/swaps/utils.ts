@@ -71,7 +71,17 @@ export const resolveAttributionFromChain = (
   quotedAt: Date | null,
   swap: { status: SwapStatus; createdAt: Date },
 ): AttributionVerdict => {
-  if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
+  // a settled swap the chain still cannot answer for after a week is closed out unchecked, never held forever
+  const settled = swap.status === 'SUCCESS' || swap.status === 'FAILED'
+  const expired = Date.now() - swap.createdAt.getTime() > RESOLUTION_DEADLINE_MS
+
+  if (!quotedAt) {
+    if (settled && expired) {
+      return { status: 'REJECTED', details: { checked: false, reason: `${UNRESOLVED_ATTRIBUTION_PREFIX}no-quoted-at` } }
+    }
+
+    return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
+  }
 
   if ('unavailable' in lookup) {
     // rejection cannot be walked back, and a node briefly behind also reports not-found, so this waits
@@ -81,10 +91,6 @@ export const resolveAttributionFromChain = (
     if (lookup.unavailable === 'not-found' && abandoned) {
       return { status: 'REJECTED', details: { checked: true, reason: 'tx-not-found' } }
     }
-
-    // a settled swap the chain still cannot answer for after a week is closed out unchecked, never held forever
-    const settled = swap.status === 'SUCCESS' || swap.status === 'FAILED'
-    const expired = Date.now() - swap.createdAt.getTime() > RESOLUTION_DEADLINE_MS
 
     if (settled && expired) {
       return {
@@ -200,12 +206,17 @@ export const resolveMissingPrices = async (
   if (!swap.buyAssetUsd) missing.push(['buyAssetUsd', swap.buyAsset.assetId])
   if (!swap.affiliateAssetUsd && swap.affiliateFeeAssetId) missing.push(['affiliateAssetUsd', swap.affiliateFeeAssetId])
 
-  const resolved = await Promise.all(
-    missing.map(async ([field, assetId]) => [field, await priceAt(assetId, swap.createdAt)] as const),
+  // the fee asset is usually the sell or buy asset, so each asset is fetched once
+  const assetIds = [...new Set(missing.map(([, assetId]) => assetId))]
+  const prices = new Map(
+    await Promise.all(assetIds.map(async (assetId) => [assetId, await priceAt(assetId, swap.createdAt)] as const)),
   )
 
   return Object.fromEntries(
-    resolved.flatMap(([field, price]) => (price === null ? [] : [[field, price.toString()]])),
+    missing.flatMap(([field, assetId]) => {
+      const price = prices.get(assetId)
+      return price === null || price === undefined ? [] : [[field, price.toString()]]
+    }),
   ) as Partial<UsdPrices>
 }
 

@@ -140,3 +140,93 @@ describe('attribution for a swap with no transaction', () => {
     expect(updates).toEqual([])
   })
 })
+
+describe('polling queries and writes', () => {
+  const build = (prisma: Record<string, unknown>) => {
+    const stub = {} as never
+    return new SwapsService(
+      { swap: prisma } as never,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+    )
+  }
+
+  // verification may record a different fee asset meanwhile, which a stale price must not land on
+  it('writes each price only into a field still empty, and the fee price only for its asset', async () => {
+    const writes: { where: Record<string, unknown>; data: Record<string, unknown> }[] = []
+    const service = build({
+      updateMany: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        writes.push(args)
+        return Promise.resolve({ count: 1 })
+      },
+    })
+
+    const swap = swapOf({
+      createdAt: new Date(),
+      sellAsset: { assetId: 'eip155:1/slip44:60', chainId: 'eip155:1' },
+      buyAsset: { assetId: 'eip155:1/erc20:0xusdc' },
+      affiliateFeeAssetId: 'eip155:8453/slip44:60',
+      sellAssetUsd: null,
+      buyAssetUsd: '1',
+      affiliateAssetUsd: null,
+    } as unknown as Partial<Swap>)
+
+    const pricing = jest.requireMock('../../utils/pricing') as { getAssetPriceUsdAt: jest.Mock }
+    pricing.getAssetPriceUsdAt.mockResolvedValue(2500)
+
+    await expect(service.fillMissingPrices(swap)).resolves.toBe(2)
+    expect(writes).toEqual([
+      { where: { swapId: 'swap-1', sellAssetUsd: null }, data: { sellAssetUsd: '2500' } },
+      {
+        where: { swapId: 'swap-1', affiliateAssetUsd: null, affiliateFeeAssetId: 'eip155:8453/slip44:60' },
+        data: { affiliateAssetUsd: '2500' },
+      },
+    ])
+  })
+
+  // a backlog of unresolvable rows must not starve either end: new swaps, or old ones due their deadline
+  it('takes both the newest and the oldest pending attribution, once each', async () => {
+    const service = build({
+      findMany: (args: { orderBy: { createdAt: 'asc' | 'desc' }; take: number }) =>
+        Promise.resolve(
+          args.orderBy.createdAt === 'desc'
+            ? [{ swapId: 'new-1' }, { swapId: 'mid' }]
+            : [{ swapId: 'old-1' }, { swapId: 'mid' }],
+        ),
+    })
+
+    const swaps = await service.getPendingAttributionSwaps()
+
+    expect(swaps.map((swap) => swap.swapId)).toEqual(['new-1', 'mid', 'old-1'])
+  })
+
+  it('abandons only unfunded swaps that never reported a transaction for 24h', async () => {
+    let where: Record<string, unknown> = {}
+    const service = build({
+      updateMany: (args: { where: Record<string, unknown> }) => {
+        where = args.where
+        return Promise.resolve({ count: 3 })
+      },
+    })
+
+    await expect(service.abandonUnbroadcastSwaps()).resolves.toBe(3)
+    expect(where).toMatchObject({
+      status: { in: ['IDLE', 'PENDING'] },
+      sellTxHash: null,
+      swapperName: { notIn: expect.any(Array) },
+    })
+    expect(Date.now() - (where.createdAt as { lt: Date }).lt.getTime()).toBeGreaterThanOrEqual(
+      24 * 60 * 60 * 1000 - 1000,
+    )
+  })
+})
