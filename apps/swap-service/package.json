@@ -14,6 +14,7 @@
     "test:watch": "yarn run -T jest --config jest.config.ts --watch"
   },
   "dependencies": {
+    "@shapeshift/prisma": "workspace:*",
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
     "@shapeshiftoss/contracts": "^1.0.7",

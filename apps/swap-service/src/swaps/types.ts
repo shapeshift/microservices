@@ -1,7 +1,7 @@
-import type { AttributionStatus, Prisma, Swap as PrismaSwap } from '@prisma/client'
 import { Type } from 'class-transformer'
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator'
 
+import type { AttributionStatus, Prisma, Swap as PrismaSwap } from '@shapeshift/prisma'
 import type { SwapMetadata, SwapperName } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 

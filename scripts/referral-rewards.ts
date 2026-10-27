@@ -1,6 +1,7 @@
-import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
+
+import { createPrismaAdapter, PrismaClient } from '../packages/prisma'
 
 type ReferralRewardDistribution = {
   id: string
@@ -31,7 +32,7 @@ type SafeTransactionData = {
   operation: number[]
 }
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ adapter: createPrismaAdapter(2) })
 
 const RFOX_STAKING_CONTRACT = process.env.RFOX_STAKING_CONTRACT || '0x...'
 

@@ -12,6 +12,7 @@
     "start:prod": "node dist/main.js"
   },
   "dependencies": {
+    "@shapeshift/prisma": "workspace:*",
     "@shapeshift/shared-types": "workspace:*",
     "@shapeshift/shared-utils": "workspace:*",
     "expo-server-sdk": "^3.15.0"

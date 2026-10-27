@@ -3,6 +3,7 @@ dist
 node_modules
 .turbo
 /generated/prisma
+packages/prisma/src/generated
 
 # Payout artifacts
 /payouts/

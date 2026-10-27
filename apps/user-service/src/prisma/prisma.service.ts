@@ -1,8 +1,13 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
-import { PrismaClient } from '@prisma/client'
+
+import { createPrismaAdapter, PrismaClient } from '@shapeshift/prisma'
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    super({ adapter: createPrismaAdapter(10) })
+  }
+
   async onModuleInit() {
     await this.$connect()
   }

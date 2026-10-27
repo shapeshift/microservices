@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
-import type { Affiliate, Prisma } from '@prisma/client'
 import { getAddress } from 'viem'
 
+import type { Affiliate, Prisma } from '@shapeshift/prisma'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
 import { PrismaService } from '../prisma/prisma.service'

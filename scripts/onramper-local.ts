@@ -147,7 +147,7 @@ const provider = createServer((request, response) => {
 @Module({
   controllers: [OnramperController, OnramperAuthController],
   providers: [
-    { provide: PrismaService, useFactory: () => new PrismaService({ datasourceUrl: databaseUrl }) },
+    { provide: PrismaService, useFactory: () => new PrismaService() },
     OnramperCatalogue,
     OnramperSessions,
     WalletProofVerifier,

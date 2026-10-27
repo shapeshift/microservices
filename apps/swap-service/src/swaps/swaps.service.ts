@@ -5,8 +5,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
 
+import { Prisma } from '@shapeshift/prisma'
 import { CreateSwapDto, Fees, SwapStatus, SwapStatusResponse, UpdateSwapStatusDto } from '@shapeshift/shared-types'
 import { NotificationsServiceClient, UserServiceClient } from '@shapeshift/shared-utils'
 import { swappers } from '@shapeshiftoss/swapper'

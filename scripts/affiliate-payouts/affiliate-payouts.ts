@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 
 import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../../apps/swap-service/src/swaps/utils'
+import { createPrismaAdapter, PrismaClient } from '../../packages/prisma'
 
 import type { PartnerPayout, PayoutRecord } from './types'
 import { aggregateByPartner, buildPayouts, buildRecord, resolveWindow, toCsv } from './utils'
@@ -13,7 +13,7 @@ if (!databaseUrl) {
   process.exit(1)
 }
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ adapter: createPrismaAdapter(2, databaseUrl) })
 
 function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
   console.log('\n=== Affiliate Payout Summary ===')

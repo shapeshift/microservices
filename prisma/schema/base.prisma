@@ -1,10 +1,11 @@
 generator client {
-  provider        = "prisma-client-js"
+  provider        = "prisma-client"
+  output          = "../../packages/prisma/src/generated"
+  moduleFormat    = "cjs"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider   = "postgres"
-  url        = env("DATABASE_URL")
   extensions = [citext]
 }

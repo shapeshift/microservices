@@ -6,6 +6,7 @@ module.exports = {
   ],
   transform: { '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }] },
   moduleNameMapper: {
+    '^@shapeshift/prisma$': '<rootDir>/packages/prisma/src',
     '^@shapeshift/shared-utils$': '<rootDir>/packages/shared-utils/src',
     '^@shapeshift/shared-types$': '<rootDir>/packages/shared-types/src',
   },

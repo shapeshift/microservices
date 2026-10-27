@@ -1,5 +1,6 @@
-import type { Swap as PrismaSwap } from '@prisma/client'
 import type BigNumber from 'bignumber.js'
+
+import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 export type PartnerAccrual = {
   partnerCode: string

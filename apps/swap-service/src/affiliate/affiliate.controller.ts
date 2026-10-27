@@ -11,7 +11,8 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common'
-import type { Affiliate } from '@prisma/client'
+
+import type { Affiliate } from '@shapeshift/prisma'
 
 import { SHAPESHIFT_BPS } from '../swaps/constants'
 

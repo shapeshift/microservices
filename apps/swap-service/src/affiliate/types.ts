@@ -1,6 +1,7 @@
-import type { Affiliate } from '@prisma/client'
 import { Type } from 'class-transformer'
 import { IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
+
+import type { Affiliate } from '@shapeshift/prisma'
 
 import { PaginationQueryDto } from '../swaps/types'
 

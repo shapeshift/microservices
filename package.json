@@ -38,7 +38,7 @@
     "onramper:local": "ts-node scripts/onramper-local.ts",
     "onramper:smoke": "ts-node scripts/onramper-local-smoke.ts",
     "onramper:db": "node scripts/onramper-local-db.mjs",
-    "onramper:setup": "DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_local yarn db:migrate && yarn tsc -p packages/shared-types && yarn tsc -p packages/shared-utils",
+    "onramper:setup": "DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_local yarn db:migrate && yarn tsc -p packages/prisma && yarn tsc -p packages/shared-types && yarn tsc -p packages/shared-utils",
     "test:onramper:postgres": "ONRAMPER_TEST_DATABASE_URL=postgresql://onramper:local-test-only@127.0.0.1:55439/onramper_authorization_test yarn test:security"
   },
   "dependencies": {
@@ -54,7 +54,6 @@
     "@nestjs/platform-socket.io": "^11.1.6",
     "@nestjs/schedule": "^6.0.0",
     "@nestjs/websockets": "^11.1.6",
-    "@prisma/client": "6.13.0",
     "@pulumi/kubernetes": "4.23.0",
     "@pulumi/pulumi": "3.160.0",
     "@shapeshiftoss/caip": "8.16.10",
@@ -92,7 +91,7 @@
     "globals": "^16.0.0",
     "jest": "^30.0.0",
     "prettier": "^3.4.2",
-    "prisma": "6.13.0",
+    "prisma": "7.10.1",
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
