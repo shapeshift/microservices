@@ -29,6 +29,7 @@ import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import {
+  ABANDON_BATCH_SIZE,
   ABANDONED_STATUS_PREFIX,
   ATTRIBUTION_BATCH_SIZE,
   MISSING_PRICE_BATCH_SIZE,
@@ -69,6 +70,13 @@ import {
 } from './utils'
 
 const logger = new Logger('SwapsService')
+
+const pendingTxWhere = (): Prisma.SwapWhereInput => ({
+  OR: [
+    { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
+    { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
+  ],
+})
 
 @Injectable()
 export class SwapsService {
@@ -322,78 +330,79 @@ export class SwapsService {
   // Externally paid swaps are tracked from registration, before any deposit hash is known
   // Just enough to decide which are due, so a large pending set isn't loaded whole on every tick
   async getPendingTxSwapRefs(): Promise<{ swapId: string; createdAt: Date }[]> {
-    return this.prisma.swap.findMany({
-      where: {
-        OR: [
-          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
-          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
-        ],
-      },
-      select: { swapId: true, createdAt: true },
-    })
+    return this.prisma.swap.findMany({ where: pendingTxWhere(), select: { swapId: true, createdAt: true } })
   }
 
-  async getSwapsByIds(swapIds: string[]): Promise<Swap[]> {
+  // re-checks pending, so a swap that settled since its ref was read isn't polled again
+  async getPendingTxSwapsByIds(swapIds: string[]): Promise<Swap[]> {
     if (swapIds.length === 0) return []
 
-    const swaps = await this.prisma.swap.findMany({ where: { swapId: { in: swapIds } } })
+    const swaps = await this.prisma.swap.findMany({ where: { ...pendingTxWhere(), swapId: { in: swapIds } } })
 
     return swaps.map(toSwap)
   }
 
-  // A swap with no transaction is never polled, so one that never reported a hash is abandoned here instead
+  // A swap that never reported a transaction is never polled, so it is closed here; nothing happened, so no push
   async abandonUnbroadcastSwaps(): Promise<Swap[]> {
-    const stalled = await this.prisma.swap.findMany({
-      where: {
-        status: { in: ['IDLE', 'PENDING'] },
-        sellTxHash: null,
-        swapperName: { notIn: getExternalPaymentSwappers() },
-        createdAt: { lt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
+    const where: Prisma.SwapWhereInput = {
+      status: { in: ['IDLE', 'PENDING'] },
+      sellTxHash: null,
+      swapperName: { notIn: getExternalPaymentSwappers() },
+      createdAt: { lt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
+    }
+
+    const stalled = await this.prisma.swap.findMany({ where, select: { swapId: true }, take: ABANDON_BATCH_SIZE })
+    if (stalled.length === 0) return []
+
+    const swapIds = stalled.map(({ swapId }) => swapId)
+
+    // the guard is re-applied at write time, so a row that moved on since the select is left alone
+    await this.prisma.swap.updateMany({
+      where: { ...where, swapId: { in: swapIds } },
+      data: {
+        status: 'FAILED',
+        statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within 24h of registration`,
+        settledAt: new Date(),
       },
-      select: { swapId: true },
     })
 
-    // through updateSwapStatus so the user is notified and settledAt is set, like any other failure
-    return Promise.all(
-      stalled.map(({ swapId }) =>
-        this.updateSwapStatus({
-          swapId,
-          status: 'FAILED',
-          statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within 24h of registration`,
-        }),
-      ),
-    )
+    const abandoned = await this.prisma.swap.findMany({ where: { swapId: { in: swapIds }, status: 'FAILED' } })
+
+    return abandoned.map(toSwap)
   }
 
-  // the newest keep new swaps from waiting behind a backlog, the oldest keep the deadline reachable under one
+  // the newest keep new swaps moving under a backlog; claims past their deadline close the same pass
   async getPendingAttributionSwaps(): Promise<Swap[]> {
     const since = new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+    const dueTake = Math.floor(ATTRIBUTION_BATCH_SIZE / 4)
 
-    // a claim with no quote time has nothing to check, so it only takes a slot once its deadline is due
-    const where: Prisma.SwapWhereInput = {
-      attributionStatus: 'PENDING',
-      OR: [
-        { sellTxHash: { not: null }, quotedAt: { not: null } },
-        {
+    const [newest, due] = await Promise.all([
+      this.prisma.swap.findMany({
+        where: {
+          attributionStatus: 'PENDING',
+          OR: [
+            { sellTxHash: { not: null }, quotedAt: { not: null } },
+            { sellTxHash: null, status: 'FAILED' },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: ATTRIBUTION_BATCH_SIZE - dueTake,
+      }),
+      this.prisma.swap.findMany({
+        where: {
+          attributionStatus: 'PENDING',
           sellTxHash: { not: null },
-          quotedAt: null,
           status: { in: ['SUCCESS', 'FAILED'] },
           OR: [{ settledAt: { lt: since } }, { settledAt: null, createdAt: { lt: since } }],
         },
-        { sellTxHash: null, status: 'FAILED' },
-      ],
-    }
-
-    const oldestTake = Math.floor(ATTRIBUTION_BATCH_SIZE / 4)
-
-    const [newest, oldest] = await Promise.all([
-      this.prisma.swap.findMany({ where, orderBy: { createdAt: 'desc' }, take: ATTRIBUTION_BATCH_SIZE - oldestTake }),
-      this.prisma.swap.findMany({ where, orderBy: { createdAt: 'asc' }, take: oldestTake }),
+        orderBy: { createdAt: 'asc' },
+        take: dueTake,
+      }),
     ])
 
     const seen = new Set(newest.map((swap) => swap.swapId))
 
-    return [...newest, ...oldest.filter((swap) => !seen.has(swap.swapId))].map(toSwap)
+    return [...newest, ...due.filter((swap) => !seen.has(swap.swapId))].map(toSwap)
   }
 
   async resolveAttribution(swap: Swap): Promise<Swap> {

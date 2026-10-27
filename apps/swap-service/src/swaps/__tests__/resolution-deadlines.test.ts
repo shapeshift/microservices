@@ -203,8 +203,8 @@ describe('polling queries and writes', () => {
     ])
   })
 
-  // a backlog of unresolvable rows must not starve either end: new swaps, or old ones due their deadline
-  it('takes both the newest and the oldest pending attribution, once each', async () => {
+  // a backlog must neither hold up new swaps nor strand a claim past its deadline
+  it('takes the newest pending attribution and the claims past their deadline, once each', async () => {
     const service = build({
       findMany: (args: { orderBy: { createdAt: 'asc' | 'desc' }; take: number }) =>
         Promise.resolve(
@@ -219,38 +219,36 @@ describe('polling queries and writes', () => {
     expect(swaps.map((swap) => swap.swapId)).toEqual(['new-1', 'mid', 'old-1'])
   })
 
-  // through updateSwapStatus, so each is notified and stamped settled like any other failure
+  // one guarded write, re-checked at write time, and no push for a swap that never happened
   it('abandons only unfunded swaps that never reported a transaction for 24h', async () => {
-    let where: Record<string, unknown> = {}
-    const updates: { swapId: string; data: Record<string, unknown> }[] = []
+    const finds: Record<string, unknown>[] = []
+    let write: { where: Record<string, unknown>; data: Record<string, unknown> } | undefined
     const service = build({
       findMany: (args: { where: Record<string, unknown> }) => {
-        where = args.where
-        return Promise.resolve([{ swapId: 'stalled-1' }, { swapId: 'stalled-2' }])
+        finds.push(args.where)
+        return Promise.resolve(
+          finds.length === 1 ? [{ swapId: 'stalled-1' }, { swapId: 'stalled-2' }] : [{ swapId: 'stalled-1' }],
+        )
       },
-      update: (args: { where: { swapId: string }; data: Record<string, unknown> }) => {
-        updates.push({ swapId: args.where.swapId, data: args.data })
-        return Promise.resolve({ ...args.data, swapId: args.where.swapId })
+      updateMany: (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        write = args
+        return Promise.resolve({ count: 1 })
       },
     })
-    jest
-      .spyOn(
-        service as unknown as { sendStatusUpdateNotification: () => Promise<void> },
-        'sendStatusUpdateNotification',
-      )
-      .mockResolvedValue()
 
     const abandoned = await service.abandonUnbroadcastSwaps()
 
-    expect(abandoned.map((swap) => swap.swapId)).toEqual(['stalled-1', 'stalled-2'])
-    expect(where).toMatchObject({
+    expect(finds[0]).toMatchObject({
       status: { in: ['IDLE', 'PENDING'] },
       sellTxHash: null,
       swapperName: { notIn: getExternalPaymentSwappers() },
     })
-    expect(Date.now() - (where.createdAt as { lt: Date }).lt.getTime()).toBeGreaterThanOrEqual(
+    expect(Date.now() - (finds[0].createdAt as { lt: Date }).lt.getTime()).toBeGreaterThanOrEqual(
       24 * 60 * 60 * 1000 - 1000,
     )
-    expect(updates[0].data).toMatchObject({ status: 'FAILED', settledAt: expect.any(Date) as Date })
+    expect(write?.where).toMatchObject({ ...finds[0], swapId: { in: ['stalled-1', 'stalled-2'] } })
+    expect(write?.data).toMatchObject({ status: 'FAILED', settledAt: expect.any(Date) as Date })
+    // a row that moved on since the select was left alone, so only the written one is pushed
+    expect(abandoned.map((swap) => swap.swapId)).toEqual(['stalled-1'])
   })
 })

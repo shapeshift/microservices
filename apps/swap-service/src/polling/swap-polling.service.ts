@@ -19,10 +19,11 @@ export class SwapPollingService {
   private isPollingVerification = false
   private isPollingAttribution = false
   private isPollingPrices = false
+  private isAbandoning = false
 
   // in memory is enough with one replica: a restart only costs each swap one early poll
   private readonly lastTxPollAt = new Map<string, number>()
-  // the last time a swap showed progress, so a deposit funded days in is polled live again
+  // the last status change or newly reported hash, so a deposit funded days in is polled live again
   private readonly lastProgressAt = new Map<string, number>()
 
   constructor(
@@ -51,9 +52,10 @@ export class SwapPollingService {
       })
       if (due.length === 0) return
 
-      due.forEach((ref) => this.lastTxPollAt.set(ref.swapId, now))
+      const swaps = await this.swapsService.getPendingTxSwapsByIds(due.map((ref) => ref.swapId))
+      if (swaps.length === 0) return
 
-      const swaps = await this.swapsService.getSwapsByIds(due.map((ref) => ref.swapId))
+      swaps.forEach((swap) => this.lastTxPollAt.set(swap.swapId, now))
 
       this.logger.log(`Polling tx status for ${swaps.length} swaps (${swapIds(swaps)})`)
       await this.runWorkers(swaps, (swap) => this.pollTxStatus(swap))
@@ -108,6 +110,9 @@ export class SwapPollingService {
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async abandonUnbroadcastSwaps() {
+    if (this.isAbandoning) return
+    this.isAbandoning = true
+
     try {
       const abandoned = await this.swapsService.abandonUnbroadcastSwaps()
       if (abandoned.length === 0) return
@@ -116,6 +121,8 @@ export class SwapPollingService {
       abandoned.forEach((swap) => this.websocketGateway.sendSwapUpdateToUser(swap.userId, swap))
     } catch (err) {
       this.logger.error('Failed to abandon unbroadcast swaps:', err)
+    } finally {
+      this.isAbandoning = false
     }
   }
 
@@ -153,6 +160,14 @@ export class SwapPollingService {
     try {
       const statusUpdate = await this.swapsService.checkSwapStatus(swap.swapId)
 
+      // only real milestones count; a message can change every poll (errors, confirmation counts)
+      const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
+      const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
+
+      if (statusUpdate.status !== swap.status || hasNewSellTxHash || hasNewBuyTxHash) {
+        this.lastProgressAt.set(swap.swapId, Date.now())
+      }
+
       if (statusUpdate.status !== swap.status) {
         const updated = await this.swapsService.updateSwapStatus({
           swapId: swap.swapId,
@@ -169,14 +184,10 @@ export class SwapPollingService {
       }
 
       // Same status, but a hash, tracker link, or message the row did not have yet
-      const hasNewSellTxHash = !!statusUpdate.sellTxHash && statusUpdate.sellTxHash !== swap.sellTxHash
-      const hasNewBuyTxHash = !!statusUpdate.buyTxHash && statusUpdate.buyTxHash !== swap.buyTxHash
       const hasNewTxLink = !!statusUpdate.txLink && statusUpdate.txLink !== swap.txLink
       const hasNewStatusMessage = !!statusUpdate.statusMessage && statusUpdate.statusMessage !== swap.statusMessage
 
       if (hasNewSellTxHash || hasNewBuyTxHash || hasNewTxLink || hasNewStatusMessage) {
-        this.lastProgressAt.set(swap.swapId, Date.now())
-
         const updated = await this.swapsService.updateSwapTxHashes({
           swapId: swap.swapId,
           sellTxHash: statusUpdate.sellTxHash,
