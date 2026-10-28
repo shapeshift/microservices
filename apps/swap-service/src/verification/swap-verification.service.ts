@@ -26,6 +26,7 @@ import {
   CowSwapOrderResponse,
   MidgardActionsResponse,
   PortalsOrderResponse,
+  RelayRequest,
   RelayRequestsResponse,
   StonfiQuoteMetadata,
   ZrxApiResponse,
@@ -163,33 +164,30 @@ export class SwapVerificationService {
     const relayId = getSwapMetadata(metadata, 'relay')?.relayId
     if (!relayId) return noAffiliateResult('FAILED', 'Missing relayId in relay metadata')
 
-    const { data } = await firstValueFrom(
-      this.httpService.get<RelayRequestsResponse>(`${env.VITE_RELAY_API_URL}/requests/v2?id=${relayId}`),
-    )
-
-    const request = data?.requests?.[0]
+    const request = await this.fetchRelayRequest(relayId)
     if (!request?.data) return noAffiliateResult('PENDING', 'No request data returned from Relay API')
 
-    const appFees = request.data.appFees?.length ? request.data.appFees : (request.data.paidAppFees ?? [])
+    // the referrer is only returned for requests made with our API key, which every quote we register is
+    const isShapeshiftReferral = request.data.referrer?.toLowerCase() === 'shapeshift'
+
+    // the fee actually collected, or the quoted one until Relay reports it
+    const { actual, quoted, currency } = request.data.appFees ?? {}
+    const appFees = actual?.length ? actual : (quoted ?? [])
 
     // Relay routes affiliate fees to our BASE-chain treasury
     const affiliateAddresses = ['0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502']
 
-    const shapeshiftFee =
-      request.referrer?.toLowerCase() === 'shapeshift'
-        ? appFees.find(({ recipient }) => recipient && affiliateAddresses.includes(recipient.toLowerCase()))
-        : undefined
+    const shapeshiftFee = isShapeshiftReferral
+      ? appFees.find(({ recipient }) => recipient && affiliateAddresses.includes(recipient.toLowerCase()))
+      : undefined
 
     const parsedBps = Number(shapeshiftFee?.bps)
     const affiliateBps = Number.isFinite(parsedBps) ? parsedBps : undefined
 
-    // Relay's appFeeCurrencyObject is the source of truth for which asset the affiliate fee was paid in —
+    // Relay's app fee currency is the source of truth for which asset the affiliate fee was paid in —
     // it can be the sell asset, the buy asset, or neither, depending on the route.
     const actualAffiliateFeeAssetId = (() => {
-      if (!shapeshiftFee) return
-
-      const currency = request.data.appFeeCurrencyObject
-      if (!currency) return
+      if (!shapeshiftFee || !currency) return
 
       try {
         return relayTokenToAssetId(currency)
@@ -209,17 +207,33 @@ export class SwapVerificationService {
       return priceUsd?.toString()
     })()
 
+    // a same-chain swap has no destination leg, so what it received is the origin's output
+    const { origin, destination } = request.data.route?.actual ?? {}
+    const received = destination ? destination.outputCurrency : origin?.outputCurrency
+
     return {
       verificationStatus: 'SUCCESS',
       hasAffiliate: Boolean(shapeshiftFee),
       affiliateBps,
       affiliateAddress: shapeshiftFee?.recipient,
-      verifiedSellAmountCryptoBaseUnit: request.data.metadata?.currencyIn?.amount,
-      actualBuyAmountCryptoBaseUnit: request.data.metadata?.currencyOut?.amount,
+      verifiedSellAmountCryptoBaseUnit: origin?.inputCurrency?.amount,
+      actualBuyAmountCryptoBaseUnit: received?.amount,
       actualAffiliateFeeAmountCryptoBaseUnit: shapeshiftFee?.amount,
       actualAffiliateFeeAssetId,
       actualAffiliateFeeUsd: actualAffiliateFeeUsd ?? undefined,
     }
+  }
+
+  // matches the id ourselves rather than trusting the listing to have filtered on it
+  private async fetchRelayRequest(relayId: string): Promise<RelayRequest | undefined> {
+    const { data } = await firstValueFrom(
+      this.httpService.get<RelayRequestsResponse>(
+        `${env.VITE_RELAY_API_URL}/requests/v3?id=${relayId}&includeAuthenticatedData=true`,
+        { headers: { 'x-api-key': env.VITE_RELAY_API_KEY } },
+      ),
+    )
+
+    return data?.requests?.find(({ id }) => id?.toLowerCase() === relayId.toLowerCase())
   }
 
   private async verifyCowSwap(swap: Swap): Promise<SwapVerificationResult> {

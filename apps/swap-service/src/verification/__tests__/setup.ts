@@ -8,6 +8,7 @@ jest.mock('../../env', () => ({
     VITE_BEBOP_API_KEY: 'x',
     VITE_CHAINFLIP_API_KEY: 'x',
     VITE_NEAR_INTENTS_API_KEY: 'x',
+    VITE_RELAY_API_KEY: 'x',
     VITE_THORCHAIN_NODE_URL: 'https://thornode.test',
     VITE_THORCHAIN_MIDGARD_URL: 'https://thorchain-midgard.test',
     VITE_MAYACHAIN_MIDGARD_URL: 'https://mayachain-midgard.test',
