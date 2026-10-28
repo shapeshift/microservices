@@ -25,6 +25,7 @@ import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
 import { DepositDetectionService } from '../lib/deposit-detection.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
+import { tryGetAssetPrecisions } from '../utils/assets'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
@@ -551,12 +552,15 @@ export class SwapsService {
       `Calculating referral fees for code: ${referralCode}, period: ${startDate?.toISOString()} - ${endDate?.toISOString()}`,
     )
 
+    // without the asset list a fee in a third asset falls back to the bps-implied fee, as it always has for referrals
+    const assetPrecisions = await tryGetAssetPrecisions()
+
     const fees = await this.aggregateFees({
       baseWhere: { referralCode, isAffiliateVerified: true, status: 'SUCCESS', origin: 'web' },
       startDate,
       endDate,
       calcFee: (swap) => {
-        const fee = calculateFeeForSwap(swap)
+        const fee = calculateFeeForSwap(swap, assetPrecisions)
         if (!fee) return null
         return { feeUsd: fee.feeUsd * REFERRER_FEE_RATE, volumeUsd: fee.volumeUsd }
       },

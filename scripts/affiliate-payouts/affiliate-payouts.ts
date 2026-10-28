@@ -9,6 +9,7 @@ import {
   stallTimeoutMs,
   toSwap,
 } from '../../apps/swap-service/src/swaps/utils'
+import { getAssetPrecisions } from '../../apps/swap-service/src/utils/assets'
 import { createPrismaAdapter, PrismaClient } from '../../packages/prisma'
 
 import type { PartnerPayout, PayoutRecord } from './types'
@@ -139,8 +140,15 @@ async function generate(monthArg: string | undefined, force: boolean, allowUnset
     }
   }
 
+  // throws rather than leaving fees in a third asset unpaid as if they had no verified fee
+  const assetPrecisions = await getAssetPrecisions()
+
   const { partners, unpriceable, anomalies, unverified, unattributed, noAffiliateFee, partnerBpsUnset, unresolvedFee } =
-    aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
+    aggregateByPartner(rows, {
+      toSwap,
+      calculateFeeForSwap: (swap) => calculateFeeForSwap(swap, assetPrecisions),
+      getPartnerFeeUsd,
+    })
 
   const affiliates = await prisma.affiliate.findMany({
     where: { partnerCode: { in: Array.from(partners.keys()) } },

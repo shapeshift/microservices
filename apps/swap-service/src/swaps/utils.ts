@@ -259,7 +259,7 @@ export const buildStatusNotification = (swap: Swap): StatusNotification | null =
   }
 }
 
-const resolveActualFeeUsd = (swap: Swap): number | null => {
+const resolveActualFeeUsd = (swap: Swap, assetPrecisions?: ReadonlyMap<string, number>): number | null => {
   const amount = swap.actualAffiliateFeeAmountCryptoBaseUnit
   if (!amount || !swap.affiliateFeeAssetId) return null
 
@@ -286,9 +286,9 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
       precision = CACAO_PRECISION
       break
     default:
+      // a fee in neither swap asset, e.g. Relay's USDC on Base, takes its precision from the asset list
       priceUsd = swap.affiliateAssetUsd
-      // Fee asset is neither sell nor buy nor a known native fee asset — precision unknown
-      precision = null
+      precision = assetPrecisions?.get(swap.affiliateFeeAssetId) ?? null
   }
 
   if (!priceUsd || precision === null) return null
@@ -298,6 +298,7 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
 
 export const calculateFeeForSwap = (
   swap: Swap,
+  assetPrecisions?: ReadonlyMap<string, number>,
 ): {
   feeUsd: number
   volumeUsd: number
@@ -325,7 +326,7 @@ export const calculateFeeForSwap = (
     swap.sellAssetUsd,
   )
 
-  const actualFeeUsd = resolveActualFeeUsd(swap)
+  const actualFeeUsd = resolveActualFeeUsd(swap, assetPrecisions)
   const impliedFeeUsd =
     sellAmountUsd === null ? null : bnOrZero(sellAmountUsd).times(verifiedBps).div(BPS_DENOMINATOR).toNumber()
 

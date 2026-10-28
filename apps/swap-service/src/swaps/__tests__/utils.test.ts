@@ -85,6 +85,23 @@ describe('calculateFeeForSwap volume reconstruction', () => {
     // fee $1 / 1% = $100 volume
     expect(result?.volumeUsd).toBe(100)
   })
+
+  it('values a fee in neither swap asset only when the asset list knows its precision', () => {
+    const baseUsdc = 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
+    const swap = makeSwap({
+      affiliateFeeAssetId: baseUsdc,
+      affiliateAssetUsd: '1',
+      actualAffiliateFeeAmountCryptoBaseUnit: '16000000', // 16 USDC
+      affiliateVerificationDetails: {
+        hasAffiliate: true,
+        affiliateBps: 40,
+        verifiedSellAmountCryptoBaseUnit: '1000000000000000000',
+      },
+    })
+
+    expect(calculateFeeForSwap(swap, new Map([[baseUsdc, 6]]))?.actualFeeUsd).toBe(16)
+    expect(calculateFeeForSwap(swap)?.actualFeeUsd).toBeNull()
+  })
 })
 
 describe('describeError', () => {
