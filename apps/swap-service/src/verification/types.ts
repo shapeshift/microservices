@@ -53,7 +53,6 @@ interface RelayAppFee {
   bps?: string
   amount?: string
   amountUsd?: string
-  amountUsdCurrent?: string
 }
 
 interface RelayToken {
@@ -67,31 +66,37 @@ interface RelayToken {
 interface RelayCurrencyAmount {
   currency?: RelayToken
   amount?: string
-  amountFormatted?: string
-  amountUsd?: string
-  amountUsdCurrent?: string
-  minimumAmount?: string
+}
+
+interface RelayRouteLeg {
+  inputCurrency?: RelayCurrencyAmount
+  outputCurrency?: RelayCurrencyAmount
+}
+
+// GET /requests/v3, trimmed to the fields verification reads
+export interface RelayRequest {
+  id?: string
+  status?: string
+  data?: {
+    // authenticated data: only returned for requests created with our API key
+    referrer?: string | null
+    appFees?: {
+      quoted?: Array<RelayAppFee>
+      actual?: Array<RelayAppFee>
+      currency?: RelayToken
+    }
+    route?: {
+      // actual falls back to quoted until Relay has execution data
+      actual?: {
+        origin?: RelayRouteLeg
+        destination?: RelayRouteLeg | null
+      }
+    }
+  }
 }
 
 export interface RelayRequestsResponse {
-  requests?: Array<{
-    id?: string
-    status?: string
-    referrer?: string
-    user?: string
-    recipient?: string
-    createdAt?: string
-    updatedAt?: string
-    data?: {
-      appFees?: Array<RelayAppFee>
-      paidAppFees?: Array<RelayAppFee>
-      appFeeCurrencyObject?: RelayToken
-      metadata?: {
-        currencyIn?: RelayCurrencyAmount
-        currencyOut?: RelayCurrencyAmount
-      }
-    }
-  }>
+  requests?: Array<RelayRequest>
 }
 
 export interface CowSwapAppDataResponse {
