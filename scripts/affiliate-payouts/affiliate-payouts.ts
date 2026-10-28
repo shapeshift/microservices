@@ -66,8 +66,7 @@ function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
     // grouped so a swapper or chain that keeps timing out reads as a bug rather than a window to tune
     const groups = new Map<string, number>()
     record.deadlineResolved.forEach((d) => {
-      const kind = { status: 'abandoned', verification: 'timeout', attribution: `unresolved: ${d.reason}` }[d.stage]
-      const key = `${d.stage} | ${d.swapperName} | ${d.chainId ?? 'unknown chain'} | ${kind}`
+      const key = `${d.stage} | ${d.swapperName} | ${d.chainId ?? 'unknown chain'} | ${d.reason}`
       groups.set(key, (groups.get(key) ?? 0) + 1)
     })
     groups.forEach((count, key) => console.log(`${String(count).padStart(4)}  ${key}`))

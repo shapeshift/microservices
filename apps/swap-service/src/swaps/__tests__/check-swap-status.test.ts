@@ -165,6 +165,17 @@ describe('checkSwapStatus', () => {
     })
   })
 
+  it('abandons a confirmed swap whose deposit hash is never found once its deposit window passes', async () => {
+    checkTradeStatus.mockResolvedValue({ status: 'Confirmed', buyTxHash: '0xbuy', message: undefined })
+    const createdAt = new Date(Date.now() - 97 * 60 * 60 * 1000)
+    const { service } = buildService(row({ createdAt }), undefined)
+
+    await expect(service.checkSwapStatus('swap-1')).resolves.toMatchObject({
+      status: 'FAILED',
+      statusMessage: expect.stringContaining('waiting for deposit hash') as string,
+    })
+  })
+
   it('holds an externally paid swap inside its deposit window', async () => {
     checkTradeStatus.mockResolvedValue(pending)
     const createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)

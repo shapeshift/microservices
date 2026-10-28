@@ -60,12 +60,10 @@ import {
   isExternallyPaid,
   isPastResolutionDeadline,
   isSettledStatus,
-  POLL_INTERVAL_CEILING_MS,
   resolutionCutoff,
   resolveAttributionFromChain,
   resolveMissingPrices,
   resolveStalledSwap,
-  stallTimeoutMs,
   toQuotedAt,
   toSwap,
   toSwapperSwap,
@@ -499,15 +497,10 @@ export class SwapsService {
 
   // A price still missing a week after settling stops retrying and is left to the payout report
   async getMissingPriceSwaps(): Promise<Swap[]> {
-    const cutoff = resolutionCutoff()
-    // a swap settles at most a deposit window after registering, which bounds the scan
-    const registeredSince = new Date(cutoff.getTime() - stallTimeoutMs(true) - POLL_INTERVAL_CEILING_MS)
-
     const swaps = await this.prisma.swap.findMany({
       where: {
         status: 'SUCCESS',
-        createdAt: { gt: registeredSince },
-        settledAt: { gt: cutoff },
+        settledAt: { gt: resolutionCutoff() },
         OR: [
           { sellAssetUsd: null },
           { buyAssetUsd: null },
@@ -667,8 +660,12 @@ export class SwapsService {
       // A success needs a deposit to verify, so a confirmed shielded zcash swap waits on unchained rather than settling
       if (status === TxStatus.Confirmed && !sellTxHash) {
         return {
-          status: 'PENDING',
-          statusMessage: 'Confirmed by provider, waiting for deposit hash',
+          ...resolveStalledSwap(
+            'PENDING',
+            swap.createdAt,
+            'Confirmed by provider, waiting for deposit hash',
+            isExternal,
+          ),
           sellTxHash,
           buyTxHash,
           txLink: swapperTxLink,
