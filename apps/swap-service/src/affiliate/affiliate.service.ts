@@ -1,3 +1,4 @@
+import type { OnModuleInit } from '@nestjs/common'
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { getAddress } from 'viem'
 
@@ -6,7 +7,9 @@ import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { SHAPESHIFT_BPS } from '../swaps/constants'
+import { resolvePartnerFee } from '../swaps/partner-fee'
 import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../swaps/utils'
+import { tryGetAssetPrecisions } from '../utils/assets'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 
 import type {
@@ -25,8 +28,13 @@ const PARTNER_CODE_LOCK = 2
 type Claims = { walletAddress: string; partnerCode?: string }
 
 @Injectable()
-export class AffiliateService {
+export class AffiliateService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
+
+  // loaded up front so the first affiliate request doesn't wait on the download
+  onModuleInit() {
+    void tryGetAssetPrecisions()
+  }
 
   // Serializes every write that claims a wallet or partner code so the uniqueness checks cannot race.
   // $executeRaw because the lock function returns void, which $queryRaw cannot deserialize
@@ -150,10 +158,14 @@ export class AffiliateService {
     const { startDate, endDate } = options
 
     const items = await this.prisma.swap.findMany({
+      // narrows to rows that can be payable; resolvePartnerFee below still applies the full rules
       where: {
         partnerCode,
         status: 'SUCCESS',
         isAffiliateVerified: true,
+        verificationStatus: 'SUCCESS',
+        attributionStatus: 'ACCEPTED',
+        partnerBps: { gt: 0 },
         ...(startDate || endDate
           ? {
               createdAt: {
@@ -165,6 +177,8 @@ export class AffiliateService {
       },
     })
 
+    const assetPrecisions = await tryGetAssetPrecisions()
+
     let totalSwaps = 0
     let totalVolumeUsd = bnOrZero(0)
     let totalFeesEarnedUsd = bnOrZero(0)
@@ -172,12 +186,14 @@ export class AffiliateService {
     for (const item of items) {
       const swap = toSwap(item)
 
-      const fee = calculateFeeForSwap(swap)
-      if (!fee) continue
+      // only what the payout would pay counts towards the partner's totals
+      const outcome = resolvePartnerFee(swap, () => calculateFeeForSwap(swap, assetPrecisions))
+      if (outcome.kind === 'excluded') continue
 
+      const { fee } = outcome
       totalSwaps++
       totalVolumeUsd = totalVolumeUsd.plus(fee.volumeUsd)
-      totalFeesEarnedUsd = totalFeesEarnedUsd.plus(getPartnerFeeUsd(fee.feeUsd, fee.verifiedBps, swap.partnerBps))
+      totalFeesEarnedUsd = totalFeesEarnedUsd.plus(getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, swap.partnerBps))
     }
 
     return {
@@ -208,12 +224,19 @@ export class AffiliateService {
       },
     })
 
+    const assetPrecisions = await tryGetAssetPrecisions()
+
     const swaps = items.map((item) => {
       const swap = toSwap(item)
-      const fee = calculateFeeForSwap(swap)
-      const feeUsd = fee ? fee.feeUsd.toString() : null
+      const fee = calculateFeeForSwap(swap, assetPrecisions)
+      // the fee fields are set only for what the payout would pay, so anything else reads as not yet earned
+      const outcome = resolvePartnerFee(swap, () => fee)
+      const payable = outcome.kind === 'payable' ? outcome.fee : null
+      const feeUsd = payable ? payable.actualFeeUsd.toString() : null
+      const partnerFeeUsd = payable
+        ? getPartnerFeeUsd(payable.actualFeeUsd, payable.verifiedBps, swap.partnerBps)
+        : null
       const volumeUsd = fee ? fee.volumeUsd.toString() : null
-      const partnerFeeUsd = fee ? getPartnerFeeUsd(fee.feeUsd, fee.verifiedBps, swap.partnerBps) : null
       return { ...swap, feeUsd, partnerFeeUsd, volumeUsd }
     })
 

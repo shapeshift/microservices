@@ -23,6 +23,7 @@ import {
   RESOLUTION_DEADLINE_MS,
   SETTLED_STATUSES,
 } from './constants'
+import type { FeeResult } from './partner-fee'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -259,7 +260,7 @@ export const buildStatusNotification = (swap: Swap): StatusNotification | null =
   }
 }
 
-const resolveActualFeeUsd = (swap: Swap): number | null => {
+const resolveActualFeeUsd = (swap: Swap, assetPrecisions?: ReadonlyMap<string, number>): number | null => {
   const amount = swap.actualAffiliateFeeAmountCryptoBaseUnit
   if (!amount || !swap.affiliateFeeAssetId) return null
 
@@ -286,9 +287,9 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
       precision = CACAO_PRECISION
       break
     default:
+      // a fee in neither swap asset, e.g. Relay's USDC on Base, takes its precision from the asset list
       priceUsd = swap.affiliateAssetUsd
-      // Fee asset is neither sell nor buy nor a known native fee asset — precision unknown
-      precision = null
+      precision = assetPrecisions?.get(swap.affiliateFeeAssetId) ?? null
   }
 
   if (!priceUsd || precision === null) return null
@@ -296,15 +297,7 @@ const resolveActualFeeUsd = (swap: Swap): number | null => {
   return bnOrZero(amount).div(bnOrZero(10).pow(precision)).times(priceUsd).toNumber()
 }
 
-export const calculateFeeForSwap = (
-  swap: Swap,
-): {
-  feeUsd: number
-  volumeUsd: number
-  verifiedBps: number
-  actualFeeUsd: number | null
-  impliedFeeUsd: number | null
-} | null => {
+export const calculateFeeForSwap = (swap: Swap, assetPrecisions?: ReadonlyMap<string, number>): FeeResult | null => {
   if (!swap.isAffiliateVerified) return null
 
   const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps
@@ -325,7 +318,7 @@ export const calculateFeeForSwap = (
     swap.sellAssetUsd,
   )
 
-  const actualFeeUsd = resolveActualFeeUsd(swap)
+  const actualFeeUsd = resolveActualFeeUsd(swap, assetPrecisions)
   const impliedFeeUsd =
     sellAmountUsd === null ? null : bnOrZero(sellAmountUsd).times(verifiedBps).div(BPS_DENOMINATOR).toNumber()
 
