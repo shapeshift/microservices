@@ -8,7 +8,7 @@ import {
   aggregateByPartner,
   buildPayouts,
   buildRecord,
-  checkFeeAnomaly,
+  describeFeeAnomaly,
   findDeadlineResolved,
   findUnsettled,
   formatUsdc,
@@ -195,7 +195,7 @@ describe('aggregateByPartner', () => {
   })
 })
 
-describe('checkFeeAnomaly', () => {
+describe('describeFeeAnomaly', () => {
   const row = { swapId: 's1', partnerCode: 'acme' }
   const fee = (over: Partial<FeeResult>): FeeResult => ({
     feeUsd: 12,
@@ -206,24 +206,16 @@ describe('checkFeeAnomaly', () => {
     ...over,
   })
 
-  it('returns null when there is no on-chain fee to check (handled as no-verified-fee upstream)', () => {
-    expect(checkFeeAnomaly(row, fee({ actualFeeUsd: null }), 0.25)).toBeNull()
+  it('reports how far the on-chain fee is from the bps-implied fee', () => {
+    const anomaly = describeFeeAnomaly(row, fee({ actualFeeUsd: 39020, impliedFeeUsd: 0.4 }), 97549, 0.25)
+    expect(anomaly.deviation).toBe(97549)
+    expect(anomaly.reason).toMatch(/deviates/)
   })
 
-  it('passes when on-chain fee is within tolerance of implied', () => {
-    expect(checkFeeAnomaly(row, fee({ actualFeeUsd: 13, impliedFeeUsd: 12 }), 0.25)).toBeNull()
-  })
-
-  it('flags when on-chain fee exceeds the deviation band', () => {
-    const anomaly = checkFeeAnomaly(row, fee({ actualFeeUsd: 39020, impliedFeeUsd: 0.4 }), 0.25)
-    expect(anomaly?.deviation).toBeGreaterThan(0.25)
-    expect(anomaly?.reason).toMatch(/deviates/)
-  })
-
-  it('flags when the implied fee is unavailable for validation', () => {
-    const anomaly = checkFeeAnomaly(row, fee({ actualFeeUsd: 5, impliedFeeUsd: null }), 0.25)
-    expect(anomaly?.deviation).toBeNull()
-    expect(anomaly?.reason).toMatch(/cannot validate/)
+  it('reports a fee that could not be checked against a bps-implied fee', () => {
+    const anomaly = describeFeeAnomaly(row, fee({ actualFeeUsd: 5, impliedFeeUsd: null }), null, 0.25)
+    expect(anomaly.deviation).toBeNull()
+    expect(anomaly.reason).toMatch(/cannot validate/)
   })
 })
 

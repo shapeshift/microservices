@@ -19,7 +19,7 @@ export type PartnerFeeExclusion =
 
 export type PartnerFeeOutcome =
   | { kind: 'payable'; fee: FeeResult & { actualFeeUsd: number } }
-  | { kind: 'excluded'; exclusion: PartnerFeeExclusion; fee: FeeResult | null }
+  | { kind: 'excluded'; exclusion: PartnerFeeExclusion; fee: FeeResult | null; deviation: number | null }
 
 type PartnerFeeSwap = {
   attributionStatus: string
@@ -28,10 +28,13 @@ type PartnerFeeSwap = {
   partnerBps: number
 }
 
-// how far the on-chain fee is from the bps-implied one, null when there is nothing to check it against
+// how far the on-chain fee is from the bps-implied one, null when there is nothing valid to check it against
 export const feeDeviation = (fee: FeeResult): number | null => {
   if (fee.actualFeeUsd === null || fee.impliedFeeUsd === null || fee.impliedFeeUsd <= 0) return null
-  return Math.abs(fee.actualFeeUsd - fee.impliedFeeUsd) / fee.impliedFeeUsd
+
+  const deviation = Math.abs(fee.actualFeeUsd - fee.impliedFeeUsd) / fee.impliedFeeUsd
+
+  return Number.isFinite(deviation) ? deviation : null
 }
 
 // the payout's rules in its order, shared so no report counts a fee that would not actually be paid
@@ -40,11 +43,11 @@ export const resolvePartnerFee = (
   calculateFee: () => FeeResult | null,
   tolerance = FEE_DEVIATION_TOLERANCE,
 ): PartnerFeeOutcome => {
-  const excluded = (exclusion: PartnerFeeExclusion, fee: FeeResult | null = null): PartnerFeeOutcome => ({
-    kind: 'excluded',
-    exclusion,
-    fee,
-  })
+  const excluded = (
+    exclusion: PartnerFeeExclusion,
+    fee: FeeResult | null = null,
+    deviation: number | null = null,
+  ): PartnerFeeOutcome => ({ kind: 'excluded', exclusion, fee, deviation })
 
   if (swap.attributionStatus !== 'ACCEPTED') return excluded('unattributed')
   if (swap.verificationStatus !== 'SUCCESS') return excluded('unverified')
@@ -55,7 +58,7 @@ export const resolvePartnerFee = (
   if (fee.actualFeeUsd === null) return excluded('unresolved-fee', fee)
 
   const deviation = feeDeviation(fee)
-  if (deviation === null || deviation > tolerance) return excluded('fee-anomaly', fee)
+  if (deviation === null || deviation > tolerance) return excluded('fee-anomaly', fee, deviation)
 
   if (swap.partnerBps <= 0) return excluded('partner-bps-unset', fee)
 

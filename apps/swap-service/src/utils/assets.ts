@@ -42,24 +42,22 @@ const refresh = async (): Promise<void> => {
   }
 }
 
-// a failed refresh keeps the last list, so this only throws if the list has never loaded
+// only the first load is waited on; later refreshes run behind the cached list, which a failed one keeps
 export async function getAssetPrecisions(): Promise<ReadonlyMap<string, number>> {
-  if (Date.now() >= nextCheckAt) {
-    refreshing ??= refresh().finally(() => (refreshing = undefined))
-    await refreshing
-  }
+  if (Date.now() >= nextCheckAt) refreshing ??= refresh().finally(() => (refreshing = undefined))
+  if (!precisions) await refreshing
 
   if (!precisions) throw new Error('Asset list unavailable')
 
   return precisions
 }
 
-// for reporting, where a fee in a third asset is left unvalued rather than failing the whole request
+// for reporting, where a fee in a third asset is left unvalued rather than failing the whole request;
+// the failed refresh has already logged why
 export async function tryGetAssetPrecisions(): Promise<ReadonlyMap<string, number> | undefined> {
   try {
     return await getAssetPrecisions()
-  } catch (error) {
-    logger.error('Asset list unavailable, fees in a third asset are left unvalued:', error)
+  } catch {
     return
   }
 }

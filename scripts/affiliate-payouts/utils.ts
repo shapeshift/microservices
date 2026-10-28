@@ -2,7 +2,7 @@ import BigNumber from 'bignumber.js'
 import { getAddress, isAddress, zeroAddress } from 'viem'
 
 import { ABANDONED_STATUS_PREFIX, SETTLED_STATUSES } from '../../apps/swap-service/src/swaps/constants'
-import { FEE_DEVIATION_TOLERANCE, feeDeviation, resolvePartnerFee } from '../../apps/swap-service/src/swaps/partner-fee'
+import { FEE_DEVIATION_TOLERANCE, resolvePartnerFee } from '../../apps/swap-service/src/swaps/partner-fee'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
@@ -66,37 +66,30 @@ export function resolveWindow(date?: string, now: Date = new Date()): PayoutWind
   return { start, end, label: monthLabel(start) }
 }
 
-// Flags the on-chain fee when it deviates too far from — or can't be checked against — the
-// bps-implied fee; null when trustworthy. The implied fee only guards, it's never a payout basis.
-export function checkFeeAnomaly(
+// The report entry for a fee the shared rules held back as anomalous; the deviation is theirs, so the two can't disagree
+export function describeFeeAnomaly(
   row: { swapId: string; partnerCode: string },
   fee: FeeResult,
+  deviation: number | null,
   tolerance: number,
-): FeeAnomaly | null {
-  if (fee.actualFeeUsd === null) return null
-
+): FeeAnomaly {
   const base = {
     swapId: row.swapId,
     partnerCode: row.partnerCode,
     actualFeeUsd: fee.actualFeeUsd,
     impliedFeeUsd: fee.impliedFeeUsd,
     volumeUsd: fee.volumeUsd,
+    deviation,
   }
 
-  const deviation = feeDeviation(fee)
-  if (deviation === null || fee.impliedFeeUsd === null) {
-    return { ...base, deviation: null, reason: 'cannot validate on-chain fee: no bps-implied fee available' }
+  if (deviation === null) {
+    return { ...base, reason: 'cannot validate on-chain fee: no valid bps-implied fee available' }
   }
 
-  if (deviation > tolerance) {
-    return {
-      ...base,
-      deviation,
-      reason: `on-chain fee $${fee.actualFeeUsd.toFixed(6)} deviates ${(deviation * 100).toFixed(0)}% from bps-implied $${fee.impliedFeeUsd.toFixed(6)} (tolerance ${(tolerance * 100).toFixed(0)}%)`,
-    }
+  return {
+    ...base,
+    reason: `on-chain fee $${(fee.actualFeeUsd ?? 0).toFixed(6)} deviates ${(deviation * 100).toFixed(0)}% from bps-implied $${(fee.impliedFeeUsd ?? 0).toFixed(6)} (tolerance ${(tolerance * 100).toFixed(0)}%)`,
   }
-
-  return null
 }
 
 // Accrue each partner's fee share from the verified on-chain fee, using the injected swap-service
@@ -159,10 +152,8 @@ export function aggregateByPartner<S>(
           unresolvedFee.push(ref)
           break
         case 'fee-anomaly':
-          if (fee) {
-            const anomaly = checkFeeAnomaly(ref, fee, tolerance)
-            if (anomaly) anomalies.push(anomaly)
-          }
+          // the rules only reach an anomaly once the fee is known
+          if (fee) anomalies.push(describeFeeAnomaly(ref, fee, outcome.deviation, tolerance))
           break
         case 'partner-bps-unset':
           partnerBpsUnset.push({ ...ref, verifiedBps: fee?.verifiedBps ?? 0, partnerBps: row.partnerBps })

@@ -158,10 +158,14 @@ export class AffiliateService implements OnModuleInit {
     const { startDate, endDate } = options
 
     const items = await this.prisma.swap.findMany({
+      // narrows to rows that can be payable; resolvePartnerFee below still applies the full rules
       where: {
         partnerCode,
         status: 'SUCCESS',
         isAffiliateVerified: true,
+        verificationStatus: 'SUCCESS',
+        attributionStatus: 'ACCEPTED',
+        partnerBps: { gt: 0 },
         ...(startDate || endDate
           ? {
               createdAt: {
