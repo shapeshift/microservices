@@ -1,10 +1,12 @@
 import BigNumber from 'bignumber.js'
 import { getAddress, isAddress, zeroAddress } from 'viem'
 
+import { ABANDONED_STATUS_PREFIX, SETTLED_STATUSES } from '../../apps/swap-service/src/swaps/constants'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
   AggregateResult,
+  DeadlineResolvedSwap,
   FeeAnomaly,
   FeeDeps,
   FeeResult,
@@ -16,7 +18,9 @@ import type {
   PayoutWarning,
   PayoutWindow,
   UnattributedSwap,
+  UnpriceableSwap,
   UnresolvedFeeSwap,
+  UnsettledSwap,
   UnverifiedSwap,
 } from './types'
 
@@ -26,6 +30,20 @@ export const USDC_DECIMALS = 6
 
 function monthLabel(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+type ResolutionDetails = { reason?: string; checked?: boolean; resolvedBy?: 'deadline' } | null
+
+const readDetails = (details: unknown): ResolutionDetails => {
+  if (!details || typeof details !== 'object') return null
+
+  const { reason, checked, resolvedBy } = details as Record<string, unknown>
+
+  return {
+    reason: typeof reason === 'string' ? reason : undefined,
+    checked: checked === true,
+    resolvedBy: resolvedBy === 'deadline' ? 'deadline' : undefined,
+  }
 }
 
 export function resolveWindow(date?: string, now: Date = new Date()): PayoutWindow {
@@ -87,7 +105,7 @@ export function checkFeeAnomaly(
 //   verificationStatus PENDING     → unverified 'pending'  (not verified yet; may still settle)
 //   verificationStatus FAILED      → unverified 'failed'   (verification failed; investigate)
 //   verified, no affiliate fee     → noAffiliateFee        (not ours, or ours @ 0 bps)
-//   fee math returns null          → unpriceableSwaps      (can't price the swap)
+//   fee math returns null          → unpriceable           (can't price the swap)
 //   on-chain fee is null           → unresolvedFee         (nothing verified to pay on)
 //   fails the deviation guard      → anomalies             (on-chain fee looks wrong)
 //   partner share rate ≤ 0         → partnerBpsUnset       (no partner share configured)
@@ -106,7 +124,7 @@ export function aggregateByPartner<S>(
   const partnerBpsUnset: PartnerBpsUnsetSwap[] = []
   const unresolvedFee: UnresolvedFeeSwap[] = []
 
-  let unpriceableSwaps = 0
+  const unpriceable: UnpriceableSwap[] = []
 
   for (const row of rows) {
     if (!row.partnerCode) continue
@@ -119,7 +137,7 @@ export function aggregateByPartner<S>(
         swapId: row.swapId,
         partnerCode,
         status: row.attributionStatus,
-        reason: (row.attributionDetails as { reason?: string } | null)?.reason ?? null,
+        reason: readDetails(row.attributionDetails)?.reason ?? null,
       })
       continue
     }
@@ -141,7 +159,7 @@ export function aggregateByPartner<S>(
 
     const fee = deps.calculateFeeForSwap(deps.toSwap(row))
     if (!fee) {
-      unpriceableSwaps++
+      unpriceable.push({ swapId: row.swapId, partnerCode })
       continue
     }
 
@@ -185,7 +203,7 @@ export function aggregateByPartner<S>(
 
   return {
     partners,
-    unpriceableSwaps,
+    unpriceable,
     anomalies,
     unverified,
     unattributed,
@@ -193,6 +211,57 @@ export function aggregateByPartner<S>(
     partnerBpsUnset,
     unresolvedFee,
   }
+}
+
+// Partner swaps a deadline closed out rather than evidence, once per stage, none paid until a person confirms
+export function findDeadlineResolved(rows: PrismaSwap[]): DeadlineResolvedSwap[] {
+  return rows.flatMap((row) => {
+    if (!row.partnerCode) return []
+
+    const base = {
+      swapId: row.swapId,
+      partnerCode: row.partnerCode.toLowerCase(),
+      swapperName: row.swapperName,
+      chainId: (row.sellAsset as { chainId?: string } | null)?.chainId ?? null,
+      sellTxHash: row.sellTxHash,
+    }
+
+    const resolved: DeadlineResolvedSwap[] = []
+
+    const attribution = readDetails(row.attributionDetails)
+    const verification = readDetails(row.affiliateVerificationDetails)
+
+    // a transaction the chain itself ruled out can never be paid; a missing hash may be an undetected deposit
+    const abandoned = row.status === 'FAILED' && row.statusMessage?.startsWith(ABANDONED_STATUS_PREFIX)
+    const disowned = row.attributionStatus === 'REJECTED' && attribution?.checked === true
+    if (abandoned && !disowned) {
+      resolved.push({ ...base, stage: 'status', reason: row.statusMessage ?? '' })
+    }
+
+    if (row.verificationStatus === 'FAILED' && verification?.resolvedBy === 'deadline') {
+      resolved.push({ ...base, stage: 'verification', reason: verification.reason ?? '' })
+    }
+
+    if (row.attributionStatus === 'REJECTED' && attribution?.resolvedBy === 'deadline') {
+      resolved.push({ ...base, stage: 'attribution', reason: attribution.reason ?? '' })
+    }
+
+    return resolved
+  })
+}
+
+// Partner swaps with a stage still pending
+export function findUnsettled(rows: PrismaSwap[]): UnsettledSwap[] {
+  return rows.flatMap((row) => {
+    if (!row.partnerCode) return []
+
+    const stages: UnsettledSwap['stages'] = []
+    if (!SETTLED_STATUSES.includes(row.status)) stages.push('status')
+    if (row.verificationStatus === 'PENDING') stages.push('verification')
+    if (row.attributionStatus === 'PENDING') stages.push('attribution')
+
+    return stages.length ? [{ swapId: row.swapId, partnerCode: row.partnerCode.toLowerCase(), stages }] : []
+  })
 }
 
 // USD is paid 1:1 as USDC, floored to 6 dp (USDC precision), trailing zeros stripped.
@@ -251,25 +320,27 @@ export function buildRecord(input: {
   window: PayoutWindow
   payouts: PartnerPayout[]
   generatedAt: string
-  unpriceableSwaps: number
+  unpriceable: UnpriceableSwap[]
   anomalies: FeeAnomaly[]
   unverified: UnverifiedSwap[]
   unattributed: UnattributedSwap[]
   noAffiliateFee: NoAffiliateFeeSwap[]
   partnerBpsUnset: PartnerBpsUnsetSwap[]
   unresolvedFee: UnresolvedFeeSwap[]
+  deadlineResolved: DeadlineResolvedSwap[]
 }): PayoutRecord {
   const {
     window,
     payouts,
     generatedAt,
-    unpriceableSwaps,
+    unpriceable,
     anomalies,
     unverified,
     unattributed,
     noAffiliateFee,
     partnerBpsUnset,
     unresolvedFee,
+    deadlineResolved,
   } = input
   const included = payouts.filter((p) => p.included)
   const totalUsdc = included.reduce((sum, p) => sum.plus(p.usdcAmount), new BigNumber(0))
@@ -302,6 +373,13 @@ export function buildRecord(input: {
       swapId: u.swapId,
       reason: `partnerBps is 0 (verifiedBps ${u.verifiedBps}) — no partner share configured, excluded`,
     })),
+    ...unpriceable.map((u) => ({
+      type: 'unpriceable' as const,
+      partnerCode: u.partnerCode,
+      swapId: u.swapId,
+      reason:
+        'fee could not be valued (a USD price or verified amount is missing) — not paid, fix the row and regenerate',
+    })),
     ...unresolvedFee.map((n) => ({
       type: 'no-verified-fee' as const,
       partnerCode: n.partnerCode,
@@ -318,13 +396,14 @@ export function buildRecord(input: {
       partnersPaid: included.length,
       totalUsdc: totalUsdc.toFixed(USDC_DECIMALS),
       paidSwaps: included.reduce((sum, p) => sum + p.swapCount, 0),
-      unpriceableSwaps,
+      unpriceableSwaps: unpriceable.length,
       feeAnomalySwaps: anomalies.length,
       unverifiedSwaps: unverified.length,
       unattributedSwaps: unattributed.length,
       noAffiliateFeeSwaps: noAffiliateFee.length,
       partnerBpsUnsetSwaps: partnerBpsUnset.length,
       noVerifiedFeeSwaps: unresolvedFee.length,
+      deadlineResolvedSwaps: deadlineResolved.length,
     },
     partners: payouts.map((p) => ({
       partnerCode: p.partnerCode,
@@ -337,5 +416,6 @@ export function buildRecord(input: {
       excludedReason: p.excludedReason,
     })),
     warnings,
+    deadlineResolved,
   }
 }

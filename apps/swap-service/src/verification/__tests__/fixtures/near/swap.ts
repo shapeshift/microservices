@@ -45,6 +45,7 @@ export default {
   buyTxHash: null,
   txLink: null,
   statusMessage: null,
+  settledAt: null,
   isStreaming: false,
   createdAt: new Date('2026-04-27T17:53:17.569Z'),
   updatedAt: new Date('2026-04-27T17:53:17.569Z'),

@@ -3,7 +3,13 @@ import { Logger } from '@nestjs/common'
 import { mayachainAssetId } from '@shapeshiftoss/caip'
 
 import type { Swap } from '../types'
-import { calculateFeeForSwap, describeError, resolveAttributionFromChain, resolveStalledSwap } from '../utils'
+import {
+  calculateFeeForSwap,
+  describeError,
+  resolveAttributionFromChain,
+  resolveMissingPrices,
+  resolveStalledSwap,
+} from '../utils'
 
 // Minimal swap shape exercising calculateFeeForSwap's fee/volume math. CACAO fee asset so a stored
 // '0' fee amount resolves to actualFeeUsd = 0 (the real 0-bps case this branch introduced).
@@ -139,7 +145,7 @@ describe('resolveStalledSwap', () => {
   const longAgo = new Date(Date.now() - 25 * 60 * 60 * 1000)
 
   it('fails a swap the swapper still cannot settle past the timeout', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', longAgo, 'waiting', false)).toEqual({
       status: 'FAILED',
       statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: waiting)',
     })
@@ -147,21 +153,21 @@ describe('resolveStalledSwap', () => {
 
   // an unmined source tx leaves the swapper with nothing to report
   it('records why it failed when the swapper reported no status', () => {
-    expect(resolveStalledSwap('PENDING', longAgo, '').statusMessage).toBe(
+    expect(resolveStalledSwap('PENDING', longAgo, '', false).statusMessage).toBe(
       'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
     )
   })
 
   it('leaves a swap pending inside the timeout', () => {
-    expect(resolveStalledSwap('PENDING', justNow, 'waiting')).toEqual({
+    expect(resolveStalledSwap('PENDING', justNow, 'waiting', false)).toEqual({
       status: 'PENDING',
       statusMessage: 'waiting',
     })
   })
 
   it('never overrides a terminal status, however old the swap', () => {
-    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete').status).toBe('SUCCESS')
-    expect(resolveStalledSwap('FAILED', longAgo, 'reverted').status).toBe('FAILED')
+    expect(resolveStalledSwap('SUCCESS', longAgo, 'complete', false).status).toBe('SUCCESS')
+    expect(resolveStalledSwap('FAILED', longAgo, 'reverted', false).status).toBe('FAILED')
   })
 })
 
@@ -169,9 +175,13 @@ describe('resolveAttributionFromChain', () => {
   const blockTime = Date.UTC(2026, 8, 1, 12, 0, 0)
   const found = { blockTime: blockTime / 1000 } as const
   const at = (offsetMs: number) => new Date(blockTime + offsetMs)
-  const live = { status: 'SUCCESS' as const, createdAt: new Date() }
-  const abandoned = { status: 'FAILED' as const, createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) }
-  const justFailed = { status: 'FAILED' as const, createdAt: new Date() }
+  const live = { status: 'SUCCESS' as const, createdAt: new Date(), settledAt: null }
+  const abandoned = {
+    status: 'FAILED' as const,
+    createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    settledAt: null,
+  }
+  const justFailed = { status: 'FAILED' as const, createdAt: new Date(), settledAt: null }
 
   it('accepts a quote minted before its transaction was mined', () => {
     const { status, details } = resolveAttributionFromChain(found, at(-60_000), live)
@@ -234,11 +244,46 @@ describe('resolveAttributionFromChain', () => {
   it('resolves a failed swap normally when its transaction exists', () => {
     expect(resolveAttributionFromChain(found, at(-60_000), abandoned).status).toBe('ACCEPTED')
   })
+})
 
-  it('holds a row with no quote time, which cannot be checked at all', () => {
-    expect(resolveAttributionFromChain(found, null, live)).toMatchObject({
-      status: 'PENDING',
-      details: { checked: false, reason: 'no-quoted-at' },
+describe('resolveMissingPrices', () => {
+  const createdAt = new Date(Date.UTC(2026, 8, 8, 14, 40, 31))
+  const priced = {
+    createdAt,
+    sellAsset: { assetId: 'eip155:1/slip44:60' },
+    buyAsset: { assetId: 'eip155:1/erc20:0xusdc' },
+    affiliateFeeAssetId: 'eip155:8453/slip44:60',
+    sellAssetUsd: '2400',
+    buyAssetUsd: '1',
+    affiliateAssetUsd: '2400',
+  } as unknown as Parameters<typeof resolveMissingPrices>[0]
+
+  it('prices only the missing fields, each at the moment the swap was registered', async () => {
+    const priceAt = jest.fn().mockResolvedValue(2500)
+
+    await expect(
+      resolveMissingPrices({ ...priced, sellAssetUsd: null, affiliateAssetUsd: null }, priceAt),
+    ).resolves.toEqual({ sellAssetUsd: '2500', affiliateAssetUsd: '2500' })
+    expect(priceAt).toHaveBeenCalledTimes(2)
+    expect(priceAt).toHaveBeenCalledWith('eip155:1/slip44:60', createdAt)
+    expect(priceAt).toHaveBeenCalledWith('eip155:8453/slip44:60', createdAt)
+  })
+
+  it('fetches an asset once when it prices two fields', async () => {
+    const priceAt = jest.fn().mockResolvedValue(2500)
+    const sameAsset = { ...priced, affiliateFeeAssetId: 'eip155:1/slip44:60' }
+
+    await expect(
+      resolveMissingPrices({ ...sameAsset, sellAssetUsd: null, affiliateAssetUsd: null }, priceAt),
+    ).resolves.toEqual({ sellAssetUsd: '2500', affiliateAssetUsd: '2500' })
+    expect(priceAt).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves out a price that is still unavailable', async () => {
+    const priceAt = jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(1)
+
+    await expect(resolveMissingPrices({ ...priced, sellAssetUsd: null, buyAssetUsd: null }, priceAt)).resolves.toEqual({
+      buyAssetUsd: '1',
     })
   })
 })

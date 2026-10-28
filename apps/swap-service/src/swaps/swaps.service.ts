@@ -28,7 +28,17 @@ import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
-import { ATTRIBUTION_BATCH_SIZE, REFERRER_FEE_RATE } from './constants'
+import {
+  ABANDON_BATCH_SIZE,
+  ABANDONED_STATUS_PREFIX,
+  ACTIVE_STATUSES,
+  ATTRIBUTION_BATCH_SIZE,
+  ATTRIBUTION_DEADLINE_BATCH_SIZE,
+  HOUR_MS,
+  MISSING_PRICE_BATCH_SIZE,
+  PENDING_TIMEOUT_MS,
+  REFERRER_FEE_RATE,
+} from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
 import type {
   AffiliateVerificationDetails,
@@ -48,7 +58,11 @@ import {
   fetchUsdPrices,
   getExternalPaymentSwappers,
   isExternallyPaid,
+  isPastResolutionDeadline,
+  isSettledStatus,
+  resolutionCutoff,
   resolveAttributionFromChain,
+  resolveMissingPrices,
   resolveStalledSwap,
   toQuotedAt,
   toSwap,
@@ -56,6 +70,11 @@ import {
 } from './utils'
 
 const logger = new Logger('SwapsService')
+
+const pendingTxWhere = (): Prisma.SwapWhereInput => ({
+  status: { in: ACTIVE_STATUSES },
+  OR: [{ sellTxHash: { not: null } }, { swapperName: { in: getExternalPaymentSwappers() } }],
+})
 
 @Injectable()
 export class SwapsService {
@@ -228,6 +247,7 @@ export class SwapsService {
             buyTxHash: data.buyTxHash,
             txLink: data.txLink,
             statusMessage: data.statusMessage,
+            ...(isSettledStatus(data.status) && { settledAt: new Date() }),
           },
         }),
       )
@@ -306,37 +326,80 @@ export class SwapsService {
   }
 
   // Externally paid swaps are tracked from registration, before any deposit hash is known
-  async getPendingTxSwaps(): Promise<Swap[]> {
-    const swaps = await this.prisma.swap.findMany({
-      where: {
-        OR: [
-          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
-          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: getExternalPaymentSwappers() } },
-        ],
+  // only what's needed to pick the due swaps, so the pending set isn't loaded whole every tick
+  async getPendingTxSwapRefs(): Promise<{ swapId: string; createdAt: Date }[]> {
+    return this.prisma.swap.findMany({ where: pendingTxWhere(), select: { swapId: true, createdAt: true } })
+  }
+
+  // re-checks pending, as a swap may have settled since its ref was read
+  async getPendingTxSwapsByIds(swapIds: string[]): Promise<Swap[]> {
+    if (swapIds.length === 0) return []
+
+    const swaps = await this.prisma.swap.findMany({ where: { ...pendingTxWhere(), swapId: { in: swapIds } } })
+
+    return swaps.map(toSwap)
+  }
+
+  // Never polled without a transaction, so closed here; no push, since nothing happened
+  async abandonUnbroadcastSwaps(): Promise<Swap[]> {
+    const where: Prisma.SwapWhereInput = {
+      status: { in: ACTIVE_STATUSES },
+      sellTxHash: null,
+      swapperName: { notIn: getExternalPaymentSwappers() },
+      createdAt: { lt: new Date(Date.now() - PENDING_TIMEOUT_MS) },
+    }
+
+    const stalled = await this.prisma.swap.findMany({ where, select: { swapId: true }, take: ABANDON_BATCH_SIZE })
+    if (stalled.length === 0) return []
+
+    // re-applying the guard leaves alone a row that moved on since the select
+    const abandoned = await this.prisma.swap.updateManyAndReturn({
+      where: { ...where, swapId: { in: stalled.map(({ swapId }) => swapId) } },
+      data: {
+        status: 'FAILED',
+        statusMessage: `${ABANDONED_STATUS_PREFIX} no transaction reported within ${PENDING_TIMEOUT_MS / HOUR_MS}h of registration`,
+        settledAt: new Date(),
       },
     })
 
-    return swaps.map(toSwap)
+    return abandoned.map(toSwap)
   }
 
+  // claims past their deadline get their own slots, so a backlog of newer ones can't hold them beyond it
   async getPendingAttributionSwaps(): Promise<Swap[]> {
-    const swaps = await this.prisma.swap.findMany({
-      where: { sellTxHash: { not: null }, quotedAt: { not: null }, attributionStatus: 'PENDING' },
-      orderBy: { createdAt: 'desc' },
-      take: ATTRIBUTION_BATCH_SIZE,
-    })
+    const [newest, pastDeadline] = await Promise.all([
+      this.prisma.swap.findMany({
+        where: {
+          attributionStatus: 'PENDING',
+          OR: [
+            { sellTxHash: { not: null }, quotedAt: { not: null } },
+            { sellTxHash: null, status: 'FAILED' },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: ATTRIBUTION_BATCH_SIZE,
+      }),
+      this.prisma.swap.findMany({
+        where: { attributionStatus: 'PENDING', settledAt: { lt: resolutionCutoff() } },
+        orderBy: { createdAt: 'asc' },
+        take: ATTRIBUTION_DEADLINE_BATCH_SIZE,
+      }),
+    ])
 
-    return swaps.map(toSwap)
+    if (newest.length === ATTRIBUTION_BATCH_SIZE || pastDeadline.length === ATTRIBUTION_DEADLINE_BATCH_SIZE) {
+      logger.warn(
+        `Attribution backlog fills the batch (newest ${newest.length}/${ATTRIBUTION_BATCH_SIZE}, past deadline ${pastDeadline.length}/${ATTRIBUTION_DEADLINE_BATCH_SIZE}); the rest wait for a later pass`,
+      )
+    }
+
+    const unique = new Map([...newest, ...pastDeadline].map((swap) => [swap.swapId, swap]))
+
+    return [...unique.values()].map(toSwap)
   }
 
   async resolveAttribution(swap: Swap): Promise<Swap> {
-    if (!swap.sellTxHash) return swap
-
-    const lookup = await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash)
-    const chainVerdict = resolveAttributionFromChain(lookup, swap.quotedAt, {
-      status: swap.status as SwapStatus,
-      createdAt: swap.createdAt,
-    })
+    const chainVerdict = await this.resolveChainVerdict(swap)
+    if (!chainVerdict) return swap
 
     const superseded = chainVerdict.status === 'ACCEPTED' && (await this.hasPrecedingQuote(swap))
     const attribution: AttributionVerdict = superseded
@@ -361,6 +424,26 @@ export class SwapsService {
         },
       }),
     )
+  }
+
+  private async resolveChainVerdict(swap: Swap): Promise<AttributionVerdict | undefined> {
+    if (!swap.sellTxHash) {
+      if (swap.status === 'FAILED') return { status: 'REJECTED', details: { checked: false, reason: 'no-tx' } }
+      if (!isPastResolutionDeadline(swap)) return
+      return { status: 'REJECTED', details: { checked: false, reason: 'no-tx', resolvedBy: 'deadline' } }
+    }
+
+    const verdict: AttributionVerdict = swap.quotedAt
+      ? resolveAttributionFromChain(
+          await this.blockTimeService.lookup(swap.sellAsset.chainId, swap.sellTxHash),
+          swap.quotedAt,
+          { status: swap.status as SwapStatus, createdAt: swap.createdAt },
+        )
+      : { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
+
+    if (verdict.status !== 'PENDING' || !isPastResolutionDeadline(swap)) return verdict
+
+    return { status: 'REJECTED', details: { ...verdict.details, checked: false, resolvedBy: 'deadline' } }
   }
 
   // a pre-EIP-155 transaction carries the same hash on every EVM chain, so a quote only contends with
@@ -412,12 +495,51 @@ export class SwapsService {
     })
   }
 
-  async getPendingVerificationSwaps(): Promise<Swap[]> {
+  // A price still missing a week after settling stops retrying and is left to the payout report
+  async getMissingPriceSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
       where: {
-        sellTxHash: { not: null },
+        status: 'SUCCESS',
+        settledAt: { gt: resolutionCutoff() },
+        OR: [
+          { sellAssetUsd: null },
+          { buyAssetUsd: null },
+          { affiliateAssetUsd: null, affiliateFeeAssetId: { not: null } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: MISSING_PRICE_BATCH_SIZE,
+    })
+
+    return swaps.map(toSwap)
+  }
+
+  // Fills only empty fields, and the fee price only if verification hasn't since changed the fee asset
+  async fillMissingPrices(swap: Swap): Promise<number> {
+    const prices = await resolveMissingPrices(swap)
+
+    const writes = (Object.entries(prices) as [keyof typeof prices, string][]).map(([field, price]) =>
+      this.prisma.swap.updateMany({
+        where: {
+          swapId: swap.swapId,
+          [field]: null,
+          ...(field === 'affiliateAssetUsd' && { affiliateFeeAssetId: swap.affiliateFeeAssetId }),
+        },
+        data: { [field]: price },
+      }),
+    )
+
+    const results = await Promise.all(writes)
+
+    return results.reduce((filled, { count }) => filled + count, 0)
+  }
+
+  async getPendingVerificationSwaps(): Promise<Swap[]> {
+    const swaps = await this.prisma.swap.findMany({
+      // a failed swap needs no transaction to close out
+      where: {
         verificationStatus: 'PENDING',
-        status: { in: ['SUCCESS', 'FAILED'] },
+        OR: [{ status: 'SUCCESS', sellTxHash: { not: null } }, { status: 'FAILED' }],
       },
     })
 
@@ -538,8 +660,12 @@ export class SwapsService {
       // A success needs a deposit to verify, so a confirmed shielded zcash swap waits on unchained rather than settling
       if (status === TxStatus.Confirmed && !sellTxHash) {
         return {
-          status: 'PENDING',
-          statusMessage: 'Confirmed by provider, waiting for deposit hash',
+          ...resolveStalledSwap(
+            'PENDING',
+            swap.createdAt,
+            'Confirmed by provider, waiting for deposit hash',
+            isExternal,
+          ),
           sellTxHash,
           buyTxHash,
           txLink: swapperTxLink,
@@ -550,7 +676,12 @@ export class SwapsService {
       const swapStatus = status === TxStatus.Confirmed ? 'SUCCESS' : status === TxStatus.Failed ? 'FAILED' : 'PENDING'
 
       return {
-        ...resolveStalledSwap(swapStatus, swap.createdAt, typeof statusMessage === 'string' ? statusMessage : ''),
+        ...resolveStalledSwap(
+          swapStatus,
+          swap.createdAt,
+          typeof statusMessage === 'string' ? statusMessage : '',
+          isExternal,
+        ),
         sellTxHash,
         buyTxHash,
         txLink: swapperTxLink,
@@ -560,7 +691,7 @@ export class SwapsService {
 
       logger.error(`Failed to check swap status for ${swapId}: ${reason}`)
 
-      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`)
+      return resolveStalledSwap('PENDING', swap.createdAt, `Error polling status: ${reason}`, isExternal)
     }
   }
 
@@ -579,7 +710,23 @@ export class SwapsService {
     }
 
     const verificationResult = await this.swapVerificationService.verifySwap(swap)
-    if (verificationResult.verificationStatus === 'PENDING') return swap
+
+    if (verificationResult.verificationStatus === 'PENDING') {
+      if (!isPastResolutionDeadline(swap)) return swap
+
+      const affiliateVerificationDetails: AffiliateVerificationDetails = {
+        hasAffiliate: false,
+        reason: verificationResult.noAffiliateReason ?? 'no result',
+        resolvedBy: 'deadline',
+      }
+
+      return toSwap(
+        await this.prisma.swap.update({
+          where: { swapId: swap.swapId },
+          data: { verificationStatus: 'FAILED', isAffiliateVerified: false, affiliateVerificationDetails },
+        }),
+      )
+    }
 
     const isAffiliateVerified = verificationResult.verificationStatus === 'SUCCESS' && verificationResult.hasAffiliate
 

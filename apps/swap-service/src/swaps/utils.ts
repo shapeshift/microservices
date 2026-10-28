@@ -11,9 +11,18 @@ import { swappers } from '@shapeshiftoss/swapper'
 import type { Asset } from '@shapeshiftoss/types'
 
 import type { BlockTimeLookup } from '../lib/block-time.service'
-import { getAssetPriceUsd } from '../utils/pricing'
+import { getAssetPriceUsd, getAssetPriceUsdAt } from '../utils/pricing'
 
-import { PENDING_TIMEOUT_MS } from './constants'
+import {
+  ABANDONED_STATUS_PREFIX,
+  DAY_MS,
+  DEPOSIT_WINDOW_MS,
+  HOUR_MS,
+  MINUTE_MS,
+  PENDING_TIMEOUT_MS,
+  RESOLUTION_DEADLINE_MS,
+  SETTLED_STATUSES,
+} from './constants'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -45,29 +54,52 @@ export const toSwap = (swap: PrismaSwap): Swap => ({
   affiliateVerificationDetails: toAffiliateVerificationDetails(swap.affiliateVerificationDetails),
 })
 
+export const stallTimeoutMs = (isExternallyPaid: boolean): number =>
+  (isExternallyPaid ? DEPOSIT_WINDOW_MS : 0) + PENDING_TIMEOUT_MS
+
 export const resolveStalledSwap = (
   status: SwapStatus,
   createdAt: Date,
   statusMessage: string,
+  isExternallyPaid: boolean,
 ): { status: SwapStatus; statusMessage: string } => {
+  const timeoutMs = stallTimeoutMs(isExternallyPaid)
+
   if (status !== 'PENDING') return { status, statusMessage }
-  if (Date.now() - createdAt.getTime() < PENDING_TIMEOUT_MS) return { status, statusMessage }
+  if (Date.now() - createdAt.getTime() < timeoutMs) return { status, statusMessage }
 
   const last = statusMessage || 'none reported'
 
   return {
     status: 'FAILED',
-    statusMessage: `Abandoned: unsettled 24h after registration (last swapper status: ${last})`,
+    statusMessage: `${ABANDONED_STATUS_PREFIX} unsettled ${timeoutMs / HOUR_MS}h after registration (last swapper status: ${last})`,
   }
 }
 
+// [age below which the interval applies, interval]: live while someone is likely watching, then backing off
+const POLL_SCHEDULE: [number, number][] = [
+  [10 * MINUTE_MS, 5 * 1000],
+  [HOUR_MS, 30 * 1000],
+  [DAY_MS, 2 * MINUTE_MS],
+]
+export const POLL_INTERVAL_CEILING_MS = 10 * MINUTE_MS
+
+export const pollIntervalMs = (ageMs: number): number =>
+  POLL_SCHEDULE.find(([below]) => ageMs < below)?.[1] ?? POLL_INTERVAL_CEILING_MS
+
+export const isSettledStatus = (status: string): boolean => SETTLED_STATUSES.includes(status)
+
+export const resolutionCutoff = (): Date => new Date(Date.now() - RESOLUTION_DEADLINE_MS)
+
+// a settled stage its outside source still can't answer for is closed out once this passes
+export const isPastResolutionDeadline = (swap: { settledAt: Date | null }): boolean =>
+  !!swap.settledAt && swap.settledAt < resolutionCutoff()
+
 export const resolveAttributionFromChain = (
   lookup: BlockTimeLookup,
-  quotedAt: Date | null,
+  quotedAt: Date,
   swap: { status: SwapStatus; createdAt: Date },
 ): AttributionVerdict => {
-  if (!quotedAt) return { status: 'PENDING', details: { checked: false, reason: 'no-quoted-at' } }
-
   if ('unavailable' in lookup) {
     // rejection cannot be walked back, and a node briefly behind also reports not-found, so this waits
     // until the swap is both abandoned and old enough that a real transaction would have been indexed
@@ -166,6 +198,36 @@ export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: s
     logger.warn(`Failed to fetch USD prices for swap ${data.swapId}:`, err)
     return { sellAssetUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
   }
+}
+
+type PricedSwap = Pick<
+  Swap,
+  'createdAt' | 'sellAsset' | 'buyAsset' | 'affiliateFeeAssetId' | 'sellAssetUsd' | 'buyAssetUsd' | 'affiliateAssetUsd'
+>
+
+// Missing prices at the swap's registration time; one still unavailable is left out
+export const resolveMissingPrices = async (
+  swap: PricedSwap,
+  priceAt: (assetId: string, at: Date) => Promise<number | null> = getAssetPriceUsdAt,
+): Promise<Partial<UsdPrices>> => {
+  const missing: [keyof UsdPrices, string][] = []
+
+  if (!swap.sellAssetUsd) missing.push(['sellAssetUsd', swap.sellAsset.assetId])
+  if (!swap.buyAssetUsd) missing.push(['buyAssetUsd', swap.buyAsset.assetId])
+  if (!swap.affiliateAssetUsd && swap.affiliateFeeAssetId) missing.push(['affiliateAssetUsd', swap.affiliateFeeAssetId])
+
+  // the fee asset is usually the sell or buy asset, so each asset is fetched once
+  const assetIds = [...new Set(missing.map(([, assetId]) => assetId))]
+  const prices = new Map(
+    await Promise.all(assetIds.map(async (assetId) => [assetId, await priceAt(assetId, swap.createdAt)] as const)),
+  )
+
+  return Object.fromEntries(
+    missing.flatMap(([field, assetId]) => {
+      const price = prices.get(assetId)
+      return price === null || price === undefined ? [] : [[field, price.toString()]]
+    }),
+  ) as Partial<UsdPrices>
 }
 
 export const buildStatusNotification = (swap: Swap): StatusNotification | null => {

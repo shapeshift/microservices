@@ -51,6 +51,7 @@ export default {
   buyTxHash: '0x389BD007E29E081811C735F773D360A05DFC3E0C8608781A85602A7C7AE2AD4B',
   txLink: null,
   statusMessage: '',
+  settledAt: null,
   isStreaming: false,
   createdAt: new Date('2026-05-14T18:00:35.263Z'),
   updatedAt: new Date('2026-05-18T16:27:43.217Z'),

@@ -44,6 +44,7 @@ model Swap {
   buyTxHash                              String?
   txLink                                 String?
   statusMessage                          String?
+  settledAt                              DateTime?
   isStreaming                            Boolean            @default(false)
   createdAt                              DateTime           @default(now())
   updatedAt                              DateTime           @updatedAt
@@ -74,6 +75,7 @@ model Swap {
   @@index([partnerAddress])
   @@index([partnerCode])
   @@index([status, sellTxHash])
+  @@index([status, settledAt])
   @@index([sellTxHash])
   @@index([attributionStatus, createdAt])
   @@index([verificationStatus, status])

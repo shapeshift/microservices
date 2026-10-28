@@ -1,17 +1,35 @@
 import * as fs from 'fs'
 import * as path from 'path'
 
-import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../../apps/swap-service/src/swaps/utils'
+import { DAY_MS, RESOLUTION_DEADLINE_MS } from '../../apps/swap-service/src/swaps/constants'
+import {
+  calculateFeeForSwap,
+  getPartnerFeeUsd,
+  POLL_INTERVAL_CEILING_MS,
+  stallTimeoutMs,
+  toSwap,
+} from '../../apps/swap-service/src/swaps/utils'
 import { createPrismaAdapter, PrismaClient } from '../../packages/prisma'
 
 import type { PartnerPayout, PayoutRecord } from './types'
-import { aggregateByPartner, buildPayouts, buildRecord, resolveWindow, toCsv } from './utils'
+import {
+  aggregateByPartner,
+  buildPayouts,
+  buildRecord,
+  findDeadlineResolved,
+  findUnsettled,
+  resolveWindow,
+  toCsv,
+} from './utils'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) {
   console.error('DATABASE_URL is not set. Run with DATABASE_URL=<url> yarn affiliate-payouts …')
   process.exit(1)
 }
+
+// the slowest swap: a deposit settling at the end of its window, then a week to verify, each seen a poll late
+const SETTLE_DAYS = Math.ceil((stallTimeoutMs(true) + RESOLUTION_DEADLINE_MS + 2 * POLL_INTERVAL_CEILING_MS) / DAY_MS)
 
 const prisma = new PrismaClient({ adapter: createPrismaAdapter(2, databaseUrl) })
 
@@ -39,6 +57,26 @@ function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
     record.warnings.forEach((w) => {
       const ref = w.swapId ? ` [swap ${w.swapId}]` : ''
       console.log(`- [${w.type}] ${w.partnerCode}${ref}: ${w.reason}`)
+    })
+  }
+
+  if (record.deadlineResolved.length) {
+    console.log('\n=== Resolved by deadline - validate manually (not paid) ===')
+
+    // grouped so a swapper or chain that keeps timing out reads as a bug rather than a window to tune
+    const groups = new Map<string, number>()
+    record.deadlineResolved.forEach((d) => {
+      const key = `${d.stage} | ${d.swapperName} | ${d.chainId ?? 'unknown chain'} | ${d.reason}`
+      groups.set(key, (groups.get(key) ?? 0) + 1)
+    })
+    groups.forEach((count, key) => console.log(`${String(count).padStart(4)}  ${key}`))
+
+    console.log('')
+    record.deadlineResolved.forEach((d) => {
+      const tx = d.sellTxHash ? ` tx ${d.sellTxHash}` : ' no tx'
+      console.log(
+        `- [${d.stage}] ${d.partnerCode} [swap ${d.swapId}] ${d.swapperName} ${d.chainId ?? ''}${tx}: ${d.reason}`,
+      )
     })
   }
 }
@@ -72,31 +110,37 @@ function writeArtifacts(record: PayoutRecord, payouts: PartnerPayout[], force: b
   console.log(`JSON written: ${jsonPath}`)
 }
 
-async function generate(monthArg: string | undefined, force: boolean): Promise<void> {
+async function generate(monthArg: string | undefined, force: boolean, allowUnsettled: boolean): Promise<void> {
   const window = resolveWindow(monthArg)
   console.log(
     `Aggregating affiliate payouts for ${window.label} (${window.start.toISOString()} → ${window.end.toISOString()})`,
   )
 
-  const rows = await prisma.swap.findMany({
+  // every partner swap, not just successful ones - an abandoned swap may still need a person to look at it
+  const allRows = await prisma.swap.findMany({
     where: {
       partnerCode: { not: null },
-      status: 'SUCCESS',
       createdAt: { gte: window.start, lt: window.end },
     },
   })
-  console.log(`Found ${rows.length} successful swaps with a partner code`)
+  const rows = allRows.filter((row) => row.status === 'SUCCESS')
+  console.log(`Found ${rows.length} successful swaps with a partner code (${allRows.length} in total)`)
 
-  const {
-    partners,
-    unpriceableSwaps,
-    anomalies,
-    unverified,
-    unattributed,
-    noAffiliateFee,
-    partnerBpsUnset,
-    unresolvedFee,
-  } = aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
+  const unsettled = findUnsettled(allRows)
+  if (unsettled.length) {
+    console.log(`\n${unsettled.length} partner swaps are not settled yet:`)
+    unsettled.forEach((u) => console.log(`- ${u.partnerCode} [swap ${u.swapId}] pending: ${u.stages.join(', ')}`))
+
+    if (!allowUnsettled) {
+      throw new Error(
+        `Refusing to generate a payout with unsettled swaps - every stage resolves within ${SETTLE_DAYS} days of ` +
+          `registration, so run on or after day ${SETTLE_DAYS + 1} of the month, or pass --allow-unsettled to pay without them`,
+      )
+    }
+  }
+
+  const { partners, unpriceable, anomalies, unverified, unattributed, noAffiliateFee, partnerBpsUnset, unresolvedFee } =
+    aggregateByPartner(rows, { toSwap, calculateFeeForSwap, getPartnerFeeUsd })
 
   const affiliates = await prisma.affiliate.findMany({
     where: { partnerCode: { in: Array.from(partners.keys()) } },
@@ -111,13 +155,14 @@ async function generate(monthArg: string | undefined, force: boolean): Promise<v
     window,
     payouts,
     generatedAt: new Date().toISOString(),
-    unpriceableSwaps,
+    unpriceable,
     anomalies,
     unverified,
     unattributed,
     noAffiliateFee,
     partnerBpsUnset,
     unresolvedFee,
+    deadlineResolved: findDeadlineResolved(allRows),
   })
 
   writeArtifacts(record, payouts, force)
@@ -128,18 +173,20 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2)
   const command = args[0]
   const force = args.includes('--force')
+  const allowUnsettled = args.includes('--allow-unsettled')
   const positional = args.slice(1).filter((a) => !a.startsWith('--'))
 
   try {
     switch (command) {
       case 'generate':
-        await generate(positional[0], force)
+        await generate(positional[0], force, allowUnsettled)
         break
       default:
         console.log('Usage:')
-        console.log('  DATABASE_URL=<url> affiliate-payouts generate [YYYY-MM] [--force]')
+        console.log('  DATABASE_URL=<url> affiliate-payouts generate [YYYY-MM] [--force] [--allow-unsettled]')
         console.log('    No month → previous calendar month (UTC).')
-        console.log('    --force  → overwrite existing artifacts for the window.')
+        console.log('    --force            → overwrite existing artifacts for the window.')
+        console.log('    --allow-unsettled  → generate even while some swaps are still pending.')
         console.log('    Example: DATABASE_URL=<url> affiliate-payouts generate 2026-06')
         process.exit(1)
     }

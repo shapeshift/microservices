@@ -9,6 +9,8 @@ import {
   buildPayouts,
   buildRecord,
   checkFeeAnomaly,
+  findDeadlineResolved,
+  findUnsettled,
   formatUsdc,
   normalizeAddress,
   resolveWindow,
@@ -82,9 +84,9 @@ describe('resolveWindow', () => {
 
 describe('aggregateByPartner', () => {
   it('sums a partner share across swaps', () => {
-    const { partners, unpriceableSwaps, anomalies } = aggregateByPartner([makeRow(), makeRow()], stubDeps)
+    const { partners, unpriceable, anomalies } = aggregateByPartner([makeRow(), makeRow()], stubDeps)
     const acme = partners.get('acme')
-    expect(unpriceableSwaps).toBe(0)
+    expect(unpriceable).toEqual([])
     expect(anomalies).toHaveLength(0)
     expect(acme?.swapCount).toBe(2)
     expect(acme?.volumeUsd.toNumber()).toBeCloseTo(4000)
@@ -107,8 +109,8 @@ describe('aggregateByPartner', () => {
   })
 
   it('skips swaps that cannot be priced', () => {
-    const { partners, unpriceableSwaps } = aggregateByPartner([makeRow({ priceable: false })], stubDeps)
-    expect(unpriceableSwaps).toBe(1)
+    const { partners, unpriceable } = aggregateByPartner([makeRow({ priceable: false })], stubDeps)
+    expect(unpriceable).toEqual([{ swapId: 's1', partnerCode: 'acme' }])
     expect(partners.size).toBe(0)
   })
 
@@ -311,7 +313,10 @@ describe('buildRecord', () => {
       window,
       payouts,
       generatedAt: '2026-07-01T00:00:00.000Z',
-      unpriceableSwaps: 2,
+      unpriceable: [
+        { swapId: 'q1', partnerCode: 'acme' },
+        { swapId: 'q2', partnerCode: 'acme' },
+      ],
       anomalies: [
         {
           swapId: 'a1',
@@ -331,6 +336,17 @@ describe('buildRecord', () => {
       ],
       partnerBpsUnset: [{ swapId: 'p1', partnerCode: 'acme', verifiedBps: 60, partnerBps: 0 }],
       unresolvedFee: [{ swapId: 'r1', partnerCode: 'acme' }],
+      deadlineResolved: [
+        {
+          swapId: 'd1',
+          partnerCode: 'acme',
+          stage: 'verification',
+          reason: 'timeout: no result',
+          swapperName: 'Relay',
+          chainId: 'eip155:8453',
+          sellTxHash: '0xd1',
+        },
+      ],
     })
 
     expect(record.totals).toEqual({
@@ -344,6 +360,7 @@ describe('buildRecord', () => {
       noAffiliateFeeSwaps: 2,
       partnerBpsUnsetSwaps: 1,
       noVerifiedFeeSwaps: 1,
+      deadlineResolvedSwaps: 1,
     })
 
     // Every surfaced bucket is warned per-swap except noAffiliateFee, which is counted-only.
@@ -353,10 +370,128 @@ describe('buildRecord', () => {
       'no-verified-fee',
       'partner-bps-unset',
       'unattributed',
+      'unpriceable',
+      'unpriceable',
       'unverified',
     ])
     const warnedSwapIds = record.warnings.map((w) => w.swapId)
     expect(warnedSwapIds).not.toContain('n1')
     expect(warnedSwapIds).not.toContain('n2')
+  })
+})
+
+describe('findDeadlineResolved', () => {
+  const settled = {
+    status: 'SUCCESS',
+    swapperName: 'Relay',
+    sellAsset: { chainId: 'eip155:8453' },
+    sellTxHash: '0xtx',
+    statusMessage: null,
+    affiliateVerificationDetails: null,
+    attributionDetails: { checked: true, reason: 'quote-precedes-tx' },
+  } as unknown as Partial<PrismaSwap>
+
+  it('flags nothing for a swap settled on evidence', () => {
+    expect(findDeadlineResolved([makeRow(settled)])).toEqual([])
+  })
+
+  it('flags an abandoned swap whose transaction was not disowned', () => {
+    const row = makeRow({
+      ...settled,
+      status: 'FAILED',
+      statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: Waiting for deposit...)',
+    })
+
+    expect(findDeadlineResolved([row])).toEqual([
+      {
+        swapId: 's1',
+        partnerCode: 'acme',
+        stage: 'status',
+        reason: 'Abandoned: unsettled 24h after registration (last swapper status: Waiting for deposit...)',
+        swapperName: 'Relay',
+        chainId: 'eip155:8453',
+        sellTxHash: '0xtx',
+      },
+    ])
+  })
+
+  it('skips an abandoned swap whose transaction was rejected', () => {
+    const row = makeRow({
+      ...settled,
+      status: 'FAILED',
+      statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: none reported)',
+      attributionStatus: 'REJECTED',
+      attributionDetails: { checked: true, reason: 'tx-not-found' },
+    })
+
+    expect(findDeadlineResolved([row])).toEqual([])
+  })
+
+  it('flags an abandoned swap with no transaction', () => {
+    const row = makeRow({
+      ...settled,
+      sellTxHash: null,
+      status: 'FAILED',
+      statusMessage: 'Abandoned: unsettled 24h after registration (last swapper status: Waiting for deposit...)',
+      attributionStatus: 'REJECTED',
+      attributionDetails: { checked: false, reason: 'no-tx' },
+    })
+
+    expect(findDeadlineResolved([row]).map((d) => [d.stage, d.sellTxHash])).toEqual([['status', null]])
+  })
+
+  it('skips a swap that failed on the swapper reporting it', () => {
+    expect(findDeadlineResolved([makeRow({ ...settled, status: 'FAILED', statusMessage: 'Refunded' })])).toEqual([])
+  })
+
+  it('flags a verification and an attribution that timed out, once per stage', () => {
+    const row = makeRow({
+      ...settled,
+      verificationStatus: 'FAILED',
+      isAffiliateVerified: false,
+      affiliateVerificationDetails: {
+        hasAffiliate: false,
+        reason: 'No request data returned from Relay API',
+        resolvedBy: 'deadline',
+      },
+      attributionStatus: 'REJECTED',
+      attributionDetails: { checked: false, reason: 'error', resolvedBy: 'deadline' },
+    })
+
+    expect(findDeadlineResolved([row]).map((d) => [d.stage, d.reason])).toEqual([
+      ['verification', 'No request data returned from Relay API'],
+      ['attribution', 'error'],
+    ])
+  })
+
+  it('skips a verification that failed on an answer', () => {
+    const row = makeRow({
+      ...settled,
+      verificationStatus: 'FAILED',
+      affiliateVerificationDetails: null,
+    })
+
+    expect(findDeadlineResolved([row])).toEqual([])
+  })
+})
+
+describe('findUnsettled', () => {
+  it('lists each stage a partner swap is still waiting on', () => {
+    const rows = [
+      makeRow({ swapId: 'done', status: 'SUCCESS' }),
+      makeRow({ swapId: 'live', status: 'PENDING', verificationStatus: 'PENDING', attributionStatus: 'ACCEPTED' }),
+      makeRow({ swapId: 'checking', status: 'SUCCESS', verificationStatus: 'SUCCESS', attributionStatus: 'PENDING' }),
+    ]
+
+    expect(findUnsettled(rows)).toEqual([
+      { swapId: 'live', partnerCode: 'acme', stages: ['status', 'verification'] },
+      { swapId: 'checking', partnerCode: 'acme', stages: ['attribution'] },
+    ])
+  })
+
+  it('treats a failed swap as settled', () => {
+    expect(
+      findUnsettled([makeRow({ status: 'FAILED', verificationStatus: 'FAILED', attributionStatus: 'REJECTED' })]),
+    ).toEqual([])
   })
 })

@@ -4,6 +4,8 @@ import axios from 'axios'
 import { adapters } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
+import { DAY_MS, HOUR_MS } from '../swaps/constants'
+
 const logger = new Logger('Pricing')
 
 const priceCache = new Map<string, number>()
@@ -42,6 +44,52 @@ export async function getAssetPriceUsd(assetId: string): Promise<number | null> 
     return price
   } catch (error) {
     logger.error(`Failed to fetch price for ${assetId}:`, error)
+    return null
+  }
+}
+
+type CoinGeckoMarketChart = {
+  prices: [number, number][]
+}
+
+// widened only when the narrow window holds no points, so a swap is never priced off a distant day
+const HISTORICAL_WINDOWS_MS = [HOUR_MS, DAY_MS]
+
+// The price nearest a past instant, so a retried price matches when the swap happened
+export async function getAssetPriceUsdAt(assetId: string, at: Date): Promise<number | null> {
+  const url = adapters.makeCoingeckoAssetUrl(assetId)
+  if (!url) {
+    logger.warn(`No CoinGecko URL mapping for assetId: ${assetId}`)
+    return null
+  }
+
+  const time = at.getTime()
+
+  try {
+    for (const windowMs of HISTORICAL_WINDOWS_MS) {
+      const { data } = await axios.get<CoinGeckoMarketChart>(`${url}/market_chart/range`, {
+        params: {
+          vs_currency: 'usd',
+          from: Math.floor((time - windowMs) / 1000),
+          to: Math.ceil((time + windowMs) / 1000),
+        },
+        timeout: 5000,
+      })
+
+      const prices = (data?.prices ?? []).filter(([, price]) => price > 0)
+      if (prices.length === 0) continue
+
+      const [, price] = prices.reduce((nearest, point) =>
+        Math.abs(point[0] - time) < Math.abs(nearest[0] - time) ? point : nearest,
+      )
+
+      return price
+    }
+
+    logger.warn(`No historical price data found for ${assetId} at ${at.toISOString()}`)
+    return null
+  } catch (error) {
+    logger.error(`Failed to fetch historical price for ${assetId} at ${at.toISOString()}:`, error)
     return null
   }
 }

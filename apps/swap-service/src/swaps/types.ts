@@ -21,6 +21,7 @@ export type AttributionDetails = {
   reason: string
   blockTime?: number
   quotedAt?: number
+  resolvedBy?: 'deadline'
 }
 
 export type AttributionVerdict = {
@@ -33,6 +34,8 @@ export type AffiliateVerificationDetails = {
   affiliateAddress?: string
   verifiedSellAmountCryptoBaseUnit?: string
   hasAffiliate: boolean
+  reason?: string
+  resolvedBy?: 'deadline'
 }
 
 export type UsdPrices = {

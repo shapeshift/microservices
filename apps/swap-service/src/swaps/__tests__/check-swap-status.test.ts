@@ -165,15 +165,36 @@ describe('checkSwapStatus', () => {
     })
   })
 
-  it('abandons an externally paid swap that was never funded', async () => {
+  it('abandons a confirmed swap whose deposit hash is never found once its deposit window passes', async () => {
+    checkTradeStatus.mockResolvedValue({ status: 'Confirmed', buyTxHash: '0xbuy', message: undefined })
+    const createdAt = new Date(Date.now() - 97 * 60 * 60 * 1000)
+    const { service } = buildService(row({ createdAt }), undefined)
+
+    await expect(service.checkSwapStatus('swap-1')).resolves.toMatchObject({
+      status: 'FAILED',
+      statusMessage: expect.stringContaining('waiting for deposit hash') as string,
+    })
+  })
+
+  it('holds an externally paid swap inside its deposit window', async () => {
     checkTradeStatus.mockResolvedValue(pending)
     const createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    const { service } = buildService(row({ createdAt }), undefined)
+
+    await expect(service.checkSwapStatus('swap-1')).resolves.toMatchObject({ status: 'PENDING' })
+  })
+
+  it('abandons an externally paid swap that was never funded', async () => {
+    checkTradeStatus.mockResolvedValue(pending)
+    const createdAt = new Date(Date.now() - 97 * 60 * 60 * 1000)
     const { service } = buildService(row({ createdAt }), undefined)
 
     const result = await service.checkSwapStatus('swap-1')
 
     expect(result.status).toBe('FAILED')
-    expect(result.statusMessage).toContain('Waiting for deposit...')
+    expect(result.statusMessage).toBe(
+      'Abandoned: unsettled 96h after registration (last swapper status: Waiting for deposit...)',
+    )
   })
 
   it('replaces a hash found on chain with the one the provider later reports', async () => {
@@ -204,19 +225,18 @@ describe('checkSwapStatus', () => {
   })
 })
 
-describe('getPendingTxSwaps', () => {
+describe('getPendingTxSwapRefs', () => {
   it('includes externally paid swaps that have no sell tx hash yet', async () => {
     const { service, findManyCalls } = buildService(row(), undefined)
 
-    await service.getPendingTxSwaps()
+    await service.getPendingTxSwapRefs()
 
     expect(findManyCalls[0]).toEqual({
       where: {
-        OR: [
-          { status: { in: ['IDLE', 'PENDING'] }, sellTxHash: { not: null } },
-          { status: { in: ['IDLE', 'PENDING'] }, swapperName: { in: ['Chainflip', 'NEAR Intents'] } },
-        ],
+        status: { in: ['IDLE', 'PENDING'] },
+        OR: [{ sellTxHash: { not: null } }, { swapperName: { in: ['Chainflip', 'NEAR Intents'] } }],
       },
+      select: { swapId: true, createdAt: true },
     })
   })
 })
