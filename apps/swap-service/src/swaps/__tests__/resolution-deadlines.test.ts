@@ -170,6 +170,20 @@ describe('attribution for a swap with no transaction', () => {
 
     expect(updates).toEqual([])
   })
+
+  it('closes out a settled swap without a transaction once the deadline passes', async () => {
+    const { service, updates, lookups } = buildService()
+
+    await service.resolveAttribution(
+      swapOf({ sellTxHash: null, status: 'SUCCESS', settledAt: new Date(Date.now() - 8 * DAY) }),
+    )
+
+    expect(lookups).toEqual([])
+    expect(updates[0].data).toMatchObject({
+      attributionStatus: 'REJECTED',
+      attributionDetails: { checked: false, reason: 'no-tx', resolvedBy: 'deadline' },
+    })
+  })
 })
 
 describe('polling queries and writes', () => {

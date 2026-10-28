@@ -23,9 +23,10 @@ const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap
   const updateSwapStatus = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
   const updateSwapTxHashes = jest.fn().mockImplementation((data) => Promise.resolve({ ...polled, ...data }))
   const checkSwapStatus = jest.fn().mockResolvedValue(statusUpdate)
-  const getPendingTxSwaps = jest.fn().mockResolvedValue([polled])
+  const getPendingTxSwapsByIds = jest.fn().mockResolvedValue([polled])
   const swapsService = {
-    getPendingTxSwaps,
+    getPendingTxSwapRefs: jest.fn().mockResolvedValue([{ swapId: polled.swapId, createdAt: polled.createdAt }]),
+    getPendingTxSwapsByIds,
     checkSwapStatus,
     updateSwapStatus,
     updateSwapTxHashes,
@@ -35,7 +36,7 @@ const buildService = (statusUpdate: Record<string, unknown>, polled: Swap = swap
 
   return {
     checkSwapStatus,
-    getPendingTxSwaps,
+    getPendingTxSwapsByIds,
     service: new SwapPollingService(swapsService, websocketGateway),
     updateSwapStatus,
     updateSwapTxHashes,
@@ -176,11 +177,11 @@ describe('pollPendingTxStatus backoff', () => {
   it('polls a day-old swap live again once its deposit is detected', async () => {
     const start = Date.now()
     const old = { ...swap, createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap
-    const { service, checkSwapStatus, getPendingTxSwaps } = buildService(
+    const { service, checkSwapStatus, getPendingTxSwapsByIds } = buildService(
       { status: 'PENDING', statusMessage: 'Awaiting deposit', sellTxHash: '0xdeposit' },
       old,
     )
-    getPendingTxSwaps.mockResolvedValueOnce([old]).mockResolvedValue([{ ...old, sellTxHash: '0xdeposit' }])
+    getPendingTxSwapsByIds.mockResolvedValueOnce([old]).mockResolvedValue([{ ...old, sellTxHash: '0xdeposit' }])
 
     await pollsAt(service, [start, start + 5_000, start + 10_000])
 
@@ -190,11 +191,11 @@ describe('pollPendingTxStatus backoff', () => {
   it('polls a day-old swap live again once its status changes', async () => {
     const start = Date.now()
     const idle = { ...swap, status: 'IDLE', createdAt: new Date(start - 30 * 60 * 60 * 1000) } as Swap
-    const { service, checkSwapStatus, getPendingTxSwaps } = buildService(
+    const { service, checkSwapStatus, getPendingTxSwapsByIds } = buildService(
       { status: 'PENDING', statusMessage: 'Awaiting deposit' },
       idle,
     )
-    getPendingTxSwaps.mockResolvedValueOnce([idle]).mockResolvedValue([{ ...idle, status: 'PENDING' }])
+    getPendingTxSwapsByIds.mockResolvedValueOnce([idle]).mockResolvedValue([{ ...idle, status: 'PENDING' }])
 
     await pollsAt(service, [start, start + 5_000, start + 10_000])
 

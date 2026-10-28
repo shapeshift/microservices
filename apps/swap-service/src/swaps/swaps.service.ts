@@ -73,6 +73,11 @@ import {
 
 const logger = new Logger('SwapsService')
 
+const pendingTxWhere = (): Prisma.SwapWhereInput => ({
+  status: { in: ACTIVE_STATUSES },
+  OR: [{ sellTxHash: { not: null } }, { swapperName: { in: getExternalPaymentSwappers() } }],
+})
+
 @Injectable()
 export class SwapsService {
   private readonly notificationsClient: NotificationsServiceClient
@@ -323,13 +328,16 @@ export class SwapsService {
   }
 
   // Externally paid swaps are tracked from registration, before any deposit hash is known
-  async getPendingTxSwaps(): Promise<Swap[]> {
-    const swaps = await this.prisma.swap.findMany({
-      where: {
-        status: { in: ACTIVE_STATUSES },
-        OR: [{ sellTxHash: { not: null } }, { swapperName: { in: getExternalPaymentSwappers() } }],
-      },
-    })
+  // only what's needed to pick the due swaps, so the pending set isn't loaded whole every tick
+  async getPendingTxSwapRefs(): Promise<{ swapId: string; createdAt: Date }[]> {
+    return this.prisma.swap.findMany({ where: pendingTxWhere(), select: { swapId: true, createdAt: true } })
+  }
+
+  // re-checks pending, as a swap may have settled since its ref was read
+  async getPendingTxSwapsByIds(swapIds: string[]): Promise<Swap[]> {
+    if (swapIds.length === 0) return []
+
+    const swaps = await this.prisma.swap.findMany({ where: { ...pendingTxWhere(), swapId: { in: swapIds } } })
 
     return swaps.map(toSwap)
   }
@@ -380,6 +388,12 @@ export class SwapsService {
       }),
     ])
 
+    if (newest.length === ATTRIBUTION_BATCH_SIZE || pastDeadline.length === ATTRIBUTION_DEADLINE_BATCH_SIZE) {
+      logger.warn(
+        `Attribution backlog fills the batch (newest ${newest.length}/${ATTRIBUTION_BATCH_SIZE}, past deadline ${pastDeadline.length}/${ATTRIBUTION_DEADLINE_BATCH_SIZE}); the rest wait for a later pass`,
+      )
+    }
+
     const unique = new Map([...newest, ...pastDeadline].map((swap) => [swap.swapId, swap]))
 
     return [...unique.values()].map(toSwap)
@@ -416,8 +430,9 @@ export class SwapsService {
 
   private async resolveChainVerdict(swap: Swap): Promise<AttributionVerdict | undefined> {
     if (!swap.sellTxHash) {
-      if (swap.status !== 'FAILED') return
-      return { status: 'REJECTED', details: { checked: false, reason: 'no-tx' } }
+      if (swap.status === 'FAILED') return { status: 'REJECTED', details: { checked: false, reason: 'no-tx' } }
+      if (!isPastResolutionDeadline(swap)) return
+      return { status: 'REJECTED', details: { checked: false, reason: 'no-tx', resolvedBy: 'deadline' } }
     }
 
     const verdict: AttributionVerdict = swap.quotedAt
@@ -430,7 +445,7 @@ export class SwapsService {
 
     if (verdict.status !== 'PENDING' || !isPastResolutionDeadline(swap)) return verdict
 
-    return { status: 'REJECTED', details: { ...verdict.details, resolvedBy: 'deadline' } }
+    return { status: 'REJECTED', details: { ...verdict.details, checked: false, resolvedBy: 'deadline' } }
   }
 
   // a pre-EIP-155 transaction carries the same hash on every EVM chain, so a quote only contends with

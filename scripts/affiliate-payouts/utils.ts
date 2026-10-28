@@ -34,7 +34,17 @@ function monthLabel(d: Date): string {
 
 type ResolutionDetails = { reason?: string; checked?: boolean; resolvedBy?: 'deadline' } | null
 
-const readDetails = (details: unknown): ResolutionDetails => details as ResolutionDetails
+const readDetails = (details: unknown): ResolutionDetails => {
+  if (!details || typeof details !== 'object') return null
+
+  const { reason, checked, resolvedBy } = details as Record<string, unknown>
+
+  return {
+    reason: typeof reason === 'string' ? reason : undefined,
+    checked: checked === true,
+    resolvedBy: resolvedBy === 'deadline' ? 'deadline' : undefined,
+  }
+}
 
 export function resolveWindow(date?: string, now: Date = new Date()): PayoutWindow {
   const { year, monthIndex } = ((): { year: number; monthIndex: number } => {

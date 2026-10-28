@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 
-import { ATTRIBUTION_BATCH_SIZE } from '../swaps/constants'
 import { SwapsService } from '../swaps/swaps.service'
 import type { Swap } from '../swaps/types'
 import { pollIntervalMs } from '../swaps/utils'
@@ -39,18 +38,21 @@ export class SwapPollingService {
     this.isPollingTx = true
 
     try {
-      const pending = await this.swapsService.getPendingTxSwaps()
+      const pending = await this.swapsService.getPendingTxSwapRefs()
       const now = Date.now()
 
-      const pendingIds = new Set(pending.map((swap) => swap.swapId))
+      const pendingIds = new Set(pending.map((ref) => ref.swapId))
       for (const map of [this.lastTxPollAt, this.lastProgressAt]) {
         for (const swapId of map.keys()) if (!pendingIds.has(swapId)) map.delete(swapId)
       }
 
-      const swaps = pending.filter((swap) => {
-        const activeSince = this.lastProgressAt.get(swap.swapId) ?? swap.createdAt.getTime()
-        return now - (this.lastTxPollAt.get(swap.swapId) ?? 0) >= pollIntervalMs(now - activeSince) - POLL_TICK_SLACK_MS
+      const due = pending.filter((ref) => {
+        const activeSince = this.lastProgressAt.get(ref.swapId) ?? ref.createdAt.getTime()
+        return now - (this.lastTxPollAt.get(ref.swapId) ?? 0) >= pollIntervalMs(now - activeSince) - POLL_TICK_SLACK_MS
       })
+      if (due.length === 0) return
+
+      const swaps = await this.swapsService.getPendingTxSwapsByIds(due.map((ref) => ref.swapId))
       if (swaps.length === 0) return
 
       swaps.forEach((swap) => this.lastTxPollAt.set(swap.swapId, now))
@@ -90,12 +92,6 @@ export class SwapPollingService {
     try {
       const swaps = await this.swapsService.getPendingAttributionSwaps()
       if (swaps.length === 0) return
-
-      if (swaps.length >= ATTRIBUTION_BATCH_SIZE) {
-        this.logger.warn(
-          `Attribution backlog fills the batch (${ATTRIBUTION_BATCH_SIZE}); pending swaps between the newest and oldest wait for a later pass`,
-        )
-      }
 
       this.logger.log(`Polling attribution for ${swaps.length} swaps (${swapIds(swaps)})`)
       await this.runWorkers(swaps, (swap) => this.pollAttribution(swap))
