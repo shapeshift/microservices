@@ -23,6 +23,7 @@ import {
   RESOLUTION_DEADLINE_MS,
   SETTLED_STATUSES,
 } from './constants'
+import type { FeeResult } from './partner-fee'
 import type { AffiliateVerificationDetails, AttributionVerdict, StatusNotification, Swap, UsdPrices } from './types'
 
 const logger = new Logger('SwapsService')
@@ -296,16 +297,7 @@ const resolveActualFeeUsd = (swap: Swap, assetPrecisions?: ReadonlyMap<string, n
   return bnOrZero(amount).div(bnOrZero(10).pow(precision)).times(priceUsd).toNumber()
 }
 
-export const calculateFeeForSwap = (
-  swap: Swap,
-  assetPrecisions?: ReadonlyMap<string, number>,
-): {
-  feeUsd: number
-  volumeUsd: number
-  verifiedBps: number
-  actualFeeUsd: number | null
-  impliedFeeUsd: number | null
-} | null => {
+export const calculateFeeForSwap = (swap: Swap, assetPrecisions?: ReadonlyMap<string, number>): FeeResult | null => {
   if (!swap.isAffiliateVerified) return null
 
   const verifiedBps = swap.affiliateVerificationDetails?.affiliateBps

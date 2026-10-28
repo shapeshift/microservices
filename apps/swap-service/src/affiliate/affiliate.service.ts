@@ -7,6 +7,7 @@ import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { SHAPESHIFT_BPS } from '../swaps/constants'
+import { resolvePartnerFee } from '../swaps/partner-fee'
 import { calculateFeeForSwap, getPartnerFeeUsd, toSwap } from '../swaps/utils'
 import { tryGetAssetPrecisions } from '../utils/assets'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
@@ -181,17 +182,14 @@ export class AffiliateService implements OnModuleInit {
     for (const item of items) {
       const swap = toSwap(item)
 
-      const fee = calculateFeeForSwap(swap, assetPrecisions)
-      if (!fee) continue
+      // only what the payout would pay counts towards the partner's totals
+      const outcome = resolvePartnerFee(swap, () => calculateFeeForSwap(swap, assetPrecisions))
+      if (outcome.kind === 'excluded') continue
 
+      const { fee } = outcome
       totalSwaps++
       totalVolumeUsd = totalVolumeUsd.plus(fee.volumeUsd)
-      // only the fee collected on chain is earned; the bps-implied estimate is never reported as one
-      if (fee.actualFeeUsd !== null) {
-        totalFeesEarnedUsd = totalFeesEarnedUsd.plus(
-          getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, swap.partnerBps),
-        )
-      }
+      totalFeesEarnedUsd = totalFeesEarnedUsd.plus(getPartnerFeeUsd(fee.actualFeeUsd, fee.verifiedBps, swap.partnerBps))
     }
 
     return {
@@ -227,11 +225,14 @@ export class AffiliateService implements OnModuleInit {
     const swaps = items.map((item) => {
       const swap = toSwap(item)
       const fee = calculateFeeForSwap(swap, assetPrecisions)
-      const actualFeeUsd = fee?.actualFeeUsd ?? null
-      const feeUsd = actualFeeUsd === null ? null : actualFeeUsd.toString()
+      // the fee fields are set only for what the payout would pay, so anything else reads as not yet earned
+      const outcome = resolvePartnerFee(swap, () => fee)
+      const payable = outcome.kind === 'payable' ? outcome.fee : null
+      const feeUsd = payable ? payable.actualFeeUsd.toString() : null
+      const partnerFeeUsd = payable
+        ? getPartnerFeeUsd(payable.actualFeeUsd, payable.verifiedBps, swap.partnerBps)
+        : null
       const volumeUsd = fee ? fee.volumeUsd.toString() : null
-      const partnerFeeUsd =
-        fee && actualFeeUsd !== null ? getPartnerFeeUsd(actualFeeUsd, fee.verifiedBps, swap.partnerBps) : null
       return { ...swap, feeUsd, partnerFeeUsd, volumeUsd }
     })
 

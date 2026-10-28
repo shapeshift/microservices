@@ -2,6 +2,7 @@ import BigNumber from 'bignumber.js'
 import { getAddress, isAddress, zeroAddress } from 'viem'
 
 import { ABANDONED_STATUS_PREFIX, SETTLED_STATUSES } from '../../apps/swap-service/src/swaps/constants'
+import { FEE_DEVIATION_TOLERANCE, feeDeviation, resolvePartnerFee } from '../../apps/swap-service/src/swaps/partner-fee'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
@@ -25,7 +26,7 @@ import type {
 } from './types'
 
 export const ARBITRUM_USDC_ADDRESS = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
-export const FEE_DEVIATION_TOLERANCE = 0.25
+export { FEE_DEVIATION_TOLERANCE }
 export const USDC_DECIMALS = 6
 
 function monthLabel(d: Date): string {
@@ -82,11 +83,11 @@ export function checkFeeAnomaly(
     volumeUsd: fee.volumeUsd,
   }
 
-  if (fee.impliedFeeUsd === null || fee.impliedFeeUsd <= 0) {
+  const deviation = feeDeviation(fee)
+  if (deviation === null || fee.impliedFeeUsd === null) {
     return { ...base, deviation: null, reason: 'cannot validate on-chain fee: no bps-implied fee available' }
   }
 
-  const deviation = Math.abs(fee.actualFeeUsd - fee.impliedFeeUsd) / fee.impliedFeeUsd
   if (deviation > tolerance) {
     return {
       ...base,
@@ -131,58 +132,46 @@ export function aggregateByPartner<S>(
 
     const partnerCode = row.partnerCode.toLowerCase()
 
-    // a transaction not attributed to this partner is not theirs to be paid for, whatever else is true
-    if (row.attributionStatus !== 'ACCEPTED') {
-      unattributed.push({
-        swapId: row.swapId,
-        partnerCode,
-        status: row.attributionStatus,
-        reason: readDetails(row.attributionDetails)?.reason ?? null,
-      })
+    const outcome = resolvePartnerFee(row, () => deps.calculateFeeForSwap(deps.toSwap(row)), tolerance)
+
+    if (outcome.kind === 'excluded') {
+      const ref = { swapId: row.swapId, partnerCode }
+      const { fee } = outcome
+
+      switch (outcome.exclusion) {
+        case 'unattributed':
+          unattributed.push({
+            ...ref,
+            status: row.attributionStatus,
+            reason: readDetails(row.attributionDetails)?.reason ?? null,
+          })
+          break
+        case 'unverified':
+          unverified.push({ ...ref, status: row.verificationStatus === 'FAILED' ? 'failed' : 'pending' })
+          break
+        case 'no-affiliate-fee':
+          noAffiliateFee.push(ref)
+          break
+        case 'unpriceable':
+          unpriceable.push(ref)
+          break
+        case 'unresolved-fee':
+          unresolvedFee.push(ref)
+          break
+        case 'fee-anomaly':
+          if (fee) {
+            const anomaly = checkFeeAnomaly(ref, fee, tolerance)
+            if (anomaly) anomalies.push(anomaly)
+          }
+          break
+        case 'partner-bps-unset':
+          partnerBpsUnset.push({ ...ref, verifiedBps: fee?.verifiedBps ?? 0, partnerBps: row.partnerBps })
+          break
+      }
       continue
     }
 
-    if (row.verificationStatus === 'PENDING') {
-      unverified.push({ swapId: row.swapId, partnerCode, status: 'pending' })
-      continue
-    }
-
-    if (row.verificationStatus === 'FAILED') {
-      unverified.push({ swapId: row.swapId, partnerCode, status: 'failed' })
-      continue
-    }
-
-    if (!row.isAffiliateVerified) {
-      noAffiliateFee.push({ swapId: row.swapId, partnerCode })
-      continue
-    }
-
-    const fee = deps.calculateFeeForSwap(deps.toSwap(row))
-    if (!fee) {
-      unpriceable.push({ swapId: row.swapId, partnerCode })
-      continue
-    }
-
-    if (fee.actualFeeUsd === null) {
-      unresolvedFee.push({ swapId: row.swapId, partnerCode })
-      continue
-    }
-
-    const anomaly = checkFeeAnomaly({ swapId: row.swapId, partnerCode }, fee, tolerance)
-    if (anomaly) {
-      anomalies.push(anomaly)
-      continue
-    }
-
-    if (row.partnerBps <= 0) {
-      partnerBpsUnset.push({
-        swapId: row.swapId,
-        partnerCode,
-        verifiedBps: fee.verifiedBps,
-        partnerBps: row.partnerBps,
-      })
-      continue
-    }
+    const { fee } = outcome
 
     const accrual = partners.get(partnerCode) ?? {
       partnerCode,

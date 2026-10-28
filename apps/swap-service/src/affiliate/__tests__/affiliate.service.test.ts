@@ -402,6 +402,8 @@ describe('AffiliateService.getAffiliateSwaps fee-split enrichment', () => {
     shapeshiftBps: 10,
     affiliateBps: 55,
     status: 'SUCCESS',
+    attributionStatus: 'ACCEPTED',
+    verificationStatus: 'SUCCESS',
     isAffiliateVerified: true,
     sellAsset: { precision: 8 },
     buyAsset: {},
@@ -439,6 +441,22 @@ describe('AffiliateService.getAffiliateSwaps fee-split enrichment', () => {
     expect(swaps[0].volumeUsd).toBe('10')
     // stored affiliateBps (55) passes through untouched — not overwritten with verifiedBps (60)
     expect(swaps[0].affiliateBps).toBe(55)
+  })
+
+  it('reports no fee for a claim the payout would not pay, such as a rejected attribution', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      swapRow({
+        attributionStatus: 'REJECTED',
+        actualAffiliateFeeAmountCryptoBaseUnit: '60000',
+        affiliateFeeAssetId: BASE_USDC,
+        affiliateAssetUsd: '1',
+      }),
+    ])
+    const service = new AffiliateService(makePrismaMock({ swapFindMany: findMany }))
+
+    const { swaps } = await service.getAffiliateSwaps(undefined, { limit: 50 })
+
+    expect(swaps[0]).toMatchObject({ feeUsd: null, partnerFeeUsd: null })
   })
 
   it('reports no fee rather than the bps-implied estimate when nothing was collected on chain', async () => {

@@ -1,5 +1,6 @@
 import type BigNumber from 'bignumber.js'
 
+import type { FeeResult } from '../../apps/swap-service/src/swaps/partner-fee'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 export type PartnerAccrual = {
@@ -18,13 +19,7 @@ export type PartnerPayout = PartnerAccrual & {
 
 export type PayoutWindow = { start: Date; end: Date; label: string }
 
-export type FeeResult = {
-  feeUsd: number
-  volumeUsd: number
-  verifiedBps: number
-  actualFeeUsd: number | null
-  impliedFeeUsd: number | null
-}
+export type { FeeResult }
 
 export type FeeAnomaly = {
   swapId: string
