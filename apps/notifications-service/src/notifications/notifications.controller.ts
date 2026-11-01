@@ -1,12 +1,18 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Header, Param, Post, Query, Req } from '@nestjs/common'
+import { z } from 'zod'
 
 import { NotificationType, PushNotificationData } from '@shapeshift/shared-types'
+import type { UserRequest } from '@shapeshift/shared-utils'
+import { DeviceAccess, SecurityRateLimiter } from '@shapeshift/shared-utils'
 
 import { NotificationsService } from './notifications.service'
 
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly limits: SecurityRateLimiter,
+  ) {}
 
   @Post()
   async createNotification(
@@ -34,6 +40,16 @@ export class NotificationsController {
     return this.notificationsService.registerDevice(data.userId, data.deviceToken, data.deviceType)
   }
 
+  @Header('Cache-Control', 'no-store')
+  @Get('me')
+  @DeviceAccess()
+  async mine(@Req() request: UserRequest, @Query('limit') limit?: string) {
+    if (limit !== undefined && !/^(?:[1-9]|[1-9][0-9]|100)$/.test(limit))
+      throw new BadRequestException('Limit must be between 1 and 100')
+    await this.limits.consume('notification-read', request.userId, 60)
+    return this.notificationsService.getUserNotifications(request.userId, limit ? Number(limit) : 50)
+  }
+
   @Get('user/:userId')
   async getUserNotifications(@Param('userId') userId: string, @Query('limit') limit?: string) {
     return this.notificationsService.getUserNotifications(userId, limit ? parseInt(limit) : 50)
@@ -55,6 +71,19 @@ export class NotificationsController {
     },
   ) {
     return this.notificationsService.sendPushNotificationToUser(data.userId, data.title, data.body, data.data)
+  }
+
+  @Post('verify-device')
+  async verifyDevice(@Body() input: unknown) {
+    const parsed = z
+      .strictObject({
+        deviceToken: z.string().max(256),
+        registrationId: z.uuid(),
+        nonce: z.string().regex(/^[a-f0-9]{64}$/),
+      })
+      .safeParse(input)
+    if (!parsed.success) throw new BadRequestException('Invalid verification request')
+    return this.notificationsService.sendDeviceVerification(parsed.data)
   }
 
   @Post('send-to-device')
