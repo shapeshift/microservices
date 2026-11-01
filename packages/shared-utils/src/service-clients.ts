@@ -13,8 +13,11 @@ export class UserServiceClient {
     const baseUrl = getRequiredEnvVar('USER_SERVICE_URL')
     this.axios = axios.create({
       baseURL: baseUrl,
+      timeout: 10_000,
+      maxRedirects: 0,
       headers: {
         'Content-Type': 'application/json',
+        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
       },
     })
   }
@@ -79,10 +82,17 @@ export class NotificationsServiceClient {
     const baseUrl = getRequiredEnvVar('NOTIFICATIONS_SERVICE_URL')
     this.axios = axios.create({
       baseURL: baseUrl,
+      timeout: 10_000,
+      maxRedirects: 0,
       headers: {
         'Content-Type': 'application/json',
+        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
       },
     })
+  }
+
+  async sendDeviceVerification(data: { deviceToken: string; registrationId: string; nonce: string }): Promise<void> {
+    await this.axios.post('/notifications/verify-device', data)
   }
 
   async createNotification(data: CreateNotificationDto): Promise<Record<string, unknown>> {
@@ -108,6 +118,8 @@ export class SwapServiceClient {
     const baseUrl = getRequiredEnvVar('SWAP_SERVICE_URL')
     this.axios = axios.create({
       baseURL: baseUrl,
+      timeout: 10_000,
+      maxRedirects: 0,
       headers: {
         'Content-Type': 'application/json',
         [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),

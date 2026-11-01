@@ -1,6 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
   testMatch: [
+    '<rootDir>/apps/user-service/src/__tests__/*.test.ts',
     '<rootDir>/apps/user-service/src/onramper/*.test.ts',
     '<rootDir>/packages/shared-utils/src/auth/client-ip.test.ts',
   ],
