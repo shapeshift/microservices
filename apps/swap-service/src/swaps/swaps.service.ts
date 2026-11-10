@@ -13,6 +13,7 @@ import { swappers } from '@shapeshiftoss/swapper'
 import { TxStatus } from '@shapeshiftoss/unchained-client'
 
 import { BlockTimeService } from '../lib/block-time.service'
+import { AptosChainAdapterService } from '../lib/chain-adapters/aptos.service'
 import { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service'
 import { EvmChainAdapterService } from '../lib/chain-adapters/evm.service'
 import { NearChainAdapterService } from '../lib/chain-adapters/near.service'
@@ -94,6 +95,7 @@ export class SwapsService {
     nearChainAdapterService: NearChainAdapterService,
     starknetChainAdapterService: StarknetChainAdapterService,
     tonChainAdapterService: TonChainAdapterService,
+    aptosChainAdapterService: AptosChainAdapterService,
     private blockTimeService: BlockTimeService,
     private depositDetectionService: DepositDetectionService,
   ) {
@@ -109,6 +111,7 @@ export class SwapsService {
       nearChainAdapterService,
       starknetChainAdapterService,
       tonChainAdapterService,
+      aptosChainAdapterService,
     })
   }
 

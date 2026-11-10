@@ -51,6 +51,7 @@ const buildService = (verifierResult: Record<string, unknown> = {}) => {
     stub,
     stub,
     stub,
+    stub,
     blockTime as never,
     stub,
   )
@@ -191,6 +192,7 @@ describe('polling queries and writes', () => {
     const stub = {} as never
     return new SwapsService(
       { swap: prisma } as never,
+      stub,
       stub,
       stub,
       stub,
