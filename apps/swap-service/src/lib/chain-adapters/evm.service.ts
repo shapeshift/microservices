@@ -36,23 +36,12 @@ export class EvmChainAdapterService {
       this.initializePlasmaAdapter(chainAdapterManager)
       this.initializeMantleAdapter(chainAdapterManager)
       this.initializeMegaEthAdapter(chainAdapterManager)
-      this.initializeBerachainAdapter(chainAdapterManager)
       this.initializeCronosAdapter(chainAdapterManager)
       this.initializeKatanaAdapter(chainAdapterManager)
-      this.initializeFlowEvmAdapter(chainAdapterManager)
       this.initializeCeloAdapter(chainAdapterManager)
-      this.initializePlumeAdapter(chainAdapterManager)
-      this.initializeStoryAdapter(chainAdapterManager)
-      this.initializeZkSyncEraAdapter(chainAdapterManager)
-      this.initializeWorldChainAdapter(chainAdapterManager)
-      this.initializeHemiAdapter(chainAdapterManager)
-      this.initializeLineaAdapter(chainAdapterManager)
-      this.initializeScrollAdapter(chainAdapterManager)
       this.initializeSonicAdapter(chainAdapterManager)
       this.initializeUnichainAdapter(chainAdapterManager)
       this.initializeBobAdapter(chainAdapterManager)
-      this.initializeModeAdapter(chainAdapterManager)
-      this.initializeSoneiumAdapter(chainAdapterManager)
 
       this.logger.log('All EVM chain adapters initialized successfully')
     } catch (error) {
@@ -265,16 +254,6 @@ export class EvmChainAdapterService {
     this.logger.log('MegaETH chain adapter initialized')
   }
 
-  private initializeBerachainAdapter(chainAdapterManager: Map<string, any>) {
-    const berachainAdapter = new adapters.berachain.ChainAdapter({
-      rpcUrl: env.VITE_BERACHAIN_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.BerachainMainnet, berachainAdapter)
-    this.logger.log('Berachain chain adapter initialized')
-  }
-
   private initializeCronosAdapter(chainAdapterManager: Map<string, any>) {
     const cronosAdapter = new adapters.cronos.ChainAdapter({
       rpcUrl: env.VITE_CRONOS_NODE_URL,
@@ -295,16 +274,6 @@ export class EvmChainAdapterService {
     this.logger.log('Katana chain adapter initialized')
   }
 
-  private initializeFlowEvmAdapter(chainAdapterManager: Map<string, any>) {
-    const flowEvmAdapter = new adapters.flowEvm.ChainAdapter({
-      rpcUrl: env.VITE_FLOWEVM_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.FlowEvmMainnet, flowEvmAdapter)
-    this.logger.log('Flow EVM chain adapter initialized')
-  }
-
   private initializeCeloAdapter(chainAdapterManager: Map<string, any>) {
     const celoAdapter = new adapters.celo.ChainAdapter({
       rpcUrl: env.VITE_CELO_NODE_URL,
@@ -313,76 +282,6 @@ export class EvmChainAdapterService {
 
     chainAdapterManager.set(KnownChainIds.CeloMainnet, celoAdapter)
     this.logger.log('Celo chain adapter initialized')
-  }
-
-  private initializePlumeAdapter(chainAdapterManager: Map<string, any>) {
-    const plumeAdapter = new adapters.plume.ChainAdapter({
-      rpcUrl: env.VITE_PLUME_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.PlumeMainnet, plumeAdapter)
-    this.logger.log('Plume chain adapter initialized')
-  }
-
-  private initializeStoryAdapter(chainAdapterManager: Map<string, any>) {
-    const storyAdapter = new adapters.story.ChainAdapter({
-      rpcUrl: env.VITE_STORY_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.StoryMainnet, storyAdapter)
-    this.logger.log('Story chain adapter initialized')
-  }
-
-  private initializeZkSyncEraAdapter(chainAdapterManager: Map<string, any>) {
-    const zkSyncEraAdapter = new adapters.zksyncera.ChainAdapter({
-      rpcUrl: env.VITE_ZKSYNCERA_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.ZkSyncEraMainnet, zkSyncEraAdapter)
-    this.logger.log('zkSync Era chain adapter initialized')
-  }
-
-  private initializeWorldChainAdapter(chainAdapterManager: Map<string, any>) {
-    const worldChainAdapter = new adapters.worldchain.ChainAdapter({
-      rpcUrl: env.VITE_WORLDCHAIN_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.WorldChainMainnet, worldChainAdapter)
-    this.logger.log('World Chain chain adapter initialized')
-  }
-
-  private initializeHemiAdapter(chainAdapterManager: Map<string, any>) {
-    const hemiAdapter = new adapters.hemi.ChainAdapter({
-      rpcUrl: env.VITE_HEMI_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.HemiMainnet, hemiAdapter)
-    this.logger.log('Hemi chain adapter initialized')
-  }
-
-  private initializeLineaAdapter(chainAdapterManager: Map<string, any>) {
-    const lineaAdapter = new adapters.linea.ChainAdapter({
-      rpcUrl: env.VITE_LINEA_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.LineaMainnet, lineaAdapter)
-    this.logger.log('Linea chain adapter initialized')
-  }
-
-  private initializeScrollAdapter(chainAdapterManager: Map<string, any>) {
-    const scrollAdapter = new adapters.scroll.ChainAdapter({
-      rpcUrl: env.VITE_SCROLL_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.ScrollMainnet, scrollAdapter)
-    this.logger.log('Scroll chain adapter initialized')
   }
 
   private initializeSonicAdapter(chainAdapterManager: Map<string, any>) {
@@ -413,26 +312,6 @@ export class EvmChainAdapterService {
 
     chainAdapterManager.set(KnownChainIds.BobMainnet, bobAdapter)
     this.logger.log('BOB chain adapter initialized')
-  }
-
-  private initializeModeAdapter(chainAdapterManager: Map<string, any>) {
-    const modeAdapter = new adapters.mode.ChainAdapter({
-      rpcUrl: env.VITE_MODE_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.ModeMainnet, modeAdapter)
-    this.logger.log('Mode chain adapter initialized')
-  }
-
-  private initializeSoneiumAdapter(chainAdapterManager: Map<string, any>) {
-    const soneiumAdapter = new adapters.soneium.ChainAdapter({
-      rpcUrl: env.VITE_SONEIUM_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.SoneiumMainnet, soneiumAdapter)
-    this.logger.log('Soneium chain adapter initialized')
   }
 
   assertGetEvmChainAdapter(chainId: ChainId): EvmChainAdapter {
