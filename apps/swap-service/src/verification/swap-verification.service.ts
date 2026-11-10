@@ -97,6 +97,9 @@ export class SwapVerificationService {
             return await this.verifyAcross(swap)
           case SwapperName.BobGateway:
           case SwapperName.Debridge:
+          case SwapperName.Fynd:
+          case SwapperName.KyberSwap:
+          case SwapperName.Symbiosis:
           case SwapperName.Test:
             return noAffiliateResult('SUCCESS', 'Verification not implemented')
           default: {

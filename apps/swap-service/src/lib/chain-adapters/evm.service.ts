@@ -44,7 +44,6 @@ export class EvmChainAdapterService {
       this.initializePlumeAdapter(chainAdapterManager)
       this.initializeStoryAdapter(chainAdapterManager)
       this.initializeZkSyncEraAdapter(chainAdapterManager)
-      this.initializeBlastAdapter(chainAdapterManager)
       this.initializeWorldChainAdapter(chainAdapterManager)
       this.initializeHemiAdapter(chainAdapterManager)
       this.initializeLineaAdapter(chainAdapterManager)
@@ -344,16 +343,6 @@ export class EvmChainAdapterService {
 
     chainAdapterManager.set(KnownChainIds.ZkSyncEraMainnet, zkSyncEraAdapter)
     this.logger.log('zkSync Era chain adapter initialized')
-  }
-
-  private initializeBlastAdapter(chainAdapterManager: Map<string, any>) {
-    const blastAdapter = new adapters.blast.ChainAdapter({
-      rpcUrl: env.VITE_BLAST_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.BlastMainnet, blastAdapter)
-    this.logger.log('Blast chain adapter initialized')
   }
 
   private initializeWorldChainAdapter(chainAdapterManager: Map<string, any>) {

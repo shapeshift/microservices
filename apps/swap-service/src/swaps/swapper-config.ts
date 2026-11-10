@@ -2,6 +2,7 @@ import type { ChainId } from '@shapeshiftoss/caip'
 import type { SwapperConfig } from '@shapeshiftoss/swapper'
 
 import { env } from '../env'
+import type { AptosChainAdapterService } from '../lib/chain-adapters/aptos.service'
 import type { CosmosSdkChainAdapterService } from '../lib/chain-adapters/cosmos-sdk.service'
 import type { EvmChainAdapterService } from '../lib/chain-adapters/evm.service'
 import type { NearChainAdapterService } from '../lib/chain-adapters/near.service'
@@ -25,6 +26,8 @@ export const getSwapperConfig = (): SwapperConfig => ({
   VITE_FEATURE_CHAINFLIP_SWAP_DCA: true,
   VITE_FEATURE_THORCHAINSWAP_L1_TO_LONGTAIL: true,
   VITE_FEATURE_THORCHAINSWAP_LONGTAIL: true,
+  VITE_FYND_BASE_URL: env.VITE_FYND_BASE_URL,
+  VITE_KYBER_BASE_URL: env.VITE_KYBER_BASE_URL,
   VITE_MAYACHAIN_MIDGARD_URL: env.VITE_MAYACHAIN_MIDGARD_URL,
   VITE_MAYACHAIN_NODE_URL: env.VITE_MAYACHAIN_NODE_URL,
   VITE_NEAR_INTENTS_API_KEY: env.VITE_NEAR_INTENTS_API_KEY,
@@ -32,6 +35,7 @@ export const getSwapperConfig = (): SwapperConfig => ({
   VITE_RELAY_API_KEY: env.VITE_RELAY_API_KEY,
   VITE_RELAY_API_URL: env.VITE_RELAY_API_URL,
   VITE_SUI_NODE_URL: env.VITE_SUI_NODE_URL,
+  VITE_SYMBIOSIS_API_URL: env.VITE_SYMBIOSIS_API_URL,
   VITE_THORCHAIN_MIDGARD_URL: env.VITE_THORCHAIN_MIDGARD_URL,
   VITE_THORCHAIN_NODE_URL: env.VITE_THORCHAIN_NODE_URL,
   VITE_TRON_GRID_API_KEY: '',
@@ -60,6 +64,7 @@ type ChainAdapterServices = {
   nearChainAdapterService: NearChainAdapterService
   starknetChainAdapterService: StarknetChainAdapterService
   tonChainAdapterService: TonChainAdapterService
+  aptosChainAdapterService: AptosChainAdapterService
 }
 
 export const buildChainAdapterAsserts = (services: ChainAdapterServices) => ({
@@ -75,4 +80,6 @@ export const buildChainAdapterAsserts = (services: ChainAdapterServices) => ({
   assertGetStarknetChainAdapter: (chainId: ChainId) =>
     services.starknetChainAdapterService.assertGetStarknetChainAdapter(chainId),
   assertGetTonChainAdapter: (chainId: ChainId) => services.tonChainAdapterService.assertGetTonChainAdapter(chainId),
+  assertGetAptosChainAdapter: (chainId: ChainId) =>
+    services.aptosChainAdapterService.assertGetAptosChainAdapter(chainId),
 })
