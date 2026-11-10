@@ -42,6 +42,7 @@ export class EvmChainAdapterService {
       this.initializeSonicAdapter(chainAdapterManager)
       this.initializeUnichainAdapter(chainAdapterManager)
       this.initializeBobAdapter(chainAdapterManager)
+      this.initializeElysiumAdapter(chainAdapterManager)
 
       this.logger.log('All EVM chain adapters initialized successfully')
     } catch (error) {
@@ -312,6 +313,16 @@ export class EvmChainAdapterService {
 
     chainAdapterManager.set(KnownChainIds.BobMainnet, bobAdapter)
     this.logger.log('BOB chain adapter initialized')
+  }
+
+  private initializeElysiumAdapter(chainAdapterManager: Map<string, any>) {
+    const elysiumAdapter = new adapters.elysium.ChainAdapter({
+      rpcUrl: env.VITE_ELYSIUM_NODE_URL,
+      getKnownTokens: () => [],
+    })
+
+    chainAdapterManager.set(KnownChainIds.ElysiumMainnet, elysiumAdapter)
+    this.logger.log('Elysium chain adapter initialized')
   }
 
   assertGetEvmChainAdapter(chainId: ChainId): EvmChainAdapter {
