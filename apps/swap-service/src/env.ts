@@ -92,6 +92,7 @@ export const env = Object.freeze({
   VITE_BOB_NODE_URL: 'https://rpc.gobob.xyz',
   VITE_CELO_NODE_URL: 'https://forno.celo.org',
   VITE_CRONOS_NODE_URL: 'https://evm.cronos.org',
+  VITE_ELYSIUM_NODE_URL: 'https://rpc.elysium.kinetiq.xyz',
   VITE_HYPEREVM_NODE_URL: 'https://rpc.hyperliquid.xyz/evm',
   VITE_INK_NODE_URL: 'https://rpc-gel.inkonchain.com',
   VITE_KATANA_NODE_URL: 'https://rpc.katana.network',
