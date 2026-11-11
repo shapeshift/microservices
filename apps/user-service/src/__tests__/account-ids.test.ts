@@ -48,3 +48,15 @@ test('a WEB token owned by another profile is refused with 409 instead of being 
   const [{ update }] = upsert.mock.calls[0] as unknown as [{ update: Record<string, unknown> }]
   expect(update).not.toHaveProperty('userId')
 })
+
+test('a WEB token owned by another profile is refused when the native upsert returns no row', async () => {
+  const prisma = {
+    user: { findUnique: jest.fn(() => ({ id: 'new-profile' })) },
+    device: { upsert: jest.fn().mockResolvedValue(null) },
+  }
+  const users = new UsersService(prisma as never, {} as never)
+
+  await expect(
+    users.registerDevice({ userId: 'new-profile', deviceToken: 'web-token', deviceType: 'WEB' }),
+  ).rejects.toBeInstanceOf(ConflictException)
+})

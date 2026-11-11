@@ -307,7 +307,9 @@ export class UsersService {
         throw new Error('User not found')
       }
 
-      const device = await this.prisma.device.upsert({
+      // Prisma runs this as a native INSERT ... ON CONFLICT DO UPDATE WHERE "userId" = ..., which returns no row
+      // when another profile owns the token; the emulated path raises P2002 instead.
+      const device: Device | null = await this.prisma.device.upsert({
         where: {
           deviceToken: data.deviceToken,
           userId: data.userId,
@@ -323,6 +325,7 @@ export class UsersService {
         },
       })
 
+      if (!device) throw new ConflictException('Device is registered to another profile')
       this.logger.log(`Device registered for user ${data.userId}`)
       return device
     } catch (error) {

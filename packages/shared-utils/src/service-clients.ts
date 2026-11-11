@@ -6,20 +6,41 @@ import type { CreateNotificationDto, Device, Fees, User } from '@shapeshift/shar
 import { API_KEY_HEADER } from './api-key.guard'
 import { getRequiredEnvVar } from './index'
 
+/** Error for a failed internal call that omits the request config, so the service key and payload never reach logs. */
+export class ServiceRequestError extends Error {
+  constructor(
+    readonly service: string,
+    readonly status: number | undefined,
+  ) {
+    super(`${service} request failed${status ? ` with status ${status}` : ''}`)
+    this.name = 'ServiceRequestError'
+  }
+}
+
+const withSafeErrors = (instance: AxiosInstance, service: string): AxiosInstance => {
+  instance.interceptors.response.use(undefined, (error: unknown) =>
+    Promise.reject(new ServiceRequestError(service, axios.isAxiosError(error) ? error.response?.status : undefined)),
+  )
+  return instance
+}
+
 export class UserServiceClient {
   private readonly axios: AxiosInstance
 
   constructor() {
     const baseUrl = getRequiredEnvVar('USER_SERVICE_URL')
-    this.axios = axios.create({
-      baseURL: baseUrl,
-      timeout: 10_000,
-      maxRedirects: 0,
-      headers: {
-        'Content-Type': 'application/json',
-        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
-      },
-    })
+    this.axios = withSafeErrors(
+      axios.create({
+        baseURL: baseUrl,
+        timeout: 10_000,
+        maxRedirects: 0,
+        headers: {
+          'Content-Type': 'application/json',
+          [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
+        },
+      }),
+      'user-service',
+    )
   }
 
   async getUserById(userId: string): Promise<User> {
@@ -80,15 +101,18 @@ export class NotificationsServiceClient {
 
   constructor() {
     const baseUrl = getRequiredEnvVar('NOTIFICATIONS_SERVICE_URL')
-    this.axios = axios.create({
-      baseURL: baseUrl,
-      timeout: 10_000,
-      maxRedirects: 0,
-      headers: {
-        'Content-Type': 'application/json',
-        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
-      },
-    })
+    this.axios = withSafeErrors(
+      axios.create({
+        baseURL: baseUrl,
+        timeout: 10_000,
+        maxRedirects: 0,
+        headers: {
+          'Content-Type': 'application/json',
+          [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
+        },
+      }),
+      'notifications-service',
+    )
   }
 
   async sendDeviceVerification(data: { deviceToken: string; registrationId: string; nonce: string }): Promise<void> {
@@ -116,15 +140,18 @@ export class SwapServiceClient {
 
   constructor() {
     const baseUrl = getRequiredEnvVar('SWAP_SERVICE_URL')
-    this.axios = axios.create({
-      baseURL: baseUrl,
-      timeout: 10_000,
-      maxRedirects: 0,
-      headers: {
-        'Content-Type': 'application/json',
-        [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
-      },
-    })
+    this.axios = withSafeErrors(
+      axios.create({
+        baseURL: baseUrl,
+        timeout: 10_000,
+        maxRedirects: 0,
+        headers: {
+          'Content-Type': 'application/json',
+          [API_KEY_HEADER]: getRequiredEnvVar('SERVICE_API_KEY'),
+        },
+      }),
+      'swap-service',
+    )
   }
 
   async calculateReferralFees(referralCode: string, startDate?: Date, endDate?: Date): Promise<Fees> {
