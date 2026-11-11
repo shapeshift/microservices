@@ -21,6 +21,7 @@ const challenges = new Map<string, Challenge>()
 const identities = new Map<string, { keyId: string; userId: string }>()
 const sessions = new Map<string, Session>()
 const registrations = new Map<string, Pending>()
+const limits = new Map<string, number>()
 const deviceUpsert = jest.fn(() => ({ id: 'device-1', deviceType: 'MOBILE', isActive: true }))
 const registerDevice = jest.fn((data: { userId: string; deviceType: string }) => ({
   id: 'device-1',
@@ -68,7 +69,9 @@ const db = {
   },
   device: { findUnique: () => ({ userId: 'legacy-user', isActive: true }), upsert: deviceUpsert },
   securityRateLimit: { deleteMany: () => ({ count: 0 }) },
-  $queryRaw: () => [{ count: 1 }],
+  $queryRaw: (_: TemplateStringsArray, key: string) => [
+    { count: (limits.set(key, (limits.get(key) ?? 0) + 1), limits.get(key)) },
+  ],
   $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn(db),
 }
 let app: INestApplication
@@ -115,6 +118,7 @@ beforeEach(() => {
   identities.clear()
   sessions.clear()
   registrations.clear()
+  limits.clear()
   delivered.mockClear()
   deviceUpsert.mockClear()
   registerDevice.mockClear()
@@ -196,4 +200,14 @@ test('mobile registration requires receipt of the secret delivered to that push 
     expect.objectContaining({ update: { userId: a.userId, deviceType: 'MOBILE', isActive: true } }),
   )
   expect((await api('/me/devices/confirm', proof, a.token)).status).toBe(400)
+})
+
+test("a stranger who knows a push token cannot use up its owner's verification quota", async () => {
+  const owner = await login()
+  const stranger = await login(generateKeyPairSync('ec', { namedCurve: 'prime256v1' }))
+  const register = (token: string) =>
+    api('/me/devices', { deviceToken: 'ExpoPushToken[victim]', deviceType: 'MOBILE' }, token)
+  for (let attempt = 0; attempt < 5; attempt++) expect((await register(stranger.token)).status).toBe(201)
+  expect((await register(stranger.token)).status).toBe(429)
+  expect((await register(owner.token)).status).toBe(201)
 })

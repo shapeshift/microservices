@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { BadRequestException, Body, Controller, Delete, Get, Header, Param, Post, Req } from '@nestjs/common'
+import type { Request } from 'express'
 import { z } from 'zod'
 
 import type { UserRequest } from '@shapeshift/shared-utils'
@@ -7,6 +8,8 @@ import { DeviceAccess, hashToken, NotificationsServiceClient, SecurityRateLimite
 
 import { PrismaService } from '../prisma/prisma.service'
 import { UsersService } from '../users/users.service'
+
+import { requestIp } from './auth.controller'
 
 const deviceSchema = z.strictObject({ deviceToken: z.string().min(1).max(256), deviceType: z.enum(['MOBILE', 'WEB']) })
 
@@ -39,7 +42,7 @@ export class ProfileController {
   }
 
   @Post('devices')
-  async register(@Req() request: UserRequest, @Body() input: unknown) {
+  async register(@Req() request: UserRequest & Pick<Request, 'socket' | 'headers'>, @Body() input: unknown) {
     const parsed = deviceSchema.safeParse(input)
     if (!parsed.success) throw new BadRequestException('Invalid device')
     await this.limits.consume('device-registration', request.userId, 10)
@@ -49,8 +52,10 @@ export class ProfileController {
       const existing = await this.db.device.findUnique({ where: { deviceToken: parsed.data.deviceToken } })
       if (existing?.userId === request.userId && existing.isActive)
         return { device: { id: existing.id, deviceType: existing.deviceType, isActive: true } }
-      await this.limits.consume('push-verification-token', parsed.data.deviceToken, 5, 3600)
-      await this.limits.consume('push-verification-global', 'all', 500)
+      // Scoped to the caller so a stranger who knows a push token cannot exhaust its owner's quota.
+      await this.limits.consume('push-verification-user', request.userId, 10, 3600)
+      await this.limits.consume('push-verification-ip', requestIp(request), 30, 3600)
+      await this.limits.consume('push-verification-user-token', `${request.userId}:${parsed.data.deviceToken}`, 5, 3600)
       const id = randomUUID()
       const nonce = randomBytes(32).toString('hex')
       const expiresAt = new Date(Date.now() + 5 * 60_000)

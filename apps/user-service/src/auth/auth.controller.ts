@@ -22,6 +22,12 @@ const challengeSchema = z.strictObject({
     .regex(/^[A-Za-z0-9+/]+={0,2}$/)
     .max(200),
 })
+const GLOBAL_AUTH_BACKSTOP_PER_MINUTE = 50_000
+const GLOBAL_REGISTRATION_BACKSTOP_PER_DAY = 200_000
+
+export const requestIp = (request: Pick<Request, 'socket' | 'headers'>): string =>
+  clientIp(request.socket.remoteAddress, request.headers['x-forwarded-for'] as string | undefined)
+
 const proofSchema = z.strictObject({ id: z.uuid(), signature: z.string().regex(/^[A-Za-z0-9+/]{86}==$/) })
 
 @Controller('auth/device')
@@ -39,12 +45,9 @@ export class DeviceAuthController {
     if (!parsed.success) throw new BadRequestException('Invalid device key')
     const origin = request.headers.origin
     if (!origin || !allowedOrigins().includes(origin)) throw new BadRequestException('Unsupported application origin')
-    await this.limits.consume('device-auth-global', 'all', 1000)
-    await this.limits.consume(
-      'device-auth-ip',
-      clientIp(request.socket.remoteAddress, request.headers['x-forwarded-for'] as string | undefined),
-      20,
-    )
+    // Per-IP limits are the main control; the global cap is only a backstop that normal peaks never reach.
+    await this.limits.consume('device-auth-ip', requestIp(request), 20)
+    await this.limits.consume('device-auth-global', 'all', GLOBAL_AUTH_BACKSTOP_PER_MINUTE)
     let publicKey: string
     try {
       const key = createPublicKey({ key: Buffer.from(parsed.data.publicKey, 'base64'), type: 'spki', format: 'der' })
@@ -72,12 +75,8 @@ export class DeviceAuthController {
   async verify(@Body() input: unknown, @Req() request: Request) {
     const parsed = proofSchema.safeParse(input)
     if (!parsed.success) throw new BadRequestException('Invalid device proof')
-    await this.limits.consume('device-verify-global', 'all', 1000)
-    await this.limits.consume(
-      'device-verify-ip',
-      clientIp(request.socket.remoteAddress, request.headers['x-forwarded-for'] as string | undefined),
-      30,
-    )
+    await this.limits.consume('device-verify-ip', requestIp(request), 30)
+    await this.limits.consume('device-verify-global', 'all', GLOBAL_AUTH_BACKSTOP_PER_MINUTE)
     const challenge = await this.db.deviceChallenge.findUnique({ where: { id: parsed.data.id } })
     if (
       !challenge ||
@@ -98,13 +97,8 @@ export class DeviceAuthController {
       throw new UnauthorizedException('Invalid device signature')
     const identity = await this.db.deviceIdentity.findUnique({ where: { keyId: challenge.keyId } })
     if (!identity) {
-      await this.limits.consume('device-registration-global', 'all', 10000, 86400)
-      await this.limits.consume(
-        'device-registration-ip',
-        clientIp(request.socket.remoteAddress, request.headers['x-forwarded-for'] as string | undefined),
-        10,
-        3600,
-      )
+      await this.limits.consume('device-registration-ip', requestIp(request), 10, 3600)
+      await this.limits.consume('device-registration-global', 'all', GLOBAL_REGISTRATION_BACKSTOP_PER_DAY, 86400)
     }
     const token = randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + 24 * 60 * 60_000)
