@@ -8,10 +8,10 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets'
-import type { Notification } from '@shapeshift/prisma'
 import type { DefaultEventsMap } from 'socket.io'
 import { Server, Socket } from 'socket.io'
 
+import type { Notification } from '@shapeshift/prisma'
 import { allowedOrigins, clientIp, DeviceSessions, SecurityRateLimiter } from '@shapeshift/shared-utils'
 
 import { NotificationsService } from '../notifications/notifications.service'
