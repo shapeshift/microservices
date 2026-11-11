@@ -1,9 +1,9 @@
 import { createHash, createPublicKey, randomBytes, randomUUID, verify } from 'node:crypto'
 import { BadRequestException, Body, Controller, Delete, Header, Post, Req, UnauthorizedException } from '@nestjs/common'
-import { Prisma } from '@shapeshift/prisma'
 import type { Request } from 'express'
 import { z } from 'zod'
 
+import { Prisma } from '@shapeshift/prisma'
 import type { UserRequest } from '@shapeshift/shared-utils'
 import {
   allowedOrigins,

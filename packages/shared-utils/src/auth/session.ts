@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { CanActivate, ExecutionContext, Inject, Injectable, SetMetadata, UnauthorizedException } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
+
 import type { PrismaClient } from '@shapeshift/prisma'
 
 export const DeviceAccess = () => SetMetadata('device-access', true)

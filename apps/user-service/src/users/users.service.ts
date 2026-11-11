@@ -1,11 +1,15 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common'
 
-import { Device, User, UserAccount } from '@shapeshift/prisma'
+import { Device, Prisma, User, UserAccount } from '@shapeshift/prisma'
 import { AddAccountIdDto, CreateUserDto, DeviceType, RegisterDeviceDto } from '@shapeshift/shared-types'
 import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { ReferralService } from '../referral/referral.service'
+
+// EVM addresses are case-insensitive, so every read and write must hash the same form.
+const hashNormalizedAccountId = (accountId: string): string =>
+  hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
 
 @Injectable()
 export class UsersService {
@@ -33,7 +37,7 @@ export class UsersService {
 
   async createUser(data: CreateUserDto): Promise<User> {
     try {
-      const hashedAccountIds = data.accountIds.map((id) => hashAccountId(id))
+      const hashedAccountIds = data.accountIds.map((id) => hashNormalizedAccountId(id))
 
       for (const hashedAccountId of hashedAccountIds) {
         const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
@@ -76,7 +80,7 @@ export class UsersService {
         if (!isValidAccountId(id)) {
           throw new Error('Invalid account ID')
         }
-        return hashAccountId(id)
+        return hashNormalizedAccountId(id)
       })
 
       return this.addHashedAccountIds(userId, hashedAccountIds)
@@ -120,7 +124,7 @@ export class UsersService {
         throw new Error('Invalid account ID')
       }
 
-      const hashedAccountId = hashAccountId(data.accountId)
+      const hashedAccountId = hashNormalizedAccountId(data.accountId)
 
       const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
       if (existingUser && existingUser.id !== data.userId) {
@@ -165,7 +169,7 @@ export class UsersService {
       throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
+    const hashedAccountId = hashNormalizedAccountId(accountId)
 
     return this.findUserByHashedAccountId(hashedAccountId)
   }
@@ -189,7 +193,7 @@ export class UsersService {
       return false
     }
 
-    const hashedAccountId = hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
+    const hashedAccountId = hashNormalizedAccountId(accountId)
     const user = await this.findUserByHashedAccountId(hashedAccountId)
     return !!user
   }
@@ -199,7 +203,7 @@ export class UsersService {
       throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
+    const hashedAccountId = hashNormalizedAccountId(accountId)
     const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
 
     if (existingUser) {
@@ -224,7 +228,7 @@ export class UsersService {
       }
     })
 
-    const hashedAccountIds = accountIds.map((id) => hashAccountId(id))
+    const hashedAccountIds = accountIds.map((id) => hashNormalizedAccountId(id))
 
     for (const hashedAccountId of hashedAccountIds) {
       const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
@@ -322,6 +326,9 @@ export class UsersService {
       this.logger.log(`Device registered for user ${data.userId}`)
       return device
     } catch (error) {
+      // The token belongs to another profile; only a mobile push proof may move it.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+        throw new ConflictException('Device is registered to another profile')
       this.logger.error('Failed to register device', error)
       throw error
     }
