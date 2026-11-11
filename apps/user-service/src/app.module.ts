@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { APP_GUARD } from '@nestjs/core'
 
-import { SecurityRateLimiter } from '@shapeshift/shared-utils'
+import { DeviceSessions, SecurityRateLimiter, ServiceOrDeviceGuard } from '@shapeshift/shared-utils'
 
+import { DeviceAuthController } from './auth/auth.controller'
+import { ProfileController } from './auth/profile.controller'
 import { OnramperCatalogue, OnramperController } from './onramper/onramper.controller'
 import { OnramperAuthController, OnramperSessions, WalletProofVerifier } from './onramper/wallet-auth'
 import { PrismaService } from './prisma/prisma.service'
@@ -18,7 +21,14 @@ import { UsersService } from './users/users.service'
       envFilePath: ['.env', '../../.env'],
     }),
   ],
-  controllers: [UsersController, ReferralController, OnramperController, OnramperAuthController],
+  controllers: [
+    UsersController,
+    ReferralController,
+    OnramperController,
+    OnramperAuthController,
+    DeviceAuthController,
+    ProfileController,
+  ],
   providers: [
     UsersService,
     ReferralService,
@@ -26,6 +36,8 @@ import { UsersService } from './users/users.service'
     OnramperCatalogue,
     OnramperSessions,
     WalletProofVerifier,
+    { provide: APP_GUARD, useClass: ServiceOrDeviceGuard },
+    DeviceSessions,
     SecurityRateLimiter,
     { provide: 'SECURITY_DB', useExisting: PrismaService },
   ],
