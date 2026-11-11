@@ -1,18 +1,12 @@
-import type { HttpService } from '@nestjs/axios'
-import { of, throwError } from 'rxjs'
+import type { Swap } from '../../../../swaps/types'
+import { SwapVerificationService } from '../../../swap-verification.service'
 
-import type { Swap } from '../../swaps/types'
-import { SwapVerificationService } from '../swap-verification.service'
+import { failingHttp, mockHttp } from '../../../test-helpers'
 
-import thorchainResponse from './fixtures/thorchain/response.json'
-import thorchainSwap from './fixtures/thorchain/swap'
+import thorchainResponse from './thorchain.response.json'
+import thorchainSwap from './thorchain.swap'
 
 const swap = thorchainSwap as unknown as Swap
-
-const makeHttpMock = (response: unknown): HttpService => {
-  const get = jest.fn().mockReturnValue(of({ data: response }))
-  return { get } as unknown as HttpService
-}
 
 describe('verifyThorchain', () => {
   let service: SwapVerificationService
@@ -22,7 +16,7 @@ describe('verifyThorchain', () => {
   })
 
   it('verifies a successful swap with shapeshift affiliate', async () => {
-    service = new SwapVerificationService(makeHttpMock(thorchainResponse))
+    service = new SwapVerificationService(mockHttp(thorchainResponse).http)
 
     const result = await service.verifySwap(swap)
 
@@ -38,8 +32,8 @@ describe('verifyThorchain', () => {
   })
 
   it('strips 0x prefix from sellTxHash before calling Midgard', async () => {
-    const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: thorchainResponse }))
-    service = new SwapVerificationService({ get } as unknown as HttpService)
+    const { http, get } = mockHttp(thorchainResponse)
+    service = new SwapVerificationService(http)
 
     await service.verifySwap(swap)
 
@@ -52,7 +46,7 @@ describe('verifyThorchain', () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].metadata.swap.affiliateAddress = 'other'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -67,7 +61,7 @@ describe('verifyThorchain', () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !out.affiliate)
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -78,7 +72,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {
-    service = new SwapVerificationService(makeHttpMock(thorchainResponse))
+    service = new SwapVerificationService(mockHttp(thorchainResponse).http)
 
     const result = await service.verifySwap({ ...swap, sellTxHash: null } as Swap)
 
@@ -90,7 +84,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns PENDING when Midgard returns no actions', async () => {
-    service = new SwapVerificationService(makeHttpMock({ actions: [] }))
+    service = new SwapVerificationService(mockHttp({ actions: [] }).http)
 
     const result = await service.verifySwap(swap)
 
@@ -102,7 +96,7 @@ describe('verifyThorchain', () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].status = 'pending'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -114,7 +108,7 @@ describe('verifyThorchain', () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].type = 'addLiquidity'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -128,7 +122,7 @@ describe('verifyThorchain', () => {
     }
     delete response.actions[0].metadata.swap
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -141,7 +135,7 @@ describe('verifyThorchain', () => {
     // Move the destination out to the front so position-based selection would return the wrong entry.
     response.actions[0].out.reverse()
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -154,7 +148,7 @@ describe('verifyThorchain', () => {
       out.affiliate ? out : { ...out, address: '0xdeadbeef' },
     )
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -166,7 +160,7 @@ describe('verifyThorchain', () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].status = 'failed'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -178,7 +172,7 @@ describe('verifyThorchain', () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].metadata.swap.memo = ''
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -187,11 +181,7 @@ describe('verifyThorchain', () => {
   })
 
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
-    const httpMock = {
-      get: jest.fn().mockReturnValue(throwError(() => new Error('upstream 500'))),
-    } as unknown as HttpService
-
-    service = new SwapVerificationService(httpMock)
+    service = new SwapVerificationService(failingHttp())
 
     const result = await service.verifySwap(swap)
 
