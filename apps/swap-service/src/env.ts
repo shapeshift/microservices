@@ -11,6 +11,27 @@ const schema = z.object({
   // Security
   ACCOUNT_ID_SALT: z.string().min(1),
   SIWE_JWT_SECRET: z.string().min(1),
+  SIWE_ALLOWED_ORIGINS: z
+    .string()
+    .min(1)
+    .transform((value) => value.split(',').map((origin) => origin.trim()))
+    .refine(
+      (origins) =>
+        origins.every((origin) => {
+          try {
+            const url = new URL(origin)
+            return (
+              origin === url.origin &&
+              !url.username &&
+              !url.password &&
+              (url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost'))
+            )
+          } catch {
+            return false
+          }
+        }),
+      'SIWE_ALLOWED_ORIGINS must contain exact HTTPS origins (HTTP localhost is allowed)',
+    ),
   SERVICE_API_KEY: z.string().min(1),
 
   // API Keys
