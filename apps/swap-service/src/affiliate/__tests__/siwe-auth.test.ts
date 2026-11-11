@@ -87,6 +87,12 @@ test.each(['domain', 'uri', 'chain', 'statement', 'future', 'expired', 'resource
   },
 )
 
+test('tolerates a client clock a few seconds ahead', () => {
+  const message = makeMessage(Wallet.createRandom().address, 'a'.repeat(32))
+  message.issuedAt = new Date(Date.now() + 5000).toISOString()
+  expect(() => assertSiwePolicy(message, ['https://affiliate.shapeshift.com'], Date.now())).not.toThrow()
+})
+
 test('old unscoped JWTs cannot authorize affiliate changes after upgrade', () => {
   const address = Wallet.createRandom().address
   const oldToken = jwt.sign({ address }, 'test-secret-that-never-leaves-tests', { expiresIn: '24h' })
