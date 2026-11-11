@@ -121,3 +121,19 @@ test('device verification sends only a short-lived data payload to Expo', async 
   await expect(service.sendDeviceVerification(data)).rejects.toThrow('Could not deliver device verification')
   send.mockRestore()
 })
+
+test('a push failure after the notification is stored does not fail the request', async () => {
+  process.env.EXPO_ACCESS_TOKEN = 'test-only-expo-token'
+  const stored = { id: 'stored', userId: 'owner', title: 'Swap', body: 'Done', type: 'SWAP_COMPLETED', swapId: null }
+  const create = jest.fn().mockResolvedValue(stored)
+  const service = new NotificationsService({ notification: { create } } as never, {} as never)
+  const delivered = jest.fn()
+  service.events.on('notification', delivered)
+  jest.spyOn(service, 'sendPushNotification').mockRejectedValue(new Error('user-service unavailable'))
+
+  await expect(
+    service.createNotification({ userId: 'owner', title: 'Swap', body: 'Done', type: 'SWAP_COMPLETED' as never }),
+  ).resolves.toBe(stored)
+  expect(create).toHaveBeenCalledTimes(1)
+  expect(delivered).toHaveBeenCalledWith(stored)
+})

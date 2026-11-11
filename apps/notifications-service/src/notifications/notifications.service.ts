@@ -25,8 +25,8 @@ export class NotificationsService {
   }
 
   async createNotification(data: CreateNotificationDto): Promise<Notification> {
-    try {
-      const notification = await this.prisma.notification.create({
+    const notification = await this.prisma.notification
+      .create({
         data: {
           userId: data.userId,
           title: data.title,
@@ -35,17 +35,18 @@ export class NotificationsService {
           swapId: data.swapId,
         },
       })
+      .catch(() => {
+        this.logger.error('Failed to create notification')
+        throw new BadRequestException('Failed to create notification')
+      })
 
-      this.events.emit('notification', notification)
+    this.events.emit('notification', notification)
 
-      // Send push notification to all user devices
-      await this.sendPushNotification(notification)
+    // The notification is stored and delivered over WebSocket at this point. A push failure must not
+    // fail the request, or callers that retry would store and deliver it twice.
+    await this.sendPushNotification(notification).catch(() => undefined)
 
-      return notification
-    } catch {
-      this.logger.error('Failed to create notification')
-      throw new BadRequestException('Failed to create notification')
-    }
+    return notification
   }
 
   async sendPushNotification(notification: Notification) {
