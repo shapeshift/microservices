@@ -1,0 +1,414 @@
+{
+  "requests": [
+    {
+      "id": "0x1789715378c9b90058b46495c2ea9f5f4deaa6215c128e596deddaf17c2012a8",
+      "status": "success",
+      "user": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF",
+      "recipient": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF",
+      "sender": null,
+      "refundTo": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF",
+      "supersededByRequestId": null,
+      "duplicateDeposits": null,
+      "depositAddress": null,
+      "data": {
+        "claimStatus": null,
+        "withdrawalStatus": null,
+        "slippageTolerance": "50",
+        "failReason": null,
+        "refundFailReason": null,
+        "revertReason": null,
+        "usesExternalLiquidity": false,
+        "timeEstimate": 1,
+        "triggeredByFastFill": null,
+        "inTxs": [
+          {
+            "txHash": "4ANLuEqGoSydr9jWF5wKpAWesG8kxpkSqYXQT6W1RnxybKumYs7xCPQZhqMTESA64huCrQwKtx19FrwZBhXs1hGi",
+            "fee": "5847",
+            "feeUsd": "0.000593",
+            "block": 448011766,
+            "type": "onchain",
+            "chainId": 792703809,
+            "timestamp": 1789715392,
+            "status": "success",
+            "data": {
+              "instructions": [
+                { "data": "3GAG5eogvTjV", "keys": [], "programId": "ComputeBudget111111111111111111111111111111" },
+                {
+                  "data": "3Bxs4LkevNBH1kqM",
+                  "keys": [
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "F7p3dFrjRTbtRp8FRF6qHLomXbKRBzpvBLjtQcfcgmNe" }
+                  ],
+                  "programId": "11111111111111111111111111111111"
+                },
+                {
+                  "data": "2",
+                  "keys": [
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "HHYUFZWFuNszDrtiQn53Hi7QESVyS9yS5E1b5U6afXfo" },
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": false, "isSigner": false, "pubkey": "So11111111111111111111111111111111111111112" },
+                    { "isWritable": false, "isSigner": false, "pubkey": "11111111111111111111111111111111" },
+                    { "isWritable": false, "isSigner": false, "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }
+                  ],
+                  "programId": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+                },
+                {
+                  "data": "3Bxs4UkB9rV5g3Rq",
+                  "keys": [
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "HHYUFZWFuNszDrtiQn53Hi7QESVyS9yS5E1b5U6afXfo" }
+                  ],
+                  "programId": "11111111111111111111111111111111"
+                },
+                {
+                  "data": "J",
+                  "keys": [
+                    { "isWritable": true, "isSigner": false, "pubkey": "HHYUFZWFuNszDrtiQn53Hi7QESVyS9yS5E1b5U6afXfo" }
+                  ],
+                  "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                },
+                {
+                  "data": "2",
+                  "keys": [
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "ABkUJTBDH3YBjChNg5HwYxkUxniPx3j44VYbmTJ9qHhm" },
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    {
+                      "isWritable": false,
+                      "isSigner": false,
+                      "pubkey": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                    },
+                    { "isWritable": false, "isSigner": false, "pubkey": "11111111111111111111111111111111" },
+                    { "isWritable": false, "isSigner": false, "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }
+                  ],
+                  "programId": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+                },
+                {
+                  "data": "2jtsaD446yyqqK5qJAiwddfHVzTiUyWTPvqTa8yzZVVM6ER8ZM",
+                  "keys": [
+                    { "isWritable": false, "isSigner": false, "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "HHYUFZWFuNszDrtiQn53Hi7QESVyS9yS5E1b5U6afXfo" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "ABkUJTBDH3YBjChNg5HwYxkUxniPx3j44VYbmTJ9qHhm" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "ABkUJTBDH3YBjChNg5HwYxkUxniPx3j44VYbmTJ9qHhm" },
+                    {
+                      "isWritable": false,
+                      "isSigner": false,
+                      "pubkey": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                    },
+                    { "isWritable": false, "isSigner": false, "pubkey": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4" },
+                    {
+                      "isWritable": false,
+                      "isSigner": false,
+                      "pubkey": "D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf"
+                    },
+                    { "isWritable": false, "isSigner": false, "pubkey": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4" },
+                    { "isWritable": false, "isSigner": false, "pubkey": "QuaNtZsgYRe5Z9Bk4LZ4cTD9tbkVoyCNf1R2BN9bBDv" },
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "HHYUFZWFuNszDrtiQn53Hi7QESVyS9yS5E1b5U6afXfo" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "ABkUJTBDH3YBjChNg5HwYxkUxniPx3j44VYbmTJ9qHhm" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "2SixkjMjaLqXcEEJZfeth7qjH711R2uvp6TrUaHNMB65" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "Dtsi97xhNZ7aHCMiZEQbkKA57as93dMQ2kMJX4GKCvug" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "9ZmnXr7WdFvx1Uv8HJ1sSv3J4Mxo6HrgvYx6fHQErXZr" },
+                    {
+                      "isWritable": false,
+                      "isSigner": false,
+                      "pubkey": "3JumrbigQRj9TqEuy5fKGPHsQ6zCTwqqfVGhFhyoEMqH"
+                    },
+                    { "isWritable": false, "isSigner": false, "pubkey": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+                    { "isWritable": false, "isSigner": false, "pubkey": "SysvarC1ock11111111111111111111111111111111" },
+                    { "isWritable": false, "isSigner": false, "pubkey": "Sysvar1nstructions1111111111111111111111111" }
+                  ],
+                  "programId": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+                },
+                {
+                  "data": "A",
+                  "keys": [
+                    { "isWritable": true, "isSigner": false, "pubkey": "HHYUFZWFuNszDrtiQn53Hi7QESVyS9yS5E1b5U6afXfo" },
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" }
+                  ],
+                  "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                },
+                {
+                  "data": "3Bxs3zrfFUZbEPqZ",
+                  "keys": [
+                    { "isWritable": true, "isSigner": true, "pubkey": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF" },
+                    { "isWritable": true, "isSigner": false, "pubkey": "F7p3dFrjRTbtRp8FRF6qHLomXbKRBzpvBLjtQcfcgmNe" }
+                  ],
+                  "programId": "11111111111111111111111111111111"
+                },
+                {
+                  "data": "KsyMWGKoo8VU6bct2V7kVzZpt96oWYPf7PEAL4VpmUfhAJmLp2WdCLnFbhKu9LWQD1jFPxZecvzLeWU7SgVYPJRHfD",
+                  "keys": [],
+                  "programId": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+                },
+                { "data": "KQrwcb", "keys": [], "programId": "ComputeBudget111111111111111111111111111111" }
+              ],
+              "signer": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF"
+            },
+            "stateChanges": [
+              {
+                "address": "2SixkjMjaLqXcEEJZfeth7qjH711R2uvp6TrUaHNMB65",
+                "change": {
+                  "data": { "tokenAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "tokenKind": "ft" },
+                  "kind": "token",
+                  "balanceDiff": "-995270"
+                }
+              },
+              {
+                "address": "2SixkjMjaLqXcEEJZfeth7qjH711R2uvp6TrUaHNMB65",
+                "change": {
+                  "data": { "tokenAddress": "So11111111111111111111111111111111111111112", "tokenKind": "ft" },
+                  "kind": "token",
+                  "balanceDiff": "9419686"
+                }
+              },
+              {
+                "address": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF",
+                "change": {
+                  "data": { "tokenAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "tokenKind": "ft" },
+                  "kind": "token",
+                  "balanceDiff": "995270"
+                }
+              },
+              {
+                "address": "AxWH8LgnNTSqDyPXfYe4HL4pJwpKwtXxR2ToDBZRvqgF",
+                "change": {
+                  "data": { "tokenAddress": "11111111111111111111111111111111", "tokenKind": "ft" },
+                  "kind": "token",
+                  "balanceDiff": "-10976555"
+                }
+              },
+              {
+                "address": "ABkUJTBDH3YBjChNg5HwYxkUxniPx3j44VYbmTJ9qHhm",
+                "change": {
+                  "data": { "tokenAddress": "11111111111111111111111111111111", "tokenKind": "ft" },
+                  "kind": "token",
+                  "balanceDiff": "1488440"
+                }
+              },
+              {
+                "address": "Dtsi97xhNZ7aHCMiZEQbkKA57as93dMQ2kMJX4GKCvug",
+                "change": {
+                  "data": { "tokenAddress": "11111111111111111111111111111111", "tokenKind": "ft" },
+                  "kind": "token",
+                  "balanceDiff": "9419686"
+                }
+              },
+              {
+                "address": "F7p3dFrjRTbtRp8FRF6qHLomXbKRBzpvBLjtQcfcgmNe",
+                "change": {
+                  "data": { "tokenAddress": "11111111111111111111111111111111", "tokenKind": "ft" },
+                  "kind": "token",
+                  "balanceDiff": "62582"
+                }
+              }
+            ]
+          }
+        ],
+        "outTxs": [{ "chainId": 792703809 }],
+        "appFees": {
+          "quoted": [
+            {
+              "recipient": "0x9c9aA90363630d4ab1D9dbF416cc3BBC8d3Ed502",
+              "bps": "60",
+              "amount": "56893",
+              "amountFormatted": "0.000056893"
+            }
+          ],
+          "actual": [
+            {
+              "recipient": "0x9c9aA90363630d4ab1D9dbF416cc3BBC8d3Ed502",
+              "bps": "60",
+              "amount": "56893",
+              "amountFormatted": "0.000056893",
+              "amountUsd": "0.006008"
+            }
+          ],
+          "currency": {
+            "chainId": 792703809,
+            "address": "11111111111111111111111111111111",
+            "symbol": "SOL",
+            "name": "Solana",
+            "decimals": 9,
+            "metadata": {
+              "logoURI": "https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png",
+              "verified": true
+            }
+          }
+        },
+        "feeSponsorship": null,
+        "fees": {
+          "quoted": {
+            "swap": { "usd": "0.000000", "amount": "0", "amountFormatted": "0.0" },
+            "execution": { "usd": "-0.021543", "amount": "203961", "amountFormatted": "0.000203961" },
+            "platform": { "usd": "-0.000600", "amount": "5680", "amountFormatted": "0.00000568" },
+            "app": { "usd": "-0.006009", "amount": "56893", "amountFormatted": "0.000056893" },
+            "sponsored": { "usd": "0", "amount": "0", "amountFormatted": "0.0" }
+          },
+          "actual": {
+            "swap": { "usd": "0.000000", "amount": "0", "amountFormatted": "0.0" },
+            "execution": { "usd": "-0.021543", "amount": "203961", "amountFormatted": "0.000203961" },
+            "platform": { "usd": "-0.000600", "amount": "5680", "amountFormatted": "0.00000568" },
+            "app": { "usd": "-0.006009", "amount": "56893", "amountFormatted": "0.000056893" },
+            "sponsored": { "usd": "0", "amount": "0", "amountFormatted": "0.0" }
+          },
+          "currency": {
+            "chainId": 792703809,
+            "address": "11111111111111111111111111111111",
+            "symbol": "SOL",
+            "name": "Solana",
+            "decimals": 9,
+            "metadata": {
+              "logoURI": "https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png",
+              "verified": true
+            }
+          }
+        },
+        "platformFee": {
+          "bucket": "major",
+          "ruleId": "d8f647db-714d-45b1-83b3-6deaafec2ffc",
+          "relayFeeBps": 6,
+          "integratorFeeBps": 0,
+          "totalFeeBps": 6,
+          "relayFee": {
+            "currency": {
+              "chainId": 792703809,
+              "address": "11111111111111111111111111111111",
+              "symbol": "SOL",
+              "name": "Solana",
+              "decimals": 9
+            },
+            "amount": "5680",
+            "amountFormatted": "0.00000568",
+            "amountUsd": "0.000600",
+            "minimumAmount": "5680"
+          },
+          "integratorFee": {
+            "currency": {
+              "chainId": 792703809,
+              "address": "11111111111111111111111111111111",
+              "symbol": "SOL",
+              "name": "Solana",
+              "decimals": 9
+            },
+            "amount": "0",
+            "amountFormatted": "0.0",
+            "amountUsd": "0.000000",
+            "minimumAmount": "0"
+          },
+          "totalPlatformFee": {
+            "currency": {
+              "chainId": 792703809,
+              "address": "11111111111111111111111111111111",
+              "symbol": "SOL",
+              "name": "Solana",
+              "decimals": 9
+            },
+            "amount": "5680",
+            "amountFormatted": "0.00000568",
+            "amountUsd": "0.000600",
+            "minimumAmount": "5680"
+          }
+        },
+        "referrer": "shapeshift",
+        "appId": "app_id_b354ab6f-dcf8-4e47-93cc-60b9140f382e",
+        "appName": "web",
+        "apiKeyName": "web",
+        "blockedAddresses": null,
+        "route": {
+          "quoted": {
+            "origin": {
+              "inputCurrency": {
+                "currency": {
+                  "chainId": 792703809,
+                  "address": "11111111111111111111111111111111",
+                  "symbol": "SOL",
+                  "name": "Solana",
+                  "decimals": 9,
+                  "metadata": {
+                    "logoURI": "https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png",
+                    "verified": true
+                  }
+                },
+                "amount": "9482268",
+                "amountFormatted": "0.009482268",
+                "amountUsd": "1.001536",
+                "minimumAmount": "9482268"
+              },
+              "outputCurrency": {
+                "currency": {
+                  "chainId": 792703809,
+                  "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+                  "symbol": "USDC",
+                  "name": "USD Coin",
+                  "decimals": 6,
+                  "metadata": {
+                    "logoURI": "https://coin-images.coingecko.com/coins/images/6319/large/usdc.png?1696506694",
+                    "verified": true
+                  }
+                },
+                "amount": "995043",
+                "amountFormatted": "0.995043",
+                "amountUsd": "0.994915",
+                "minimumAmount": "990068"
+              },
+              "router": "jupiter"
+            },
+            "destination": null
+          },
+          "actual": {
+            "origin": {
+              "inputCurrency": {
+                "currency": {
+                  "chainId": 792703809,
+                  "address": "11111111111111111111111111111111",
+                  "symbol": "SOL",
+                  "name": "Solana",
+                  "decimals": 9,
+                  "metadata": {
+                    "logoURI": "https://upload.wikimedia.org/wikipedia/en/b/b9/Solana_logo.png",
+                    "verified": true
+                  }
+                },
+                "amount": "9482268",
+                "amountFormatted": "0.009482268",
+                "amountUsd": "1.001536",
+                "minimumAmount": "9482268"
+              },
+              "outputCurrency": {
+                "currency": {
+                  "chainId": 792703809,
+                  "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+                  "symbol": "USDC",
+                  "name": "USD Coin",
+                  "decimals": 6,
+                  "metadata": {
+                    "logoURI": "https://coin-images.coingecko.com/coins/images/6319/large/usdc.png?1696506694",
+                    "verified": true
+                  }
+                },
+                "amount": "995270",
+                "amountFormatted": "0.99527",
+                "amountUsd": "0.995142",
+                "minimumAmount": "990068"
+              },
+              "router": "jupiter"
+            },
+            "destination": null
+          }
+        },
+        "quoteOraclePrice": null,
+        "refundCurrencyData": null,
+        "externalMetadata": { "moonpayId": null }
+      },
+      "protocol": null,
+      "requestType": "Same-chain Swap",
+      "features": ["app_fees"],
+      "createdAt": "2026-09-18T07:09:52.976Z",
+      "updatedAt": "2026-10-24T20:52:44.128Z"
+    }
+  ]
+}

@@ -10,10 +10,6 @@ const swap = mayachainSwap as unknown as Swap
 describe('verifyMayachain', () => {
   let service: SwapVerificationService
 
-  beforeEach(() => {
-    jest.restoreAllMocks()
-  })
-
   it('verifies a successful swap with shapeshift affiliate', async () => {
     service = new SwapVerificationService(mockHttp(mayachainResponse).http)
 
@@ -85,12 +81,13 @@ describe('verifyMayachain', () => {
 
     expect(result.verificationStatus).toBe('SUCCESS')
     expect(result.hasAffiliate).toBe(false)
+    expect(result.noAffiliateReason).toBe('Midgard memo names no ShapeShift affiliate')
     expect(result.affiliateAddress).toBeUndefined()
     expect(result.affiliateBps).toBeUndefined()
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('attributes affiliate with no fee amount when affiliateAddress is ssmaya but no fee was paid out', async () => {
+  it('finds no affiliate when the memo names ssmaya but the protocol paid it nothing', async () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !('affiliate' in out && out.affiliate))
 
@@ -98,10 +95,13 @@ describe('verifyMayachain', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.hasAffiliate).toBe(true)
-    expect(result.affiliateAddress).toBe('ssmaya')
-    expect(result.affiliateBps).toBe(60)
-    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('0')
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing',
+      verifiedSellAmountCryptoBaseUnit: '4000000000000000',
+    })
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {
@@ -210,6 +210,17 @@ describe('verifyMayachain', () => {
 
     expect(result.verificationStatus).toBe('FAILED')
     expect(result.noAffiliateReason).toBe('Could not parse destination address from memo')
+  })
+
+  it('stays PENDING when the memo affiliate fee differs from what the swap charged', async () => {
+    const response = structuredClone(mayachainResponse)
+    response.actions[0].metadata.swap.affiliateFee = '40'
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ verificationStatus: 'PENDING', hasAffiliate: false })
   })
 
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {

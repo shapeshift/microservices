@@ -117,6 +117,101 @@ describe('verification deadline', () => {
   })
 })
 
+describe('verification result', () => {
+  it('records why a verified swap carries no affiliate fee', async () => {
+    const { service, updates } = buildService({
+      verificationStatus: 'SUCCESS',
+      noAffiliateReason: 'Relay quoted a 0 app fee and collected none',
+    })
+
+    await service.verifySwap(swapOf())
+
+    expect(updates[0].data).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      isAffiliateVerified: false,
+      affiliateVerificationDetails: { hasAffiliate: false, reason: 'Relay quoted a 0 app fee and collected none' },
+    })
+  })
+
+  it('records why a failed swap carries no affiliate fee without calling a verifier', async () => {
+    const { service, updates } = buildService({ verificationStatus: 'SUCCESS', hasAffiliate: true })
+
+    await service.verifySwap(swapOf({ status: 'FAILED' }))
+
+    expect(updates[0].data).toEqual({
+      verificationStatus: 'FAILED',
+      isAffiliateVerified: false,
+      affiliateVerificationDetails: { hasAffiliate: false, reason: 'Swap failed' },
+    })
+  })
+
+  it('records the verified fee details of a swap with an affiliate', async () => {
+    const { service, updates } = buildService({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 40,
+      affiliateAddress: '0xtreasury',
+      verifiedSellAmountCryptoBaseUnit: '100',
+    })
+
+    await service.verifySwap(swapOf())
+
+    expect(updates[0].data.affiliateVerificationDetails).toEqual({
+      hasAffiliate: true,
+      affiliateBps: 40,
+      affiliateAddress: '0xtreasury',
+      verifiedSellAmountCryptoBaseUnit: '100',
+    })
+  })
+})
+
+describe('pending verification query', () => {
+  it('selects settled swaps of verifiable swappers and every failed swap', async () => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const stub = {} as never
+    const service = new SwapsService(
+      { swap: { findMany } } as never,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+      stub,
+    )
+
+    await service.getPendingVerificationSwaps()
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        verificationStatus: 'PENDING',
+        OR: [
+          {
+            status: 'SUCCESS',
+            sellTxHash: { not: null },
+            swapperName: {
+              in: expect.arrayContaining([
+                'Relay',
+                'THORChain',
+                'MAYAChain',
+                'NEAR Intents',
+                'Arbitrum Bridge',
+              ]) as unknown,
+            },
+          },
+          { status: 'FAILED' },
+        ],
+      },
+    })
+  })
+})
+
 describe('attribution deadline', () => {
   it('closes out a settled claim the chain still cannot answer for once the deadline passes', async () => {
     const { service, updates } = buildService()
