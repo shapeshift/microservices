@@ -7,38 +7,9 @@ import { env } from '../../../env'
 import type { Verifier } from '../../types'
 import { noAffiliateResult } from '../../utils'
 
+import type { MidgardAction, MidgardActionsResponse, MidgardCoin, MidgardConfig } from './types'
+
 const MIDGARD_PRECISION = 8
-
-type MidgardCoin = {
-  amount: string
-  asset: string
-}
-
-// GET /v2/actions, trimmed to the fields verification reads
-type MidgardAction = {
-  type: string
-  status: 'pending' | 'success' | 'failed'
-  in: Array<{ txID: string; coins: MidgardCoin[] }>
-  out: Array<{ address: string; affiliate?: boolean; coins: MidgardCoin[] }>
-  metadata: {
-    swap?: {
-      affiliateAddress: string
-      affiliateFee: string
-      memo: string
-    }
-  }
-}
-
-type MidgardActionsResponse = {
-  actions: MidgardAction[]
-}
-
-type MidgardConfig = {
-  midgardUrl: string
-  affiliate: string
-  // the chain's native coin, which the affiliate fee is paid in
-  nativeAsset: { asset: string; precision: number }
-}
 
 // Midgard normalizes every coin to 1e8 except the chain's native coin, which it reports at its own precision
 const toNativePrecision = (coin: MidgardCoin, precision: number, config: MidgardConfig): string => {
@@ -109,9 +80,9 @@ const midgardVerifier =
     if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) return result
 
     // the protocol pays affiliates in its native coin, so any other coin is not a fee we can value
-    const feeCoin = action.out
-      .find((out) => out.affiliate && out.coins[0]?.asset.toUpperCase() === config.nativeAsset.asset)
-      ?.coins[0]
+    const feeCoin = action.out.find(
+      (out) => out.affiliate && out.coins[0]?.asset.toUpperCase() === config.nativeAsset.asset,
+    )?.coins[0]
 
     return {
       ...result,

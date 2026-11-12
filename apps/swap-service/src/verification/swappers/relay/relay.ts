@@ -6,50 +6,9 @@ import { env } from '../../../env'
 import type { Verifier, VerifierDeps } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
+import type { RelayAppFee, RelayRequest, RelayRequestsResponse, RelayToken } from './types'
+
 export const TREASURY_ACCOUNTS = ['0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502']
-
-type RelayToken = {
-  chainId: number
-  address: string
-  symbol: string
-  name: string
-  decimals: number
-}
-
-type RelayAppFee = {
-  recipient?: string
-  bps?: string
-  amount?: string
-}
-
-type RelayRouteLeg = {
-  inputCurrency?: { currency?: RelayToken; amount?: string }
-  outputCurrency?: { currency?: RelayToken; amount?: string }
-}
-
-// GET /requests/v3, trimmed to the fields verification reads
-type RelayRequest = {
-  id?: string
-  status?: string
-  data?: {
-    inTxs?: Array<{ txHash?: string }>
-    appFees?: {
-      quoted?: RelayAppFee[]
-      actual?: RelayAppFee[]
-      currency?: RelayToken
-    }
-    route?: {
-      actual?: {
-        origin?: RelayRouteLeg
-        destination?: RelayRouteLeg | null
-      }
-    }
-  }
-}
-
-type RelayRequestsResponse = {
-  requests?: RelayRequest[]
-}
 
 const fetchRelayRequest = async (relayId: string, { http }: VerifierDeps): Promise<RelayRequest | undefined> => {
   const { data } = await firstValueFrom(
