@@ -161,6 +161,19 @@ describe('verifyRelay', () => {
     })
   })
 
+  it('stays PENDING while a collected fee has no amount', async () => {
+    const response = withRequest(({ data }) => {
+      delete (data.appFees.actual[0] as { amount?: string }).amount
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      noAffiliateReason: 'Relay has not reported the collected app fee amount yet',
+    })
+  })
+
   it('sums every fee Relay collected to the treasury', async () => {
     const response = withRequest(({ data }) => {
       data.appFees.actual.push({ ...data.appFees.actual[0], amount: '120' })

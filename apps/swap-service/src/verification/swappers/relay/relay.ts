@@ -87,7 +87,11 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     return { ...noAffiliateResult('SUCCESS', reason), ...amounts }
   }
 
-  const feeAmount = fees.reduce((total, { amount }) => total + BigInt(amount ?? 0), 0n)
+  // a collected fee without an amount isn't fully reported yet, and is not a zero fee
+  if (fees.some(({ amount }) => !amount))
+    return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee amount yet')
+
+  const feeAmount = fees.reduce((total, { amount }) => total + BigInt(amount as string), 0n)
   if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', 'Relay collected a 0 app fee'), ...amounts }
 
   const [fee] = fees

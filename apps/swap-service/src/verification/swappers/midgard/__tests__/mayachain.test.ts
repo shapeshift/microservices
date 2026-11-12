@@ -91,7 +91,7 @@ describe('verifyMayachain', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('attributes affiliate with no fee amount when affiliateAddress is ssmaya but no fee was paid out', async () => {
+  it('finds no affiliate when the memo names ssmaya but the protocol paid it nothing', async () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !('affiliate' in out && out.affiliate))
 
@@ -99,10 +99,13 @@ describe('verifyMayachain', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.hasAffiliate).toBe(true)
-    expect(result.affiliateAddress).toBe('ssmaya')
-    expect(result.affiliateBps).toBe(60)
-    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('0')
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing',
+      verifiedSellAmountCryptoBaseUnit: '4000000000000000',
+    })
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {

@@ -84,12 +84,17 @@ const midgardVerifier =
       (out) => out.affiliate && out.coins[0]?.asset.toUpperCase() === config.nativeAsset.asset,
     )?.coins[0]
 
+    // an affiliate the memo names but the protocol paid nothing earned no fee
+    if (!feeCoin || bnOrZero(feeCoin.amount).isZero()) {
+      return { ...result, noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing' }
+    }
+
     return {
       ...result,
       hasAffiliate: true,
       affiliateBps: Number(swapMetadata.affiliateFee),
       affiliateAddress: config.affiliate,
-      actualAffiliateFeeAmountCryptoBaseUnit: feeCoin?.amount ?? '0',
+      actualAffiliateFeeAmountCryptoBaseUnit: feeCoin.amount,
     }
   }
 

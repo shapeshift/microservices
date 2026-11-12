@@ -58,7 +58,7 @@ describe('verifyThorchain', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('attributes affiliate with no fee amount when affiliateAddress is ss but no fee was paid out', async () => {
+  it('finds no affiliate when the memo names ss but the protocol paid it nothing', async () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !out.affiliate)
 
@@ -66,10 +66,13 @@ describe('verifyThorchain', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result.hasAffiliate).toBe(true)
-    expect(result.affiliateAddress).toBe('ss')
-    expect(result.affiliateBps).toBe(60)
-    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('0')
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing',
+      verifiedSellAmountCryptoBaseUnit: '3000000000000000',
+    })
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {
@@ -313,7 +316,7 @@ describe('verifyThorchain', () => {
     })
   })
 
-  it('credits no fee for an affiliate out that is not RUNE', async () => {
+  it('finds no affiliate when the affiliate payout is not in RUNE', async () => {
     const response = structuredClone(thorchainResponse)
     const affiliateOut = response.actions[0].out.find((out) => out.affiliate)
     affiliateOut.coins[0].asset = 'ETH.ETH'
@@ -322,7 +325,31 @@ describe('verifyThorchain', () => {
 
     const result = await service.verifySwap(swap)
 
-    expect(result).toMatchObject({ hasAffiliate: true, actualAffiliateFeeAmountCryptoBaseUnit: '0' })
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing',
+      verifiedSellAmountCryptoBaseUnit: '3000000000000000',
+    })
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
+  })
+
+  it('finds no affiliate when the affiliate payout is zero', async () => {
+    const response = structuredClone(thorchainResponse)
+    const affiliateOut = response.actions[0].out.find((out) => out.affiliate)
+    affiliateOut.coins[0].amount = '0'
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing',
+      verifiedSellAmountCryptoBaseUnit: '3000000000000000',
+    })
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
