@@ -47,14 +47,6 @@ export const verifyNearIntents: Verifier = async (swap) => {
 
   if (!appFee) return { ...noAffiliateResult('SUCCESS', 'No ShapeShift app fee on the 1Click quote'), ...amounts }
 
-  // a share other than the one charged means 1Click's split changed, which would misprice payouts
-  if (appFee.fee !== swap.affiliateBps) {
-    return noAffiliateResult(
-      'PENDING',
-      `1Click app fee of ${appFee.fee} bps differs from the swap's ${swap.affiliateBps} bps`,
-    )
-  }
-
   // trusts 1Click to pay the fee it reports, rounded up as 1Click does when it settles on chain
   const feeAmount = ceilDiv(BigInt(verifiedSellAmountCryptoBaseUnit) * BigInt(appFee.fee), BPS_DENOMINATOR)
 

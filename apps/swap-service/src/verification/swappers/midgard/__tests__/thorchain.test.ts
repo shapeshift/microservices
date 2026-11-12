@@ -278,7 +278,7 @@ describe('verifyThorchain', () => {
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
       hasAffiliate: false,
-      noAffiliateReason: `Midgard affiliate fee of ${fee} bps differs from the swap's 60 bps`,
+      noAffiliateReason: `THORChain affiliate fee of ${fee} bps differs from the swap's 60 bps`,
     })
   })
 

@@ -9,7 +9,7 @@ import type { Verifier, VerifierDeps } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
 const REFERRER = 'shapeshift'
-// every treasury account app fees have been paid to (lowercase); keep retired ones so older swaps still verify
+
 export const TREASURY_ACCOUNTS = ['0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502']
 
 type RelayToken = {
@@ -57,7 +57,6 @@ type RelayRequestsResponse = {
   requests?: RelayRequest[]
 }
 
-// matches the id ourselves rather than trusting the listing to have filtered on it
 const fetchRelayRequest = async (relayId: string, { http }: VerifierDeps): Promise<RelayRequest | undefined> => {
   const { data } = await firstValueFrom(
     http.get<RelayRequestsResponse>(
@@ -122,7 +121,8 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   const received = destination ? destination.outputCurrency : origin?.outputCurrency
 
   const verifiedSellAmountCryptoBaseUnit = origin?.inputCurrency?.amount
-  if (!verifiedSellAmountCryptoBaseUnit) return noAffiliateResult('PENDING', 'Relay has not reported the executed route yet')
+  if (!verifiedSellAmountCryptoBaseUnit)
+    return noAffiliateResult('PENDING', 'Relay has not reported the executed route yet')
 
   const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: received?.amount }
 
@@ -144,14 +144,6 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     return { ...noAffiliateResult('SUCCESS', 'Relay collected no ShapeShift app fee'), ...amounts }
   }
 
-  // a share other than the one charged would misprice payouts
-  if (Number(fee.bps) !== swap.affiliateBps) {
-    return noAffiliateResult(
-      'PENDING',
-      `Relay app fee of ${fee.bps} bps differs from the swap's ${swap.affiliateBps} bps`,
-    )
-  }
-
   // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
   const actualAffiliateFeeAssetId = currency ? toAssetId(currency) : undefined
 
@@ -163,7 +155,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   return {
     verificationStatus: 'SUCCESS',
     hasAffiliate: true,
-    affiliateBps: swap.affiliateBps,
+    affiliateBps: Number(fee.bps),
     affiliateAddress: fee.recipient,
     ...amounts,
     actualAffiliateFeeAmountCryptoBaseUnit: fee.amount,

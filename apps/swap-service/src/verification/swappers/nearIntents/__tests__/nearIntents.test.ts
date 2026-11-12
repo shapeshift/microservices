@@ -79,7 +79,7 @@ describe('verifyNearIntents', () => {
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
       hasAffiliate: false,
-      noAffiliateReason: `1Click app fee of ${fee} bps differs from the swap's 40 bps`,
+      noAffiliateReason: `NEAR Intents affiliate fee of ${fee} bps differs from the swap's 40 bps`,
     })
   })
 

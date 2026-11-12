@@ -170,7 +170,7 @@ describe('verifyRelay', () => {
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
       hasAffiliate: false,
-      noAffiliateReason: `Relay app fee of ${bps} bps differs from the swap's 40 bps`,
+      noAffiliateReason: `Relay affiliate fee of ${bps} bps differs from the swap's 40 bps`,
     })
   })
 

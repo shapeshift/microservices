@@ -108,15 +108,6 @@ const midgardVerifier =
 
     if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) return result
 
-    // a fee other than the one charged would misprice payouts
-    const affiliateBps = Number(swapMetadata.affiliateFee)
-    if (affiliateBps !== swap.affiliateBps) {
-      return noAffiliateResult(
-        'PENDING',
-        `Midgard affiliate fee of ${swapMetadata.affiliateFee} bps differs from the swap's ${swap.affiliateBps} bps`,
-      )
-    }
-
     // the protocol pays affiliates in its native coin, so any other coin is not a fee we can value
     const feeCoin = action.out
       .find((out) => out.affiliate && out.coins[0]?.asset.toUpperCase() === config.nativeAsset.asset)
@@ -125,7 +116,7 @@ const midgardVerifier =
     return {
       ...result,
       hasAffiliate: true,
-      affiliateBps,
+      affiliateBps: Number(swapMetadata.affiliateFee),
       affiliateAddress: config.affiliate,
       actualAffiliateFeeAmountCryptoBaseUnit: feeCoin?.amount ?? '0',
     }
