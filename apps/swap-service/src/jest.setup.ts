@@ -3,26 +3,18 @@ import type BigNumberJs from 'bignumber.js'
 
 Logger.overrideLogger(false)
 
-jest.mock('../../env', () => ({
+jest.mock('./env', () => ({
   env: {
-    VITE_BEBOP_API_KEY: 'x',
-    VITE_CHAINFLIP_API_KEY: 'x',
     VITE_NEAR_INTENTS_API_KEY: 'x',
+    VITE_NEAR_ARCHIVAL_NODE_URL: 'https://near-archival.test',
     VITE_RELAY_API_KEY: 'x',
-    VITE_THORCHAIN_NODE_URL: 'https://thornode.test',
     VITE_THORCHAIN_MIDGARD_URL: 'https://thorchain-midgard.test',
     VITE_MAYACHAIN_MIDGARD_URL: 'https://mayachain-midgard.test',
-    VITE_ACROSS_API_URL: 'https://across.test',
-    VITE_BEBOP_API_URL: 'https://bebop.test',
-    VITE_CHAINFLIP_API_URL: 'https://chainflip.test',
-    VITE_COWSWAP_BASE_URL: 'https://cow.test',
-    VITE_PORTALS_BASE_URL: 'https://portals.test',
     VITE_RELAY_API_URL: 'https://relay.test',
-    VITE_ZRX_BASE_URL: 'https://zrx.test',
   },
 }))
 
-jest.mock('../../utils/pricing', () => ({
+jest.mock('./utils/pricing', () => ({
   getAssetPriceUsd: jest.fn(),
   getAssetPriceUsdAt: jest.fn(),
 }))
@@ -59,14 +51,18 @@ jest.mock('@shapeshiftoss/swapper', () => ({
     Stonfi: 'STON.fi',
     Across: 'Across',
     Debridge: 'deBridge',
+    BobGateway: 'BOB Gateway',
+    Fynd: 'Fynd',
+    KyberSwap: 'KyberSwap',
+    Symbiosis: 'Symbiosis',
   },
+  THORCHAIN_AFFILIATE_NAME: 'ss',
+  MAYACHAIN_AFFILIATE_NAME: 'ssmaya',
   swappers: {},
-  assertGetCowNetwork: jest.fn(),
   getSwapMetadata: (metadata: { name?: string } | undefined, name: string) => {
     if (metadata?.name !== name) throw new Error(`Expected ${name} swap metadata`)
     return metadata
   },
-  getTreasuryAddressFromChainId: jest.fn(),
   relayTokenToAssetId: (token: { chainId: number; address: string }) => {
     const isNative = token.address.toLowerCase() === '0x0000000000000000000000000000000000000000'
     return isNative

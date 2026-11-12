@@ -1,13 +1,11 @@
-import type { HttpService } from '@nestjs/axios'
-import { of, throwError } from 'rxjs'
-
 import type { SwapMetadata } from '@shapeshiftoss/swapper'
 
-import type { Swap } from '../../swaps/types'
-import { SwapVerificationService } from '../swap-verification.service'
+import type { Swap } from '../../../../swaps/types'
+import { SwapVerificationService } from '../../../swap-verification.service'
+import { failingHttp, mockHttp } from '../../../test-helpers'
 
-import relayResponse from './fixtures/relay/response.json'
-import relaySwap from './fixtures/relay/swap'
+import relayResponse from './relay.response.json'
+import relaySwap from './relay.swap'
 
 const swap = relaySwap as unknown as Swap
 
@@ -16,13 +14,8 @@ const DAO_TREASURY_BASE = '0x9c9aA90363630d4ab1D9dbF416cc3BBC8d3Ed502'
 type RelayResponse = typeof relayResponse
 type RelayRequestData = RelayResponse['requests'][0]['data']
 
-const makeHttpMock = (response: unknown) => {
-  const get = jest.fn().mockReturnValue(of({ data: response }))
-  return { http: { get } as unknown as HttpService, get }
-}
-
 const verify = (response: unknown) => {
-  const { http, get } = makeHttpMock(response)
+  const { http, get } = mockHttp(response)
   return { result: new SwapVerificationService(http).verifySwap(swap), get }
 }
 
@@ -178,7 +171,7 @@ describe('verifyRelay', () => {
   })
 
   it('returns FAILED when relay metadata is missing', async () => {
-    const { http } = makeHttpMock(relayResponse)
+    const { http } = mockHttp(relayResponse)
     const swapWithoutMetadata = { ...swap, metadata: {} as SwapMetadata } as Swap
 
     const result = await new SwapVerificationService(http).verifySwap(swapWithoutMetadata)
@@ -200,11 +193,7 @@ describe('verifyRelay', () => {
   })
 
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
-    const httpMock = {
-      get: jest.fn().mockReturnValue(throwError(() => new Error('upstream 500'))),
-    } as unknown as HttpService
-
-    const result = await new SwapVerificationService(httpMock).verifySwap(swap)
+    const result = await new SwapVerificationService(failingHttp()).verifySwap(swap)
 
     expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'upstream 500' })
   })
