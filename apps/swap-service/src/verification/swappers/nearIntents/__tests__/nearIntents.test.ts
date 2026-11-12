@@ -150,6 +150,23 @@ describe('verifyNearIntents', () => {
     })
   })
 
+  it('cancels a 1Click status request that hangs and stays PENDING', async () => {
+    jest.useFakeTimers()
+
+    let reject: (error: Error) => void = () => undefined
+    const hung = new Promise((_, r) => (reject = r))
+    const cancel = jest.fn(() => reject(new Error('Request aborted')))
+    jest.spyOn(OneClickService, 'getExecutionStatus').mockReturnValue(Object.assign(hung, { cancel }) as never)
+
+    const pending = new SwapVerificationService(failingHttp()).verifySwap(exactInputSwap as Swap)
+    await jest.advanceTimersByTimeAsync(15_000)
+
+    expect(cancel).toHaveBeenCalled()
+    expect(await pending).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'Request aborted' })
+
+    jest.useRealTimers()
+  })
+
   it('returns PENDING when 1Click errors (transient, retried next tick)', async () => {
     jest.spyOn(OneClickService, 'getExecutionStatus').mockRejectedValue(new Error('upstream 500'))
 

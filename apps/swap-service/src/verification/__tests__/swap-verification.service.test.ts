@@ -1,10 +1,13 @@
 import type { Swap } from '../../swaps/types'
 import { SwapVerificationService } from '../swap-verification.service'
+import noFeeResponse from '../swappers/relay/__tests__/relay.noFee.response.json'
+import noFeeSwap from '../swappers/relay/__tests__/relay.noFee.swap'
 import sameChainResponse from '../swappers/relay/__tests__/relay.sameChain.response.json'
 import sameChainSwap from '../swappers/relay/__tests__/relay.sameChain.swap'
 import { mockHttp } from '../test-helpers'
 
-const verify = (swap: unknown) => new SwapVerificationService(mockHttp(sameChainResponse).http).verifySwap(swap as Swap)
+const verify = (swap: unknown, response: unknown = sameChainResponse) =>
+  new SwapVerificationService(mockHttp(response).http).verifySwap(swap as Swap)
 
 describe('SwapVerificationService', () => {
   it('passes a verified fee whose bps and partner split match the swap', async () => {
@@ -23,10 +26,14 @@ describe('SwapVerificationService', () => {
     })
   })
 
-  it('leaves a swap without a verified affiliate alone', async () => {
-    const result = await verify({ ...sameChainSwap, partnerBps: 40, sellTxHash: `0x${'1'.repeat(64)}` })
+  it('leaves a verified swap without an affiliate fee alone whatever its partner split', async () => {
+    const result = await verify({ ...noFeeSwap, partnerBps: 40 }, noFeeResponse)
 
-    expect(result.noAffiliateReason).toMatch(/is not an origin tx/)
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Relay quoted a 0 app fee and collected none',
+    })
   })
 
   it('leaves a swap with no verifier PENDING', async () => {

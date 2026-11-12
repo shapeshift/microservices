@@ -3,6 +3,7 @@ import { SwapVerificationService } from '../../../swap-verification.service'
 
 import { failingHttp, mockHttp } from '../../../test-helpers'
 
+import thorchainPartialFillResponse from './thorchain.partialFill.response.json'
 import thorchainResponse from './thorchain.response.json'
 import thorchainSwap from './thorchain.swap'
 
@@ -240,6 +241,36 @@ describe('verifyThorchain', () => {
     const result = await service.verifySwap(swap)
 
     expect(result).toMatchObject({ verificationStatus: 'SUCCESS', actualAffiliateFeeAmountCryptoBaseUnit: '6944500' })
+  })
+
+  it('takes only the filled part of a real partially filled streaming swap', async () => {
+    // mainnet A4E275F0…7374: 2 ETH deposited, 0.88484868 swapped to ZEC, 1.11515132 refunded
+    const partialFillSwap = {
+      ...swap,
+      sellTxHash: '0xa4e275f02a68a79305cc5dbb9641ae52b97bd1cf2b3b7ef62bdba4f341637374',
+      buyAsset: {
+        ...swap.buyAsset,
+        symbol: 'ZEC',
+        assetId: 'bip122:00040fe8ec8471911baa1db1266ea15d/slip44:133',
+        precision: 8,
+      },
+      affiliateBps: 1,
+      shapeshiftBps: 1,
+      partnerBps: 0,
+    } as Swap
+
+    service = new SwapVerificationService(mockHttp(thorchainPartialFillResponse).http)
+
+    const result = await service.verifySwap(partialFillSwap)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 1,
+      verifiedSellAmountCryptoBaseUnit: '884848680000000000',
+      actualBuyAmountCryptoBaseUnit: '161089489',
+      actualAffiliateFeeAmountCryptoBaseUnit: '33229704',
+    })
   })
 
   it('returns FAILED when the sell tx was only refunded', async () => {

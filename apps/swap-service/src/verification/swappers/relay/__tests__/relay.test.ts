@@ -171,6 +171,19 @@ describe('verifyRelay', () => {
     expect(result).toMatchObject({ verificationStatus: 'SUCCESS', actualAffiliateFeeAmountCryptoBaseUnit: '1000000' })
   })
 
+  it('stays PENDING while Relay has not reported the request app fees', async () => {
+    const response = withRequest(({ data }) => {
+      delete (data as { appFees?: unknown }).appFees
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      noAffiliateReason: 'Relay has not reported the app fees yet',
+    })
+  })
+
   it('fails a refunded request even when Relay returns no request data', async () => {
     const response = withRequest((request) => {
       request.status = 'refund'
