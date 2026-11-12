@@ -77,7 +77,9 @@ const midgardVerifier =
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     } as const
 
-    if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) return result
+    if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) {
+      return { ...result, noAffiliateReason: 'Midgard memo names no ShapeShift affiliate' }
+    }
 
     const affiliateCoins = action.out.filter((out) => out.affiliate).flatMap((out) => out.coins)
 

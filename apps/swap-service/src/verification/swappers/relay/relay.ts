@@ -87,15 +87,16 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     return { ...noAffiliateResult('SUCCESS', reason), ...amounts }
   }
 
-  // a collected fee without an amount isn't fully reported yet, and is not a zero fee
-  if (fees.some(({ amount }) => !amount)) {
-    return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee amount yet')
-  }
-
-  const feeAmount = fees.reduce((total, { amount }) => total + BigInt(amount), 0n)
-  if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', 'Relay collected a 0 app fee'), ...amounts }
+  // relay has only ever reported one collected treasury fee, so several are flagged rather than combined
+  if (fees.length > 1) return noAffiliateResult('PENDING', 'Relay reports more than one collected app fee to the treasury')
 
   const [fee] = fees
+
+  // a collected fee without an amount isn't fully reported yet, and is not a zero fee
+  if (!fee.amount) return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee amount yet')
+
+  const feeAmount = BigInt(fee.amount)
+  if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', 'Relay collected a 0 app fee'), ...amounts }
 
   // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
   const actualAffiliateFeeAssetId = currency ? toAssetId(currency) : undefined

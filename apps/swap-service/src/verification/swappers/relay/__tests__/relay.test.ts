@@ -174,14 +174,18 @@ describe('verifyRelay', () => {
     })
   })
 
-  it('sums every fee Relay collected to the treasury', async () => {
+  it('stays PENDING when Relay reports more than one collected fee to the treasury', async () => {
     const response = withRequest(({ data }) => {
       data.appFees.actual.push({ ...data.appFees.actual[0], amount: '120' })
     })
 
     const { result } = await verify(sameChainSwap, response)
 
-    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', actualAffiliateFeeAmountCryptoBaseUnit: '1000000' })
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      hasAffiliate: false,
+      noAffiliateReason: 'Relay reports more than one collected app fee to the treasury',
+    })
   })
 
   it('stays PENDING while Relay has not reported the request app fees', async () => {

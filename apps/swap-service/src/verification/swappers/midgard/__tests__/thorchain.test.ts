@@ -53,6 +53,7 @@ describe('verifyThorchain', () => {
 
     expect(result.verificationStatus).toBe('SUCCESS')
     expect(result.hasAffiliate).toBe(false)
+    expect(result.noAffiliateReason).toBe('Midgard memo names no ShapeShift affiliate')
     expect(result.affiliateAddress).toBeUndefined()
     expect(result.affiliateBps).toBeUndefined()
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
