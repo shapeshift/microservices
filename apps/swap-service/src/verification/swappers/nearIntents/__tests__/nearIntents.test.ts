@@ -110,6 +110,22 @@ describe('verifyNearIntents', () => {
     expect(result.affiliateBps).toBeUndefined()
   })
 
+  it('finds no affiliate when the treasury app fee on the quote is 0 bps', async () => {
+    const appFees = exactInputResponse.quoteResponse.quoteRequest.appFees.map((appFee) =>
+      appFee.recipient === TREASURY ? { ...appFee, fee: 0 } : appFee,
+    )
+
+    const { result } = await verify(exactInputSwap, withQuoteRequest({ appFees }))
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: '1Click charged a 0 ShapeShift app fee',
+      verifiedSellAmountCryptoBaseUnit: '31000000',
+    })
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
+  })
+
   it('stays PENDING when 1Click has no executed amountIn', async () => {
     const statusResponse = structuredClone(exactInputResponse)
     Object.assign(statusResponse.swapDetails, { amountIn: undefined })

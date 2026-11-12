@@ -61,6 +61,7 @@ export const verifyNearIntents: Verifier = async (swap) => {
 
   // trusts 1Click to pay the fee it reports, rounded up as 1Click does when it settles on chain
   const feeAmount = ceilDiv(BigInt(verifiedSellAmountCryptoBaseUnit) * BigInt(appFee.fee), BPS_DENOMINATOR)
+  if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', '1Click charged a 0 ShapeShift app fee'), ...amounts }
 
   return {
     verificationStatus: 'SUCCESS',
