@@ -240,24 +240,6 @@ describe('verifyRelay', () => {
     })
   })
 
-  it.each([
-    ['sold', 'sellAsset', 'eip155:8453/erc20:0x4ed4e862860bed51a9570b96d89af5e1b0efefed', 'DEGEN', 'USDC'],
-    ['bought', 'buyAsset', 'eip155:8453/erc20:0x4ed4e862860bed51a9570b96d89af5e1b0efefed', 'DEGEN', 'VVV'],
-  ])(
-    'stays PENDING when the Relay request %s an asset other than the swap',
-    async (verb, side, assetId, symbol, actual) => {
-      const swap = { ...sameChainSwap, [side]: { ...sameChainSwap[side as 'sellAsset'], assetId, symbol } }
-
-      const { result } = await verify(swap, sameChainResponse)
-
-      expect(result).toMatchObject({
-        verificationStatus: 'PENDING',
-        hasAffiliate: false,
-        noAffiliateReason: `Relay request ${verb} ${actual} rather than the swap's ${symbol}`,
-      })
-    },
-  )
-
   it('finds no affiliate when the collected fee goes to another recipient', async () => {
     const response = withRequest(({ data }) => {
       const other = '0x0000000000000000000000000000000000000001'

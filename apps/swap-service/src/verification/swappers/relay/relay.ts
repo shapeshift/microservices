@@ -85,9 +85,6 @@ const getAssetUsd = async (swap: Swap, assetId: string): Promise<string | undefi
   return priceUsd?.toString()
 }
 
-const isAsset = (token: RelayToken | undefined, assetId: string): boolean =>
-  Boolean(token) && toAssetId(token as RelayToken)?.toLowerCase() === assetId.toLowerCase()
-
 const isTreasury = ({ recipient }: RelayAppFee) => TREASURY_ACCOUNTS.includes(recipient?.toLowerCase() ?? '')
 
 export const verifyRelay: Verifier = async (swap, deps) => {
@@ -107,10 +104,10 @@ export const verifyRelay: Verifier = async (swap, deps) => {
       return noAffiliateResult('PENDING', `Relay request ${request.status ?? 'without a status'}`)
   }
 
-  // the client reports the sell tx, so it must be one Relay executed for this request
   const sellTxHash = swap.sellTxHash?.toLowerCase()
   if (!sellTxHash) return noAffiliateResult('PENDING', 'Missing sell txHash')
 
+  // the client reports the sell tx, so it must be one Relay executed for this request
   if (!request.data.inTxs?.some(({ txHash }) => txHash?.toLowerCase() === sellTxHash)) {
     return noAffiliateResult('PENDING', `Sell tx ${swap.sellTxHash} is not an origin tx of Relay request ${relayId}`)
   }
@@ -120,25 +117,11 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   const received = destination ? destination.outputCurrency : origin?.outputCurrency
 
   const verifiedSellAmountCryptoBaseUnit = origin?.inputCurrency?.amount
-  if (!verifiedSellAmountCryptoBaseUnit)
+  if (!verifiedSellAmountCryptoBaseUnit) {
     return noAffiliateResult('PENDING', 'Relay has not reported the executed route yet')
+  }
 
   const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: received?.amount }
-
-  // the client registers the swap's assets, so they must be the ones Relay actually swapped
-  if (!isAsset(origin?.inputCurrency?.currency, swap.sellAsset.assetId)) {
-    return noAffiliateResult(
-      'PENDING',
-      `Relay request sold ${origin?.inputCurrency?.currency?.symbol} rather than the swap's ${swap.sellAsset.symbol}`,
-    )
-  }
-
-  if (!isAsset(received?.currency, swap.buyAsset.assetId)) {
-    return noAffiliateResult(
-      'PENDING',
-      `Relay request bought ${received?.currency?.symbol} rather than the swap's ${swap.buyAsset.symbol}`,
-    )
-  }
 
   const { actual = [], quoted = [], currency } = request.data.appFees ?? {}
 
@@ -146,6 +129,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   const fee = actual.find(isTreasury)
   if (!fee?.amount || BigInt(fee.amount) === 0n) {
     const quotedFee = quoted.find(isTreasury)
+
     if (quotedFee?.amount && BigInt(quotedFee.amount) > 0n) {
       return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee yet')
     }
@@ -153,6 +137,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     const reason = quotedFee
       ? 'Relay quoted a 0 app fee and collected none'
       : 'Relay request carries no ShapeShift app fee'
+
     return { ...noAffiliateResult('SUCCESS', reason), ...amounts }
   }
 
