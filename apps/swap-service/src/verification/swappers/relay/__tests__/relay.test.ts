@@ -98,7 +98,7 @@ describe('verifyRelay', () => {
     expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
       hasAffiliate: false,
-      noAffiliateReason: 'Relay collected no ShapeShift app fee',
+      noAffiliateReason: 'Relay quoted a 0 app fee and collected none',
       verifiedSellAmountCryptoBaseUnit: '211031580000000000',
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     })
@@ -226,28 +226,37 @@ describe('verifyRelay', () => {
     expect(result).toMatchObject({ verificationStatus, hasAffiliate: false })
   })
 
-  it('finds no affiliate for a request made without our API key, which carries no referrer', async () => {
+  it('credits a fee collected to the treasury on a request made before we sent our API key, which carries no referrer', async () => {
     const response = withRequest(({ data }) => {
-      delete (data as Partial<RelayRequest['data']>).referrer
+      delete (data as { referrer?: string }).referrer
     })
 
     const { result } = await verify(sameChainSwap, response)
 
     expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
-      hasAffiliate: false,
-      verifiedSellAmountCryptoBaseUnit: '249970000',
+      hasAffiliate: true,
+      actualAffiliateFeeAmountCryptoBaseUnit: '999880',
     })
   })
 
-  it('finds no affiliate when the referrer is not shapeshift', async () => {
-    const { result } = await verify(
-      sameChainSwap,
-      withRequest(({ data }) => (data.referrer = 'someone-else')),
-    )
+  it.each([
+    ['sold', 'sellAsset', 'eip155:8453/erc20:0x4ed4e862860bed51a9570b96d89af5e1b0efefed', 'DEGEN', 'USDC'],
+    ['bought', 'buyAsset', 'eip155:8453/erc20:0x4ed4e862860bed51a9570b96d89af5e1b0efefed', 'DEGEN', 'VVV'],
+  ])(
+    'stays PENDING when the Relay request %s an asset other than the swap',
+    async (verb, side, assetId, symbol, actual) => {
+      const swap = { ...sameChainSwap, [side]: { ...sameChainSwap[side as 'sellAsset'], assetId, symbol } }
 
-    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: false })
-  })
+      const { result } = await verify(swap, sameChainResponse)
+
+      expect(result).toMatchObject({
+        verificationStatus: 'PENDING',
+        hasAffiliate: false,
+        noAffiliateReason: `Relay request ${verb} ${actual} rather than the swap's ${symbol}`,
+      })
+    },
+  )
 
   it('finds no affiliate when the collected fee goes to another recipient', async () => {
     const response = withRequest(({ data }) => {
@@ -258,7 +267,11 @@ describe('verifyRelay', () => {
 
     const { result } = await verify(sameChainSwap, response)
 
-    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: false })
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Relay request carries no ShapeShift app fee',
+    })
     expect(result.actualAffiliateFeeAssetId).toBeUndefined()
   })
 

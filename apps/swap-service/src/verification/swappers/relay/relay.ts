@@ -8,8 +8,6 @@ import { getAssetPriceUsdAt } from '../../../utils/pricing'
 import type { Verifier, VerifierDeps } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
-const REFERRER = 'shapeshift'
-
 export const TREASURY_ACCOUNTS = ['0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502']
 
 type RelayToken = {
@@ -37,8 +35,6 @@ type RelayRequest = {
   status?: string
   data?: {
     inTxs?: Array<{ txHash?: string }>
-    // authenticated data: only returned for requests created with our API key
-    referrer?: string | null
     appFees?: {
       quoted?: RelayAppFee[]
       actual?: RelayAppFee[]
@@ -89,6 +85,9 @@ const getAssetUsd = async (swap: Swap, assetId: string): Promise<string | undefi
   return priceUsd?.toString()
 }
 
+const isAsset = (token: RelayToken | undefined, assetId: string): boolean =>
+  Boolean(token) && toAssetId(token as RelayToken)?.toLowerCase() === assetId.toLowerCase()
+
 const isTreasury = ({ recipient }: RelayAppFee) => TREASURY_ACCOUNTS.includes(recipient?.toLowerCase() ?? '')
 
 export const verifyRelay: Verifier = async (swap, deps) => {
@@ -126,9 +125,19 @@ export const verifyRelay: Verifier = async (swap, deps) => {
 
   const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: received?.amount }
 
-  // the referrer is only returned for requests made with our API key, which every quote we register is
-  if (request.data.referrer?.toLowerCase() !== REFERRER) {
-    return { ...noAffiliateResult('SUCCESS', 'Relay request was not made with the ShapeShift API key'), ...amounts }
+  // the client registers the swap's assets, so they must be the ones Relay actually swapped
+  if (!isAsset(origin?.inputCurrency?.currency, swap.sellAsset.assetId)) {
+    return noAffiliateResult(
+      'PENDING',
+      `Relay request sold ${origin?.inputCurrency?.currency?.symbol} rather than the swap's ${swap.sellAsset.symbol}`,
+    )
+  }
+
+  if (!isAsset(received?.currency, swap.buyAsset.assetId)) {
+    return noAffiliateResult(
+      'PENDING',
+      `Relay request bought ${received?.currency?.symbol} rather than the swap's ${swap.buyAsset.symbol}`,
+    )
   }
 
   const { actual = [], quoted = [], currency } = request.data.appFees ?? {}
@@ -141,7 +150,10 @@ export const verifyRelay: Verifier = async (swap, deps) => {
       return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee yet')
     }
 
-    return { ...noAffiliateResult('SUCCESS', 'Relay collected no ShapeShift app fee'), ...amounts }
+    const reason = quotedFee
+      ? 'Relay quoted a 0 app fee and collected none'
+      : 'Relay request carries no ShapeShift app fee'
+    return { ...noAffiliateResult('SUCCESS', reason), ...amounts }
   }
 
   // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
