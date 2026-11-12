@@ -213,6 +213,17 @@ describe('verifyMayachain', () => {
     expect(result.noAffiliateReason).toBe('Could not parse destination address from memo')
   })
 
+  it('stays PENDING when the memo affiliate fee differs from what the swap charged', async () => {
+    const response = structuredClone(mayachainResponse)
+    response.actions[0].metadata.swap.affiliateFee = '40'
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ verificationStatus: 'PENDING', hasAffiliate: false })
+  })
+
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
     service = new SwapVerificationService(failingHttp())
 

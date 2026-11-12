@@ -18,7 +18,7 @@ type MidgardCoin = {
 type MidgardAction = {
   type: string
   status: 'pending' | 'success' | 'failed'
-  in: Array<{ coins: MidgardCoin[] }>
+  in: Array<{ txID: string; coins: MidgardCoin[] }>
   out: Array<{ address: string; affiliate?: boolean; coins: MidgardCoin[] }>
   metadata: {
     swap?: {
@@ -60,10 +60,14 @@ const midgardVerifier =
       http.get<MidgardActionsResponse>(`${config.midgardUrl}/actions?txid=${txHash}`),
     )
 
-    const action = data.actions[0]
-    if (!action) return noAffiliateResult('PENDING', 'No action found in Midgard')
+    const isSellTx = ({ txID }: MidgardAction['in'][number]) => txID.toUpperCase() === txHash.toUpperCase()
 
-    if (action.type !== 'swap') return noAffiliateResult('FAILED', 'Invalid swap action type')
+    const actions = data.actions.filter((action) => action.in.some(isSellTx))
+    if (!actions.length) return noAffiliateResult('PENDING', 'No action found in Midgard')
+
+    // a streaming swap that only partially fills has a refund action alongside the swap action for the filled part
+    const action = actions.find(({ type }) => type === 'swap')
+    if (!action) return noAffiliateResult('FAILED', 'Invalid swap action type')
     if (action.status === 'pending') return noAffiliateResult('PENDING', 'Swap action still pending')
     if (action.status === 'failed') return noAffiliateResult('FAILED', 'Swap action failed')
 
@@ -78,22 +82,37 @@ const midgardVerifier =
     const buyOut = action.out.find((out) => !out.affiliate && out.address.toLowerCase() === destinationAddress)
     if (!buyOut) return noAffiliateResult('FAILED', 'No outbound matching memo destination')
 
+    const sellIn = action.in.find(isSellTx)
+    if (!sellIn) return noAffiliateResult('FAILED', 'No inbound matching the sell tx')
+
     const result = {
       verificationStatus: 'SUCCESS',
       hasAffiliate: false,
-      verifiedSellAmountCryptoBaseUnit: toNativePrecision(action.in[0].coins[0], swap.sellAsset.precision, config),
+      verifiedSellAmountCryptoBaseUnit: toNativePrecision(sellIn.coins[0], swap.sellAsset.precision, config),
       actualBuyAmountCryptoBaseUnit: toNativePrecision(buyOut.coins[0], swap.buyAsset.precision, config),
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     } as const
 
     if (swapMetadata.affiliateAddress !== config.affiliate) return result
 
-    const feeCoin = action.out.find((out) => out.affiliate)?.coins[0]
+    // a fee other than the one charged would misprice payouts
+    const affiliateBps = Number(swapMetadata.affiliateFee)
+    if (affiliateBps !== swap.affiliateBps) {
+      return noAffiliateResult(
+        'PENDING',
+        `Midgard affiliate fee of ${swapMetadata.affiliateFee} bps differs from the swap's ${swap.affiliateBps} bps`,
+      )
+    }
+
+    // the protocol pays affiliates in its native coin, so any other coin is not a fee we can value
+    const feeCoin = action.out
+      .find((out) => out.affiliate && out.coins[0]?.asset.toUpperCase() === config.nativeAsset.asset)
+      ?.coins[0]
 
     return {
       ...result,
       hasAffiliate: true,
-      affiliateBps: parseInt(swapMetadata.affiliateFee),
+      affiliateBps,
       affiliateAddress: swapMetadata.affiliateAddress,
       actualAffiliateFeeAmountCryptoBaseUnit: feeCoin
         ? toNativePrecision(feeCoin, config.nativeAsset.precision, config)

@@ -180,6 +180,70 @@ describe('verifyThorchain', () => {
     expect(result.noAffiliateReason).toBe('Could not parse destination address from memo')
   })
 
+  it('takes the swap action of a partially filled streaming swap, not the refund of the unfilled part', async () => {
+    const response = structuredClone(thorchainResponse) as { actions: Array<Record<string, unknown>> }
+    const [swapAction] = response.actions
+    response.actions = [{ ...swapAction, type: 'refund' }, swapAction]
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', actualAffiliateFeeAmountCryptoBaseUnit: '6944500' })
+  })
+
+  it('returns FAILED when the sell tx was only refunded', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].type = 'refund'
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ verificationStatus: 'FAILED', noAffiliateReason: 'Invalid swap action type' })
+  })
+
+  it('ignores an action whose inbound is not the sell tx', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].in[0].txID = '1'.repeat(64)
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'No action found in Midgard' })
+  })
+
+  it.each([
+    ['above', '80'],
+    ['below', '11'],
+  ])('stays PENDING when the memo affiliate fee is %s what the swap charged', async (_, fee) => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].metadata.swap.affiliateFee = fee
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      hasAffiliate: false,
+      noAffiliateReason: `Midgard affiliate fee of ${fee} bps differs from the swap's 60 bps`,
+    })
+  })
+
+  it('credits no fee for an affiliate out that is not RUNE', async () => {
+    const response = structuredClone(thorchainResponse)
+    const affiliateOut = response.actions[0].out.find((out) => out.affiliate)
+    affiliateOut.coins[0].asset = 'ETH.ETH'
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ hasAffiliate: true, actualAffiliateFeeAmountCryptoBaseUnit: '0' })
+  })
+
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
     service = new SwapVerificationService(failingHttp())
 
