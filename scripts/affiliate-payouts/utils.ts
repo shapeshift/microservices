@@ -25,7 +25,7 @@ import type {
   UnverifiedSwap,
 } from './types'
 
-export const ARBITRUM_USDC_ADDRESS = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
+export const ETHEREUM_USDC_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 export { FEE_DEVIATION_TOLERANCE }
 export const USDC_DECIMALS = 6
 
@@ -260,7 +260,7 @@ export function normalizeAddress(address: string | null | undefined): string | n
 export function toCsv(rows: { receiveAddress: string; usdcAmount: string }[]): string {
   const header = 'token_type,token_address,receiver,amount,id'
   const lines = rows.map(
-    (row, index) => `erc20,${ARBITRUM_USDC_ADDRESS},${row.receiveAddress},${row.usdcAmount},${index}`,
+    (row, index) => `erc20,${ETHEREUM_USDC_ADDRESS},${row.receiveAddress},${row.usdcAmount},${index}`,
   )
   return [header, ...lines].join('\n') + '\n'
 }
@@ -371,7 +371,7 @@ export function buildRecord(input: {
   return {
     window: { start: window.start.toISOString(), end: window.end.toISOString(), label: window.label },
     generatedAt,
-    token: { chain: 'arbitrum', address: ARBITRUM_USDC_ADDRESS, symbol: 'USDC' },
+    token: { chain: 'ethereum', address: ETHEREUM_USDC_ADDRESS, symbol: 'USDC' },
     totals: {
       partnersPaid: included.length,
       totalUsdc: totalUsdc.toFixed(USDC_DECIMALS),

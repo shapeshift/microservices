@@ -254,8 +254,8 @@ describe('toCsv', () => {
     ])
     const lines = csv.trimEnd().split('\n')
     expect(lines[0]).toBe('token_type,token_address,receiver,amount,id')
-    expect(lines[1]).toBe('erc20,0xaf88d065e77c8cC2239327C5EDb3A432268e5831,0xabc,10,0')
-    expect(lines[2]).toBe('erc20,0xaf88d065e77c8cC2239327C5EDb3A432268e5831,0xdef,5.5,1')
+    expect(lines[1]).toBe('erc20,0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,0xabc,10,0')
+    expect(lines[2]).toBe('erc20,0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,0xdef,5.5,1')
   })
 })
 
