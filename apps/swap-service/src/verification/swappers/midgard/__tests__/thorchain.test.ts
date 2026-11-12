@@ -1,6 +1,5 @@
 import type { Swap } from '../../../../swaps/types'
 import { SwapVerificationService } from '../../../swap-verification.service'
-
 import { failingHttp, mockHttp } from '../../../test-helpers'
 
 import thorchainPartialFillResponse from './thorchain.partialFill.response.json'
@@ -137,7 +136,7 @@ describe('verifyThorchain', () => {
 
   it('selects the buy out by memo destination rather than array position', async () => {
     const response = structuredClone(thorchainResponse)
-    // Move the destination out to the front so position-based selection would return the wrong entry.
+    // moves the destination out to the front so position-based selection would pick the wrong entry
     response.actions[0].out.reverse()
 
     service = new SwapVerificationService(mockHttp(response).http)

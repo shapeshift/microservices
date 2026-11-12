@@ -26,7 +26,7 @@ export const noAffiliateResult = (
   noAffiliateReason,
 })
 
-// a verified fee other than the one the swap charged, or a partner split that doesn't add up to it, would misprice payouts
+// a fee at other than the swap's bps, or a partner split that doesn't add up to it, would misprice payouts
 export const checkAffiliateBps = (swap: Swap, result: SwapVerificationResult): SwapVerificationResult => {
   if (result.verificationStatus !== 'SUCCESS' || !result.hasAffiliate) return result
 

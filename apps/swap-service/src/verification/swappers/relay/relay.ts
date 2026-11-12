@@ -70,7 +70,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
 
   const { actual = [], quoted = [], currency } = request.data.appFees
 
-  // only the fee Relay reports as collected counts, so a quote it never charged earns nothing
+  // only a fee Relay reports as collected counts, never the quote
   const fees = actual.filter(isTreasury)
 
   if (!fees.length) {
@@ -87,12 +87,13 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     return { ...noAffiliateResult('SUCCESS', reason), ...amounts }
   }
 
-  // relay has only ever reported one collected treasury fee, so several are flagged rather than combined
-  if (fees.length > 1) return noAffiliateResult('PENDING', 'Relay reports more than one collected app fee to the treasury')
+  // Relay has only ever reported one collected treasury fee, so several are flagged rather than combined
+  if (fees.length > 1)
+    return noAffiliateResult('PENDING', 'Relay reports more than one collected app fee to the treasury')
 
   const [fee] = fees
 
-  // a collected fee without an amount isn't fully reported yet, and is not a zero fee
+  // a missing amount means the fee isn't reported yet, not that it's zero
   if (!fee.amount) return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee amount yet')
 
   const feeAmount = BigInt(fee.amount)
@@ -101,7 +102,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
   const actualAffiliateFeeAssetId = currency ? toAssetId(currency) : undefined
 
-  // a fee in an unknown asset can't be valued, so wait for the mapping rather than finalize it
+  // a fee in an unknown asset can't be valued, so wait for its mapping
   if (!actualAffiliateFeeAssetId) return noAffiliateResult('PENDING', 'Relay app fee currency has no known asset')
 
   return {

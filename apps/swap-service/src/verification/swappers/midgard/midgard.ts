@@ -11,7 +11,7 @@ import type { MidgardAction, MidgardActionsResponse, MidgardCoin, MidgardConfig 
 
 const MIDGARD_PRECISION = 8
 
-// Midgard normalizes every coin to 1e8 except the chain's native coin, which it reports at its own precision
+// Midgard reports every coin in 1e8 except the native coin, which keeps its own precision
 const toNativePrecision = (coin: MidgardCoin, precision: number, config: MidgardConfig): string => {
   const isNativeAsset = coin.asset.toUpperCase() === config.nativeAsset.asset
   const midgardPrecision = isNativeAsset ? config.nativeAsset.precision : MIDGARD_PRECISION
@@ -39,7 +39,7 @@ const midgardVerifier =
     })
     if (!matches.length) return noAffiliateResult('PENDING', 'No action found in Midgard')
 
-    // a streaming swap that only partially fills has a refund action alongside the swap action for the filled part
+    // a partially filled streaming swap also has a refund action for the unfilled part
     const match = matches.find(({ action }) => action.type === 'swap')
     if (!match) return noAffiliateResult('FAILED', 'Invalid swap action type')
 
@@ -51,11 +51,10 @@ const midgardVerifier =
     if (!swapMetadata) return noAffiliateResult('FAILED', 'No swap metadata found')
 
     // memo format: =:ASSET:DESTADDR[/REFUNDADDR]:LIM/INTERVAL/QUANTITY:AFFILIATE:FEE
-    // the destination is what Midgard observed on-chain, so it's the trusted source for matching the buy out
     const destinationAddress = swapMetadata.memo.split(':')[2]?.split('/')[0]?.toLowerCase()
     if (!destinationAddress) return noAffiliateResult('FAILED', 'Could not parse destination address from memo')
 
-    // a large outbound can be paid from several vaults, and a partial refund can go to the same address in the sell coin
+    // an outbound can be split across vaults, and a partial refund in the sell coin can go to the same address
     const buyOuts = action.out.filter(
       (out) =>
         !out.affiliate &&
@@ -83,14 +82,13 @@ const midgardVerifier =
 
     const affiliateCoins = action.out.filter((out) => out.affiliate).flatMap((out) => out.coins)
 
-    // the protocol pays affiliates in its native coin, so a payout in any other coin can't be valued yet
+    // affiliates are paid in the native coin, so a payout in any other coin can't be valued
     if (affiliateCoins.some((coin) => coin.asset.toUpperCase() !== config.nativeAsset.asset)) {
       return noAffiliateResult('PENDING', `Midgard affiliate payout is not in ${config.nativeAsset.asset}`)
     }
 
     const feeAmount = affiliateCoins.reduce((total, coin) => total.plus(bnOrZero(coin.amount)), bnOrZero(0))
 
-    // an affiliate the memo names but the protocol paid nothing earned no fee
     if (feeAmount.isZero()) {
       return { ...result, noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing' }
     }
@@ -113,6 +111,5 @@ export const verifyThorchain = midgardVerifier({
 export const verifyMayachain = midgardVerifier({
   midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
   affiliate: MAYACHAIN_AFFILIATE_NAME,
-  // CACAO is 1e10, so shifting it from 1e8 like other coins would inflate it 100x
   nativeAsset: { asset: 'MAYA.CACAO', precision: 10 },
 })

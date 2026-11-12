@@ -109,7 +109,7 @@ describe('verifyRelay', () => {
     const response = withRequest(({ data }) => {
       data.appFees.currency = {
         ...data.appFees.currency,
-        address: sameChainSwap.buyAsset.assetId.split(':').pop() as string,
+        address: sameChainSwap.buyAsset.assetId.split(':').pop(),
       }
     })
 

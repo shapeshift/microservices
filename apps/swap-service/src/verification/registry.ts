@@ -8,7 +8,7 @@ import { noAffiliateResult } from './utils'
 
 const noAffiliateFee: Verifier = () => Promise.resolve(noAffiliateResult('SUCCESS', 'Swapper charges no affiliate fee'))
 
-// swappers without a verifier are left PENDING, untouched, until one is registered here
+// swappers without a verifier stay PENDING until one is registered here
 export const verifiers: Partial<Record<SwapperName, Verifier>> = {
   [SwapperName.ArbitrumBridge]: noAffiliateFee,
   [SwapperName.Mayachain]: verifyMayachain,

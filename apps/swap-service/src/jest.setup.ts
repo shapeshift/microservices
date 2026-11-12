@@ -62,7 +62,7 @@ jest.mock('@shapeshiftoss/swapper', () => ({
     if (metadata?.name !== name) throw new Error(`Expected ${name} swap metadata`)
     return metadata
   },
-  // mirrors the swapper's mapping for EVM chains and Solana, Relay chain id 792703809
+  // mirrors the swapper's mapping, where 792703809 is Relay's Solana chain id
   relayTokenToAssetId: (token: { chainId: number; address: string }) => {
     if (token.chainId === 792703809) {
       const solana = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'
