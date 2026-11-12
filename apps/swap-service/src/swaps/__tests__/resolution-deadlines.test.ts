@@ -117,6 +117,42 @@ describe('verification deadline', () => {
   })
 })
 
+describe('verification result', () => {
+  it('records why a verified swap carries no affiliate fee', async () => {
+    const { service, updates } = buildService({
+      verificationStatus: 'SUCCESS',
+      noAffiliateReason: 'Relay quoted a 0 app fee and collected none',
+    })
+
+    await service.verifySwap(swapOf())
+
+    expect(updates[0].data).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      isAffiliateVerified: false,
+      affiliateVerificationDetails: { hasAffiliate: false, reason: 'Relay quoted a 0 app fee and collected none' },
+    })
+  })
+
+  it('records the verified fee details of a swap with an affiliate', async () => {
+    const { service, updates } = buildService({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 40,
+      affiliateAddress: '0xtreasury',
+      verifiedSellAmountCryptoBaseUnit: '100',
+    })
+
+    await service.verifySwap(swapOf())
+
+    expect(updates[0].data.affiliateVerificationDetails).toEqual({
+      hasAffiliate: true,
+      affiliateBps: 40,
+      affiliateAddress: '0xtreasury',
+      verifiedSellAmountCryptoBaseUnit: '100',
+    })
+  })
+})
+
 describe('attribution deadline', () => {
   it('closes out a settled claim the chain still cannot answer for once the deadline passes', async () => {
     const { service, updates } = buildService()

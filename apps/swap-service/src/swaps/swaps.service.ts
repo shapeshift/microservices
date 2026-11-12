@@ -737,12 +737,14 @@ export class SwapsService {
 
     const isAffiliateVerified = verificationResult.verificationStatus === 'SUCCESS' && verificationResult.hasAffiliate
 
-    const affiliateVerificationDetails: AffiliateVerificationDetails = {
-      hasAffiliate: verificationResult.hasAffiliate,
-      affiliateBps: verificationResult.affiliateBps,
-      affiliateAddress: verificationResult.affiliateAddress,
-      verifiedSellAmountCryptoBaseUnit: verificationResult.verifiedSellAmountCryptoBaseUnit,
-    }
+    const affiliateVerificationDetails: AffiliateVerificationDetails = isAffiliateVerified
+      ? {
+          hasAffiliate: true,
+          affiliateBps: verificationResult.affiliateBps,
+          affiliateAddress: verificationResult.affiliateAddress,
+          verifiedSellAmountCryptoBaseUnit: verificationResult.verifiedSellAmountCryptoBaseUnit,
+        }
+      : { hasAffiliate: false, reason: verificationResult.noAffiliateReason ?? 'no result' }
 
     return toSwap(
       await this.prisma.swap.update({
@@ -752,7 +754,7 @@ export class SwapsService {
           isAffiliateVerified,
           affiliateFeeAssetId: verificationResult.actualAffiliateFeeAssetId,
           affiliateAssetUsd: verificationResult.actualAffiliateFeeUsd,
-          affiliateVerificationDetails: isAffiliateVerified ? affiliateVerificationDetails : Prisma.DbNull,
+          affiliateVerificationDetails,
           actualBuyAmountCryptoBaseUnit: verificationResult.actualBuyAmountCryptoBaseUnit,
           actualAffiliateFeeAmountCryptoBaseUnit: verificationResult.actualAffiliateFeeAmountCryptoBaseUnit,
         },
