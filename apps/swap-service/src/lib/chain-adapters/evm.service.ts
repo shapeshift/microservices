@@ -44,6 +44,7 @@ export class EvmChainAdapterService {
       this.initializeBobAdapter(chainAdapterManager)
       this.initializeElysiumAdapter(chainAdapterManager)
       this.initializeRobinhoodAdapter(chainAdapterManager)
+      this.initializeSeiAdapter(chainAdapterManager)
 
       this.logger.log('All EVM chain adapters initialized successfully')
     } catch (error) {
@@ -334,6 +335,16 @@ export class EvmChainAdapterService {
 
     chainAdapterManager.set(KnownChainIds.RobinhoodMainnet, robinhoodAdapter)
     this.logger.log('Robinhood chain adapter initialized')
+  }
+
+  private initializeSeiAdapter(chainAdapterManager: Map<string, any>) {
+    const seiAdapter = new adapters.sei.ChainAdapter({
+      rpcUrl: env.VITE_SEI_NODE_URL,
+      getKnownTokens: () => [],
+    })
+
+    chainAdapterManager.set(KnownChainIds.SeiMainnet, seiAdapter)
+    this.logger.log('Sei chain adapter initialized')
   }
 
   assertGetEvmChainAdapter(chainId: ChainId): EvmChainAdapter {

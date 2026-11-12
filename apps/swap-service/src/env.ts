@@ -104,6 +104,7 @@ export const env = Object.freeze({
   VITE_NEAR_ARCHIVAL_NODE_URL: 'https://archival-rpc.mainnet.fastnear.com',
   VITE_PLASMA_NODE_URL: 'https://rpc.plasma.to',
   VITE_ROBINHOOD_NODE_URL: 'https://rpc.mainnet.chain.robinhood.com',
+  VITE_SEI_NODE_URL: 'https://evm-rpc.sei-apis.com',
   VITE_SONIC_NODE_URL: 'https://rpc.soniclabs.com',
   VITE_STARKNET_NODE_URL: 'https://rpc.starknet.lava.build',
   VITE_SUI_NODE_URL: 'https://fullnode.mainnet.sui.io',
