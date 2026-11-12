@@ -2,7 +2,7 @@ import { SwapperName } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../../../swaps/types'
 
-// prod swap row as it stood when verification first ran
+// prod EXACT_OUTPUT swap with the verification fields reset to what verifySwap receives (settledAt is the backfilled createdAt)
 export default {
   swapId: '40086d1f-2742-4382-95cf-6a1bbdc8cf3f',
   sellAsset: {

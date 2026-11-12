@@ -7,7 +7,7 @@ import type { Swap } from '../swaps/types'
 
 import { verifiers } from './registry'
 import type { VerifierDeps } from './types'
-import { noAffiliateResult } from './utils'
+import { checkAffiliateBps, noAffiliateResult } from './utils'
 
 @Injectable()
 export class SwapVerificationService {
@@ -31,7 +31,7 @@ export class SwapVerificationService {
     if (!verifier) return noAffiliateResult('PENDING', `No verifier for ${swap.swapperName}`)
 
     try {
-      return await verifier(swap, this.deps)
+      return checkAffiliateBps(swap, await verifier(swap, this.deps))
     } catch (error) {
       return noAffiliateResult('PENDING', error instanceof Error ? error.message : 'Unknown error')
     }

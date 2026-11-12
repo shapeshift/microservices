@@ -100,8 +100,6 @@ export const env = Object.freeze({
   VITE_MEGAETH_NODE_URL: 'https://mainnet.megaeth.com/rpc',
   VITE_MONAD_NODE_URL: 'https://rpc.monad.xyz',
   VITE_NEAR_NODE_URLS: 'https://rpc.mainnet.near.org,https://near.lava.build,https://rpc.fastnear.com',
-  // verification reads swap transactions long after regular nodes have garbage collected them
-  VITE_NEAR_ARCHIVAL_NODE_URL: 'https://archival-rpc.mainnet.fastnear.com',
   VITE_PLASMA_NODE_URL: 'https://rpc.plasma.to',
   VITE_ROBINHOOD_NODE_URL: 'https://rpc.mainnet.chain.robinhood.com',
   VITE_SEI_NODE_URL: 'https://evm-rpc.sei-apis.com',
