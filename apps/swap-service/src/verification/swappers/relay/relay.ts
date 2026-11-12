@@ -46,16 +46,8 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     case 'success':
       break
     case 'failure':
-    case 'refund': {
-      // a fee Relay still reports as collected must not be dropped with the request
-      const collected = request.data?.appFees?.actual?.some(
-        (fee) => isTreasury(fee) && fee.amount !== undefined && BigInt(fee.amount) > 0n,
-      )
-      if (collected)
-        return noAffiliateResult('PENDING', `Relay request ${request.status} but reports a collected app fee`)
-
+    case 'refund':
       return noAffiliateResult('FAILED', `Relay request ${request.status}`)
-    }
     default:
       return noAffiliateResult('PENDING', `Relay request ${request.status ?? 'without a status'}`)
   }

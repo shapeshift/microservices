@@ -262,22 +262,6 @@ describe('verifyRelay', () => {
     expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true, affiliateAddress: TREASURY })
   })
 
-  it.each(['failure', 'refund'])(
-    'stays PENDING when a %s request still reports a collected treasury fee',
-    async (status) => {
-      const { result } = await verify(
-        sameChainSwap,
-        withRequest((request) => (request.status = status)),
-      )
-
-      expect(result).toMatchObject({
-        verificationStatus: 'PENDING',
-        hasAffiliate: false,
-        noAffiliateReason: `Relay request ${status} but reports a collected app fee`,
-      })
-    },
-  )
-
   it.each([
     ['failure', 'FAILED'],
     ['refund', 'FAILED'],
@@ -286,13 +270,10 @@ describe('verifyRelay', () => {
     ['submitted', 'PENDING'],
     ['delayed', 'PENDING'],
     ['depositing', 'PENDING'],
-  ])('maps a %s Relay request without a collected fee to %s', async (status, verificationStatus) => {
+  ])('maps a %s Relay request to %s', async (status, verificationStatus) => {
     const { result } = await verify(
       sameChainSwap,
-      withRequest((request) => {
-        request.status = status
-        request.data.appFees.actual = []
-      }),
+      withRequest((request) => (request.status = status)),
     )
 
     expect(result).toMatchObject({ verificationStatus, hasAffiliate: false })

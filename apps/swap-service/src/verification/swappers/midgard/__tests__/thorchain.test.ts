@@ -350,22 +350,6 @@ describe('verifyThorchain', () => {
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('stays PENDING when the memo splits the affiliate fee across several affiliates', async () => {
-    const response = structuredClone(thorchainResponse)
-    response.actions[0].metadata.swap.affiliateAddress = 'ss/other'
-    response.actions[0].metadata.swap.affiliateFee = '60/10'
-
-    service = new SwapVerificationService(mockHttp(response).http)
-
-    const result = await service.verifySwap(swap)
-
-    expect(result).toMatchObject({
-      verificationStatus: 'PENDING',
-      hasAffiliate: false,
-      noAffiliateReason: 'Midgard memo splits the affiliate fee across ss/other',
-    })
-  })
-
   it('sums every RUNE affiliate payout', async () => {
     const response = structuredClone(thorchainResponse)
     const affiliateOut = response.actions[0].out.find((out) => out.affiliate)

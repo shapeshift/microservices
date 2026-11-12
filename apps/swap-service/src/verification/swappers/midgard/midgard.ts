@@ -77,16 +77,7 @@ const midgardVerifier =
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     } as const
 
-    // memo affiliates and fees are '/'-separated when a swap pays more than one
-    const affiliates = swapMetadata.affiliateAddress.toLowerCase().split('/')
-    if (!affiliates.includes(config.affiliate)) return result
-
-    if (affiliates.length > 1) {
-      return noAffiliateResult(
-        'PENDING',
-        `Midgard memo splits the affiliate fee across ${swapMetadata.affiliateAddress}`,
-      )
-    }
+    if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) return result
 
     const affiliateCoins = action.out.filter((out) => out.affiliate).flatMap((out) => out.coins)
 
