@@ -62,38 +62,51 @@ const midgardVerifier =
 
     const isSellTx = ({ txID }: MidgardAction['in'][number]) => txID.toUpperCase() === txHash.toUpperCase()
 
-    const actions = data.actions.filter((action) => action.in.some(isSellTx))
-    if (!actions.length) return noAffiliateResult('PENDING', 'No action found in Midgard')
+    const matches = data.actions.flatMap((action) => {
+      const sellIn = action.in.find(isSellTx)
+      return sellIn ? [{ action, sellIn }] : []
+    })
+    if (!matches.length) return noAffiliateResult('PENDING', 'No action found in Midgard')
 
     // a streaming swap that only partially fills has a refund action alongside the swap action for the filled part
-    const action = actions.find(({ type }) => type === 'swap')
-    if (!action) return noAffiliateResult('FAILED', 'Invalid swap action type')
+    const match = matches.find(({ action }) => action.type === 'swap')
+    if (!match) return noAffiliateResult('FAILED', 'Invalid swap action type')
+
+    const { action, sellIn } = match
     if (action.status === 'pending') return noAffiliateResult('PENDING', 'Swap action still pending')
     if (action.status === 'failed') return noAffiliateResult('FAILED', 'Swap action failed')
 
     const swapMetadata = action.metadata.swap
     if (!swapMetadata) return noAffiliateResult('FAILED', 'No swap metadata found')
 
-    // memo format: =:ASSET:DESTADDR:LIM/INTERVAL/QUANTITY:AFFILIATE:FEE
+    // memo format: =:ASSET:DESTADDR[/REFUNDADDR]:LIM/INTERVAL/QUANTITY:AFFILIATE:FEE
     // the destination is what Midgard observed on-chain, so it's the trusted source for matching the buy out
-    const destinationAddress = swapMetadata.memo.split(':')[2]?.toLowerCase()
+    const destinationAddress = swapMetadata.memo.split(':')[2]?.split('/')[0]?.toLowerCase()
     if (!destinationAddress) return noAffiliateResult('FAILED', 'Could not parse destination address from memo')
 
-    const buyOut = action.out.find((out) => !out.affiliate && out.address.toLowerCase() === destinationAddress)
-    if (!buyOut) return noAffiliateResult('FAILED', 'No outbound matching memo destination')
+    // a large outbound can be paid from several vaults, and a partial refund can go to the same address in the sell coin
+    const buyOuts = action.out.filter(
+      (out) =>
+        !out.affiliate &&
+        out.address.toLowerCase() === destinationAddress &&
+        out.coins[0]?.asset !== sellIn.coins[0]?.asset,
+    )
+    if (!buyOuts.length) return noAffiliateResult('FAILED', 'No outbound matching memo destination')
 
-    const sellIn = action.in.find(isSellTx)
-    if (!sellIn) return noAffiliateResult('FAILED', 'No inbound matching the sell tx')
+    const buyAmount = buyOuts.reduce(
+      (total, out) => total.plus(toNativePrecision(out.coins[0], swap.buyAsset.precision, config)),
+      bnOrZero(0),
+    )
 
     const result = {
       verificationStatus: 'SUCCESS',
       hasAffiliate: false,
       verifiedSellAmountCryptoBaseUnit: toNativePrecision(sellIn.coins[0], swap.sellAsset.precision, config),
-      actualBuyAmountCryptoBaseUnit: toNativePrecision(buyOut.coins[0], swap.buyAsset.precision, config),
+      actualBuyAmountCryptoBaseUnit: buyAmount.toFixed(0),
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     } as const
 
-    if (swapMetadata.affiliateAddress !== config.affiliate) return result
+    if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) return result
 
     // a fee other than the one charged would misprice payouts
     const affiliateBps = Number(swapMetadata.affiliateFee)
@@ -113,10 +126,8 @@ const midgardVerifier =
       ...result,
       hasAffiliate: true,
       affiliateBps,
-      affiliateAddress: swapMetadata.affiliateAddress,
-      actualAffiliateFeeAmountCryptoBaseUnit: feeCoin
-        ? toNativePrecision(feeCoin, config.nativeAsset.precision, config)
-        : '0',
+      affiliateAddress: config.affiliate,
+      actualAffiliateFeeAmountCryptoBaseUnit: feeCoin?.amount ?? '0',
     }
   }
 

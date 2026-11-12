@@ -142,6 +142,56 @@ describe('verifyThorchain', () => {
     expect(result.actualBuyAmountCryptoBaseUnit).toBe('6643738')
   })
 
+  it('sums a buy outbound paid from several vaults', async () => {
+    const response = structuredClone(thorchainResponse)
+    const buyOut = response.actions[0].out.find((out) => !out.affiliate)
+    response.actions[0].out.push(structuredClone(buyOut))
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.actualBuyAmountCryptoBaseUnit).toBe('13287476')
+  })
+
+  it('leaves a partial refund to the destination out of the buy amount', async () => {
+    const response = structuredClone(thorchainResponse)
+    const buyOut = response.actions[0].out.find((out) => !out.affiliate)
+    response.actions[0].out.push({ ...buyOut, coins: [{ amount: '100000', asset: 'ETH.ETH' }] })
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result.actualBuyAmountCryptoBaseUnit).toBe('6643738')
+  })
+
+  it('matches the memo destination when it carries a refund address', async () => {
+    const response = structuredClone(thorchainResponse)
+    const { memo } = response.actions[0].metadata.swap
+    response.actions[0].metadata.swap.memo = memo.replace(
+      '0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535',
+      '0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535/0x31b116a71f99cf1f9ac718e5ba06b633e10f118d',
+    )
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', actualBuyAmountCryptoBaseUnit: '6643738' })
+  })
+
+  it('matches the affiliate name regardless of case', async () => {
+    const response = structuredClone(thorchainResponse)
+    response.actions[0].metadata.swap.affiliateAddress = 'SS'
+
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ hasAffiliate: true, affiliateAddress: 'ss' })
+  })
+
   it('returns FAILED when no out matches the memo destination', async () => {
     const response = structuredClone(thorchainResponse)
     response.actions[0].out = response.actions[0].out.map((out) =>
