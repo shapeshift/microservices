@@ -46,8 +46,16 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     case 'success':
       break
     case 'failure':
-    case 'refund':
+    case 'refund': {
+      // a fee Relay still reports as collected must not be dropped with the request
+      const collected = request.data?.appFees?.actual?.some(
+        (fee) => isTreasury(fee) && fee.amount !== undefined && BigInt(fee.amount) > 0n,
+      )
+      if (collected)
+        return noAffiliateResult('PENDING', `Relay request ${request.status} but reports a collected app fee`)
+
       return noAffiliateResult('FAILED', `Relay request ${request.status}`)
+    }
     default:
       return noAffiliateResult('PENDING', `Relay request ${request.status ?? 'without a status'}`)
   }
@@ -88,10 +96,11 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   }
 
   // a collected fee without an amount isn't fully reported yet, and is not a zero fee
-  if (fees.some(({ amount }) => !amount))
+  if (fees.some(({ amount }) => !amount)) {
     return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee amount yet')
+  }
 
-  const feeAmount = fees.reduce((total, { amount }) => total + BigInt(amount as string), 0n)
+  const feeAmount = fees.reduce((total, { amount }) => total + BigInt(amount), 0n)
   if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', 'Relay collected a 0 app fee'), ...amounts }
 
   const [fee] = fees

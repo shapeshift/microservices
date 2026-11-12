@@ -83,19 +83,33 @@ describe('verifyNearIntents', () => {
     })
   })
 
-  it('matches the shapeshift referral regardless of case', async () => {
-    const { result } = await verify(exactInputSwap, withQuoteRequest({ referral: 'ShapeShift' }))
-
-    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true })
-  })
-
-  it('finds no affiliate when the referral is not shapeshift', async () => {
+  it('credits a treasury app fee whatever the referral', async () => {
     const { result } = await verify(exactInputSwap, withQuoteRequest({ referral: 'someone-else' }))
 
     expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
-      hasAffiliate: false,
-      verifiedSellAmountCryptoBaseUnit: '31000000',
+      hasAffiliate: true,
+      actualAffiliateFeeAmountCryptoBaseUnit: '124000',
+    })
+  })
+
+  it('sums every treasury app fee on the quote', async () => {
+    const appFees = exactInputResponse.quoteResponse.quoteRequest.appFees.flatMap((appFee) =>
+      appFee.recipient === TREASURY
+        ? [
+            { ...appFee, fee: 30 },
+            { ...appFee, fee: 10 },
+          ]
+        : [appFee],
+    )
+
+    const { result } = await verify(exactInputSwap, withQuoteRequest({ appFees }))
+
+    // 30 + 10 bps of 31000000, the same as the single 40 bps fee
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      affiliateBps: 40,
+      actualAffiliateFeeAmountCryptoBaseUnit: '124000',
     })
   })
 

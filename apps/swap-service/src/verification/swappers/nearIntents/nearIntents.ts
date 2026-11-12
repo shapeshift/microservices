@@ -4,7 +4,6 @@ import { env } from '../../../env'
 import type { Verifier } from '../../types'
 import { ceilDiv, getSwapMetadata, noAffiliateResult } from '../../utils'
 
-const REFERRAL = 'shapeshift'
 const BPS_DENOMINATOR = 10_000n
 const STATUS_TIMEOUT_MS = 15_000
 
@@ -43,7 +42,7 @@ export const verifyNearIntents: Verifier = async (swap) => {
       return noAffiliateResult('PENDING', `1Click swap ${status.toLowerCase()}`)
   }
 
-  const { referral, appFees = [] } = quoteResponse.quoteRequest
+  const { appFees = [] } = quoteResponse.quoteRequest
 
   // the executed input, which excludes any over-deposit 1Click refunded
   const verifiedSellAmountCryptoBaseUnit = swapDetails.amountIn
@@ -51,23 +50,23 @@ export const verifyNearIntents: Verifier = async (swap) => {
 
   const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: swapDetails.amountOut }
 
-  // 1Click reports the treasury's share after taking its own cut of the requested fee
-  const appFee =
-    referral?.toLowerCase() === REFERRAL
-      ? appFees.find(({ recipient }) => TREASURY_ACCOUNTS.includes(recipient))
-      : undefined
+  // 1Click reports the treasury's share after taking its own cut of the requested fee, whatever the referral
+  const treasuryFees = appFees.filter(({ recipient }) => TREASURY_ACCOUNTS.includes(recipient))
+  if (!treasuryFees.length) {
+    return { ...noAffiliateResult('SUCCESS', 'No ShapeShift app fee on the 1Click quote'), ...amounts }
+  }
 
-  if (!appFee) return { ...noAffiliateResult('SUCCESS', 'No ShapeShift app fee on the 1Click quote'), ...amounts }
+  const bps = treasuryFees.reduce((total, { fee }) => total + fee, 0)
 
   // trusts 1Click to pay the fee it reports, rounded up as 1Click does when it settles on chain
-  const feeAmount = ceilDiv(BigInt(verifiedSellAmountCryptoBaseUnit) * BigInt(appFee.fee), BPS_DENOMINATOR)
+  const feeAmount = ceilDiv(BigInt(verifiedSellAmountCryptoBaseUnit) * BigInt(bps), BPS_DENOMINATOR)
   if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', '1Click charged a 0 ShapeShift app fee'), ...amounts }
 
   return {
     verificationStatus: 'SUCCESS',
     hasAffiliate: true,
-    affiliateBps: appFee.fee,
-    affiliateAddress: appFee.recipient,
+    affiliateBps: bps,
+    affiliateAddress: treasuryFees[0].recipient,
     ...amounts,
     actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toString(),
   }

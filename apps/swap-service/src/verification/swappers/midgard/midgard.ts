@@ -77,15 +77,28 @@ const midgardVerifier =
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     } as const
 
-    if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) return result
+    // memo affiliates and fees are '/'-separated when a swap pays more than one
+    const affiliates = swapMetadata.affiliateAddress.toLowerCase().split('/')
+    if (!affiliates.includes(config.affiliate)) return result
 
-    // the protocol pays affiliates in its native coin, so any other coin is not a fee we can value
-    const feeCoin = action.out.find(
-      (out) => out.affiliate && out.coins[0]?.asset.toUpperCase() === config.nativeAsset.asset,
-    )?.coins[0]
+    if (affiliates.length > 1) {
+      return noAffiliateResult(
+        'PENDING',
+        `Midgard memo splits the affiliate fee across ${swapMetadata.affiliateAddress}`,
+      )
+    }
+
+    const affiliateCoins = action.out.filter((out) => out.affiliate).flatMap((out) => out.coins)
+
+    // the protocol pays affiliates in its native coin, so a payout in any other coin can't be valued yet
+    if (affiliateCoins.some((coin) => coin.asset.toUpperCase() !== config.nativeAsset.asset)) {
+      return noAffiliateResult('PENDING', `Midgard affiliate payout is not in ${config.nativeAsset.asset}`)
+    }
+
+    const feeAmount = affiliateCoins.reduce((total, coin) => total.plus(bnOrZero(coin.amount)), bnOrZero(0))
 
     // an affiliate the memo names but the protocol paid nothing earned no fee
-    if (!feeCoin || bnOrZero(feeCoin.amount).isZero()) {
+    if (feeAmount.isZero()) {
       return { ...result, noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing' }
     }
 
@@ -94,7 +107,7 @@ const midgardVerifier =
       hasAffiliate: true,
       affiliateBps: Number(swapMetadata.affiliateFee),
       affiliateAddress: config.affiliate,
-      actualAffiliateFeeAmountCryptoBaseUnit: feeCoin.amount,
+      actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toFixed(0),
     }
   }
 
