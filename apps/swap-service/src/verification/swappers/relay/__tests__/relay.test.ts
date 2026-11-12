@@ -117,6 +117,46 @@ describe('verifyRelay', () => {
     })
   })
 
+  it('stays PENDING while Relay reports a zero collected fee against a positive quote', async () => {
+    const response = withRequest(({ data }) => {
+      data.appFees.actual[0].amount = '0'
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      noAffiliateReason: 'Relay has not reported the collected app fee yet',
+    })
+  })
+
+  it('stays PENDING while Relay has not reported the executed route', async () => {
+    const response = withRequest(({ data }) => {
+      delete (data.route as Partial<RelayRequest['data']['route']>).actual
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      noAffiliateReason: 'Relay has not reported the executed route yet',
+    })
+  })
+
+  it('stays PENDING when the fee currency maps to no known asset', async () => {
+    const response = withRequest(({ data }) => {
+      delete (data.appFees as Partial<RelayRequest['data']['appFees']>).currency
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      hasAffiliate: false,
+      noAffiliateReason: 'Relay app fee currency has no known asset',
+    })
+  })
+
   it.each([
     ['above', '80'],
     ['below', '20'],
@@ -141,6 +181,22 @@ describe('verifyRelay', () => {
 
     expect(result).toMatchObject({ verificationStatus: 'PENDING', hasAffiliate: false })
     expect(result.noAffiliateReason).toMatch(/is not an origin tx of Relay request/)
+  })
+
+  it('finds the sell tx among several origin txs', async () => {
+    const response = withRequest(({ data }) => {
+      data.inTxs.unshift({ ...data.inTxs[0], txHash: `0x${'2'.repeat(64)}` })
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true })
+  })
+
+  it('stays PENDING when the swap has no sell tx', async () => {
+    const { result } = await verify({ ...sameChainSwap, sellTxHash: null }, sameChainResponse)
+
+    expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'Missing sell txHash' })
   })
 
   it('matches the sell tx and treasury regardless of case', async () => {

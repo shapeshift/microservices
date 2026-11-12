@@ -111,6 +111,8 @@ export const verifyRelay: Verifier = async (swap, deps) => {
 
   // the client reports the sell tx, so it must be one Relay executed for this request
   const sellTxHash = swap.sellTxHash?.toLowerCase()
+  if (!sellTxHash) return noAffiliateResult('PENDING', 'Missing sell txHash')
+
   if (!request.data.inTxs?.some(({ txHash }) => txHash?.toLowerCase() === sellTxHash)) {
     return noAffiliateResult('PENDING', `Sell tx ${swap.sellTxHash} is not an origin tx of Relay request ${relayId}`)
   }
@@ -119,10 +121,10 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   const { origin, destination } = request.data.route?.actual ?? {}
   const received = destination ? destination.outputCurrency : origin?.outputCurrency
 
-  const amounts = {
-    verifiedSellAmountCryptoBaseUnit: origin?.inputCurrency?.amount,
-    actualBuyAmountCryptoBaseUnit: received?.amount,
-  }
+  const verifiedSellAmountCryptoBaseUnit = origin?.inputCurrency?.amount
+  if (!verifiedSellAmountCryptoBaseUnit) return noAffiliateResult('PENDING', 'Relay has not reported the executed route yet')
+
+  const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: received?.amount }
 
   // the referrer is only returned for requests made with our API key, which every quote we register is
   if (request.data.referrer?.toLowerCase() !== REFERRER) {
@@ -152,9 +154,11 @@ export const verifyRelay: Verifier = async (swap, deps) => {
 
   // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
   const actualAffiliateFeeAssetId = currency ? toAssetId(currency) : undefined
-  const actualAffiliateFeeUsd = actualAffiliateFeeAssetId
-    ? await getAssetUsd(swap, actualAffiliateFeeAssetId)
-    : undefined
+
+  // a fee in an unknown asset can't be valued, so wait for the mapping rather than finalize it
+  if (!actualAffiliateFeeAssetId) return noAffiliateResult('PENDING', 'Relay app fee currency has no known asset')
+
+  const actualAffiliateFeeUsd = await getAssetUsd(swap, actualAffiliateFeeAssetId)
 
   return {
     verificationStatus: 'SUCCESS',
