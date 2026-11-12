@@ -267,9 +267,7 @@
       },
       "protocol": null,
       "requestType": "Same-chain Swap",
-      "features": [
-        "app_fees"
-      ],
+      "features": ["app_fees"],
       "createdAt": "2026-04-28T18:35:37.874Z",
       "updatedAt": "2026-04-28T18:35:37.930Z"
     }

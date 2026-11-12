@@ -27,6 +27,7 @@ import { DepositDetectionService } from '../lib/deposit-detection.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
+import { VERIFIABLE_SWAPPERS } from '../verification/registry'
 import { SwapVerificationService } from '../verification/swap-verification.service'
 
 import {
@@ -539,10 +540,13 @@ export class SwapsService {
 
   async getPendingVerificationSwaps(): Promise<Swap[]> {
     const swaps = await this.prisma.swap.findMany({
-      // a failed swap needs no transaction to close out
+      // a failed swap needs no transaction or verifier to close out
       where: {
         verificationStatus: 'PENDING',
-        OR: [{ status: 'SUCCESS', sellTxHash: { not: null } }, { status: 'FAILED' }],
+        OR: [
+          { status: 'SUCCESS', sellTxHash: { not: null }, swapperName: { in: VERIFIABLE_SWAPPERS } },
+          { status: 'FAILED' },
+        ],
       },
     })
 

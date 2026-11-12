@@ -12,7 +12,8 @@ import { SwapsController } from './swaps.controller'
 import { SwapsService } from './swaps.service'
 
 @Module({
-  imports: [HttpModule, ChainAdaptersModule],
+  // a hung upstream would otherwise hold a polling worker forever
+  imports: [HttpModule.register({ timeout: 15_000 }), ChainAdaptersModule],
   controllers: [SwapsController],
   providers: [
     SwapsService,

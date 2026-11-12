@@ -110,7 +110,6 @@ export const env = Object.freeze({
   VITE_APTOS_INDEXER_URL: 'https://api.mainnet.aptoslabs.com',
   VITE_APTOS_NODE_URL: 'https://fullnode.mainnet.aptoslabs.com',
   VITE_ACROSS_API_URL: 'https://app.across.to/api',
-  VITE_BEBOP_API_URL: 'https://api.bebop.xyz',
   VITE_CHAINFLIP_API_URL: 'https://chainflip-broker.io',
   VITE_COWSWAP_BASE_URL: 'https://api.cow.fi',
   VITE_DEBRIDGE_API_URL: '',
