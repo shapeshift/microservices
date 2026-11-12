@@ -9,8 +9,8 @@ import type { Verifier, VerifierDeps } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
 const REFERRER = 'shapeshift'
-// Relay routes affiliate fees to our BASE-chain treasury
-const AFFILIATE_ADDRESS = '0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502'
+// every treasury account app fees have been paid to (lowercase); keep retired ones so older swaps still verify
+export const TREASURY_ACCOUNTS = ['0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502']
 
 type RelayToken = {
   chainId: number
@@ -36,6 +36,7 @@ type RelayRequest = {
   id?: string
   status?: string
   data?: {
+    inTxs?: Array<{ txHash?: string }>
     // authenticated data: only returned for requests created with our API key
     referrer?: string | null
     appFees?: {
@@ -44,7 +45,6 @@ type RelayRequest = {
       currency?: RelayToken
     }
     route?: {
-      // actual falls back to quoted until Relay has execution data
       actual?: {
         origin?: RelayRouteLeg
         destination?: RelayRouteLeg | null
@@ -90,6 +90,8 @@ const getAssetUsd = async (swap: Swap, assetId: string): Promise<string | undefi
   return priceUsd?.toString()
 }
 
+const isTreasury = ({ recipient }: RelayAppFee) => TREASURY_ACCOUNTS.includes(recipient?.toLowerCase() ?? '')
+
 export const verifyRelay: Verifier = async (swap, deps) => {
   const relayId = getSwapMetadata(swap.metadata, 'relay')?.relayId
   if (!relayId) return noAffiliateResult('FAILED', 'Missing relayId in relay metadata')
@@ -97,38 +99,70 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   const request = await fetchRelayRequest(relayId, deps)
   if (!request?.data) return noAffiliateResult('PENDING', 'No request data returned from Relay API')
 
-  // the referrer is only returned for requests made with our API key, which every quote we register is
-  const isShapeshiftReferral = request.data.referrer?.toLowerCase() === REFERRER
+  switch (request.status) {
+    case 'success':
+      break
+    case 'failure':
+    case 'refund':
+      return noAffiliateResult('FAILED', `Relay request ${request.status}`)
+    default:
+      return noAffiliateResult('PENDING', `Relay request ${request.status ?? 'without a status'}`)
+  }
 
-  // the fee actually collected, or the quoted one until Relay reports it
-  const { actual, quoted, currency } = request.data.appFees ?? {}
-  const appFees = actual?.length ? actual : (quoted ?? [])
-
-  const shapeshiftFee = isShapeshiftReferral
-    ? appFees.find(({ recipient }) => recipient?.toLowerCase() === AFFILIATE_ADDRESS)
-    : undefined
-
-  const parsedBps = Number(shapeshiftFee?.bps)
-  const affiliateBps = Number.isFinite(parsedBps) ? parsedBps : undefined
-
-  // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
-  const actualAffiliateFeeAssetId = shapeshiftFee && currency ? toAssetId(currency) : undefined
-  const actualAffiliateFeeUsd = actualAffiliateFeeAssetId
-    ? await getAssetUsd(swap, actualAffiliateFeeAssetId)
-    : undefined
+  // the client reports the sell tx, so it must be one Relay executed for this request
+  const sellTxHash = swap.sellTxHash?.toLowerCase()
+  if (!request.data.inTxs?.some(({ txHash }) => txHash?.toLowerCase() === sellTxHash)) {
+    return noAffiliateResult('PENDING', `Sell tx ${swap.sellTxHash} is not an origin tx of Relay request ${relayId}`)
+  }
 
   // a same-chain swap has no destination leg, so what it received is the origin's output
   const { origin, destination } = request.data.route?.actual ?? {}
   const received = destination ? destination.outputCurrency : origin?.outputCurrency
 
-  return {
-    verificationStatus: 'SUCCESS',
-    hasAffiliate: Boolean(shapeshiftFee),
-    affiliateBps,
-    affiliateAddress: shapeshiftFee?.recipient,
+  const amounts = {
     verifiedSellAmountCryptoBaseUnit: origin?.inputCurrency?.amount,
     actualBuyAmountCryptoBaseUnit: received?.amount,
-    actualAffiliateFeeAmountCryptoBaseUnit: shapeshiftFee?.amount,
+  }
+
+  // the referrer is only returned for requests made with our API key, which every quote we register is
+  if (request.data.referrer?.toLowerCase() !== REFERRER) {
+    return { ...noAffiliateResult('SUCCESS', 'Relay request was not made with the ShapeShift API key'), ...amounts }
+  }
+
+  const { actual = [], quoted = [], currency } = request.data.appFees ?? {}
+
+  // only the fee Relay reports as collected counts, so a quote it never charged earns nothing
+  const fee = actual.find(isTreasury)
+  if (!fee?.amount || BigInt(fee.amount) === 0n) {
+    const quotedFee = quoted.find(isTreasury)
+    if (quotedFee?.amount && BigInt(quotedFee.amount) > 0n) {
+      return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee yet')
+    }
+
+    return { ...noAffiliateResult('SUCCESS', 'Relay collected no ShapeShift app fee'), ...amounts }
+  }
+
+  // a share other than the one charged would misprice payouts
+  if (Number(fee.bps) !== swap.affiliateBps) {
+    return noAffiliateResult(
+      'PENDING',
+      `Relay app fee of ${fee.bps} bps differs from the swap's ${swap.affiliateBps} bps`,
+    )
+  }
+
+  // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
+  const actualAffiliateFeeAssetId = currency ? toAssetId(currency) : undefined
+  const actualAffiliateFeeUsd = actualAffiliateFeeAssetId
+    ? await getAssetUsd(swap, actualAffiliateFeeAssetId)
+    : undefined
+
+  return {
+    verificationStatus: 'SUCCESS',
+    hasAffiliate: true,
+    affiliateBps: swap.affiliateBps,
+    affiliateAddress: fee.recipient,
+    ...amounts,
+    actualAffiliateFeeAmountCryptoBaseUnit: fee.amount,
     actualAffiliateFeeAssetId,
     actualAffiliateFeeUsd,
   }

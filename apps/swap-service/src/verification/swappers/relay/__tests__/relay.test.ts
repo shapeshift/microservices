@@ -1,200 +1,233 @@
 import type { SwapMetadata } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../../../swaps/types'
+import { getAssetPriceUsdAt } from '../../../../utils/pricing'
 import { SwapVerificationService } from '../../../swap-verification.service'
-
 import { failingHttp, mockHttp } from '../../../test-helpers'
+import { TREASURY_ACCOUNTS } from '../relay'
 
-import relayResponse from './relay.response.json'
-import relaySwap from './relay.swap'
+import crossChainResponse from './relay.crossChain.response.json'
+import crossChainSwap from './relay.crossChain.swap'
+import noFeeResponse from './relay.noFee.response.json'
+import noFeeSwap from './relay.noFee.swap'
+import otherFeeAssetResponse from './relay.otherFeeAsset.response.json'
+import otherFeeAssetSwap from './relay.otherFeeAsset.swap'
+import sameChainResponse from './relay.sameChain.response.json'
+import sameChainSwap from './relay.sameChain.swap'
 
-const swap = relaySwap as unknown as Swap
+const [TREASURY] = TREASURY_ACCOUNTS
+const BASE_USDC = 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
 
-const DAO_TREASURY_BASE = '0x9c9aA90363630d4ab1D9dbF416cc3BBC8d3Ed502'
+type RelayResponse = typeof sameChainResponse
+type RelayRequest = RelayResponse['requests'][number]
 
-type RelayResponse = typeof relayResponse
-type RelayRequestData = RelayResponse['requests'][0]['data']
-
-const verify = (response: unknown) => {
+const verify = async (swap: unknown, response: unknown) => {
   const { http, get } = mockHttp(response)
-  return { result: new SwapVerificationService(http).verifySwap(swap), get }
+  const result = await new SwapVerificationService(http).verifySwap(swap as Swap)
+  return { result, get }
+}
+
+// a copy of the same-chain response with its one request changed
+const withRequest = (update: (request: RelayRequest) => void): RelayResponse => {
+  const response = structuredClone(sameChainResponse)
+  update(response.requests[0])
+  return response
 }
 
 describe('verifyRelay', () => {
-  it('verifies a request made with our API key from its authenticated referrer', async () => {
-    const { result, get } = verify(relayResponse)
+  beforeEach(() => jest.mocked(getAssetPriceUsdAt).mockReset())
 
-    await expect(result).resolves.toMatchObject({
+  it('verifies a same-chain swap whose fee is taken in the sell asset', async () => {
+    const { result, get } = await verify(sameChainSwap, sameChainResponse)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 40,
+      affiliateAddress: '0x9c9aA90363630d4ab1D9dbF416cc3BBC8d3Ed502',
+      verifiedSellAmountCryptoBaseUnit: '249970000',
+      actualBuyAmountCryptoBaseUnit: '13190873207415603200',
+      actualAffiliateFeeAmountCryptoBaseUnit: '999880',
+      actualAffiliateFeeAssetId: BASE_USDC,
+      // the sell asset's price from registration, no lookup needed
+      actualAffiliateFeeUsd: sameChainSwap.sellAssetUsd,
+    })
+
+    expect(get).toHaveBeenCalledWith(
+      expect.stringMatching(/\/requests\/v3\?id=0x17944955.*&includeAuthenticatedData=true$/),
+      { headers: { 'x-api-key': expect.any(String) as string } },
+    )
+    expect(getAssetPriceUsdAt).not.toHaveBeenCalled()
+  })
+
+  it('prices a fee taken in neither the sell nor the buy asset at the swap time', async () => {
+    jest.mocked(getAssetPriceUsdAt).mockResolvedValue(0.9998 as never)
+
+    const { result } = await verify(otherFeeAssetSwap, otherFeeAssetResponse)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 40,
+      verifiedSellAmountCryptoBaseUnit: '1275602200000000000',
+      actualAffiliateFeeAmountCryptoBaseUnit: '99957',
+      actualAffiliateFeeAssetId: BASE_USDC,
+      actualAffiliateFeeUsd: '0.9998',
+    })
+    expect(getAssetPriceUsdAt).toHaveBeenCalledWith(BASE_USDC, otherFeeAssetSwap.createdAt)
+  })
+
+  it('takes a cross-chain swap received amount from the destination leg', async () => {
+    const { result } = await verify(crossChainSwap, crossChainResponse)
+
+    expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
       hasAffiliate: true,
       affiliateBps: 60,
-      affiliateAddress: DAO_TREASURY_BASE,
-      verifiedSellAmountCryptoBaseUnit: '1000000000000000',
-      actualBuyAmountCryptoBaseUnit: '2272662',
-      actualAffiliateFeeAmountCryptoBaseUnit: '6000000000000',
+      verifiedSellAmountCryptoBaseUnit: '2393123121398350',
+      actualBuyAmountCryptoBaseUnit: '67836440787444513',
+      actualAffiliateFeeAmountCryptoBaseUnit: '14358738728390',
       actualAffiliateFeeAssetId: 'eip155:1/slip44:60',
+      actualAffiliateFeeUsd: crossChainSwap.sellAssetUsd,
     })
-
-    expect(get).toHaveBeenCalledTimes(1)
-    expect(get).toHaveBeenCalledWith(
-      expect.stringMatching(/\/requests\/v3\?id=0xee63.*&includeAuthenticatedData=true$/),
-      { headers: { 'x-api-key': expect.any(String) as string } },
-    )
   })
 
-  it('returns hasAffiliate=false for a request without our referrer, such as one made without our API key', async () => {
-    const response = structuredClone(relayResponse)
-    delete (response.requests[0].data as Partial<RelayRequestData>).referrer
+  it('finds no affiliate when Relay quoted a zero fee and collected none', async () => {
+    const { result } = await verify(noFeeSwap, noFeeResponse)
 
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: false })
-  })
-
-  it('returns hasAffiliate=false when the referrer is not shapeshift', async () => {
-    const response = structuredClone(relayResponse)
-    response.requests[0].data.referrer = 'someone-else'
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({
+    expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
       hasAffiliate: false,
-      affiliateBps: undefined,
-      affiliateAddress: undefined,
+      noAffiliateReason: 'Relay collected no ShapeShift app fee',
+      verifiedSellAmountCryptoBaseUnit: '211031580000000000',
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-      actualAffiliateFeeAssetId: undefined,
     })
+  })
+
+  it('stays PENDING while Relay has quoted a fee but not reported it collected', async () => {
+    const response = withRequest(({ data }) => {
+      data.appFees.actual = []
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      noAffiliateReason: 'Relay has not reported the collected app fee yet',
+    })
+  })
+
+  it.each([
+    ['above', '80'],
+    ['below', '20'],
+  ])('stays PENDING when the collected fee bps is %s what the swap charged', async (_, bps) => {
+    const response = withRequest(({ data }) => {
+      data.appFees.actual[0].bps = bps
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      hasAffiliate: false,
+      noAffiliateReason: `Relay app fee of ${bps} bps differs from the swap's 40 bps`,
+    })
+  })
+
+  it('stays PENDING when the sell tx is not one Relay executed for the request', async () => {
+    const swap = { ...sameChainSwap, sellTxHash: `0x${'1'.repeat(64)}` }
+
+    const { result } = await verify(swap, sameChainResponse)
+
+    expect(result).toMatchObject({ verificationStatus: 'PENDING', hasAffiliate: false })
+    expect(result.noAffiliateReason).toMatch(/is not an origin tx of Relay request/)
+  })
+
+  it('matches the sell tx and treasury regardless of case', async () => {
+    const swap = { ...sameChainSwap, sellTxHash: sameChainSwap.sellTxHash.toUpperCase().replace('0X', '0x') }
+    const response = withRequest(({ data }) => {
+      data.appFees.actual[0].recipient = TREASURY
+    })
+
+    const { result } = await verify(swap, response)
+
+    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true, affiliateAddress: TREASURY })
+  })
+
+  it.each([
+    ['failure', 'FAILED'],
+    ['refund', 'FAILED'],
+    ['waiting', 'PENDING'],
+    ['pending', 'PENDING'],
+    ['submitted', 'PENDING'],
+    ['delayed', 'PENDING'],
+  ])('maps a %s Relay request to %s', async (status, verificationStatus) => {
+    const { result } = await verify(
+      sameChainSwap,
+      withRequest((request) => (request.status = status)),
+    )
+
+    expect(result).toMatchObject({ verificationStatus, hasAffiliate: false })
+  })
+
+  it('finds no affiliate for a request made without our API key, which carries no referrer', async () => {
+    const response = withRequest(({ data }) => {
+      delete (data as Partial<RelayRequest['data']>).referrer
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      verifiedSellAmountCryptoBaseUnit: '249970000',
+    })
+  })
+
+  it('finds no affiliate when the referrer is not shapeshift', async () => {
+    const { result } = await verify(
+      sameChainSwap,
+      withRequest(({ data }) => (data.referrer = 'someone-else')),
+    )
+
+    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: false })
+  })
+
+  it('finds no affiliate when the collected fee goes to another recipient', async () => {
+    const response = withRequest(({ data }) => {
+      const other = '0x0000000000000000000000000000000000000001'
+      data.appFees.quoted[0].recipient = other
+      data.appFees.actual[0].recipient = other
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: false })
+    expect(result.actualAffiliateFeeAssetId).toBeUndefined()
   })
 
   it('ignores a listed request whose id is not the swap relayId', async () => {
-    const response = structuredClone(relayResponse)
-    response.requests[0].id = '0x0000000000000000000000000000000000000000000000000000000000000001'
+    const response = withRequest((request) => (request.id = `0x${'0'.repeat(63)}1`))
 
-    const { result } = verify(response)
+    const { result } = await verify(sameChainSwap, response)
 
-    await expect(result).resolves.toMatchObject({
+    expect(result).toMatchObject({
       verificationStatus: 'PENDING',
       noAffiliateReason: 'No request data returned from Relay API',
     })
   })
 
-  it('returns hasAffiliate=false when no app fee goes to the BASE treasury', async () => {
-    const response = structuredClone(relayResponse)
-    const other = { recipient: '0x0000000000000000000000000000000000000001', bps: '50', amount: '500000000000' }
-    response.requests[0].data.appFees.quoted = [{ ...other, amountFormatted: '0.0000005' }]
-    response.requests[0].data.appFees.actual = [{ ...other, amountFormatted: '0.0000005', amountUsd: '0.001' }]
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({ hasAffiliate: false, actualAffiliateFeeAssetId: undefined })
-  })
-
-  it('matches the BASE treasury recipient case-insensitively', async () => {
-    const response = structuredClone(relayResponse)
-    response.requests[0].data.appFees.actual[0].recipient = DAO_TREASURY_BASE.toLowerCase()
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({
-      hasAffiliate: true,
-      affiliateAddress: DAO_TREASURY_BASE.toLowerCase(),
-    })
-  })
-
-  it('prefers the fee actually collected over the quoted one', async () => {
-    const response = structuredClone(relayResponse)
-    response.requests[0].data.appFees.actual[0].amount = '5900000000000'
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({ actualAffiliateFeeAmountCryptoBaseUnit: '5900000000000' })
-  })
-
-  it('falls back to the quoted fee until Relay reports the actual one', async () => {
-    const response = structuredClone(relayResponse)
-    response.requests[0].data.appFees.actual = []
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({
-      hasAffiliate: true,
-      affiliateBps: 60,
-      actualAffiliateFeeAmountCryptoBaseUnit: '6000000000000',
-    })
-  })
-
-  it('builds an erc20 actualAffiliateFeeAssetId when the app fee currency is a token', async () => {
-    const response = structuredClone(relayResponse)
-    response.requests[0].data.appFees.currency = {
-      ...response.requests[0].data.appFees.currency,
-      chainId: 1,
-      address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-      symbol: 'USDT',
-      name: 'Tether USD',
-      decimals: 6,
-    }
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({
-      actualAffiliateFeeAssetId: 'eip155:1/erc20:0xdac17f958d2ee523a2206206994597c13d831ec7',
-    })
-  })
-
-  it('leaves actualAffiliateFeeAssetId undefined when the app fee currency is missing', async () => {
-    const response = structuredClone(relayResponse)
-    delete (response.requests[0].data.appFees as Partial<RelayRequestData['appFees']>).currency
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({ actualAffiliateFeeAssetId: undefined })
-  })
-
-  it('takes a cross-chain swap received amount from the destination leg, not the origin output', async () => {
-    const response = structuredClone(relayResponse) as RelayResponse & {
-      requests: { data: { route: { actual: { destination: unknown } } } }[]
-    }
-    response.requests[0].data.route.actual.destination = { outputCurrency: { amount: '2250000' } }
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({ actualBuyAmountCryptoBaseUnit: '2250000' })
-  })
-
-  it('returns affiliateBps=undefined when bps is non-numeric (avoids NaN)', async () => {
-    const response = structuredClone(relayResponse)
-    response.requests[0].data.appFees.actual[0].bps = 'not-a-number'
-
-    const { result } = verify(response)
-
-    await expect(result).resolves.toMatchObject({ hasAffiliate: true, affiliateBps: undefined })
-  })
-
   it('returns FAILED when relay metadata is missing', async () => {
-    const { http } = mockHttp(relayResponse)
-    const swapWithoutMetadata = { ...swap, metadata: {} as SwapMetadata } as Swap
-
-    const result = await new SwapVerificationService(http).verifySwap(swapWithoutMetadata)
+    const { result } = await verify({ ...sameChainSwap, metadata: {} as SwapMetadata }, sameChainResponse)
 
     expect(result).toMatchObject({
       verificationStatus: 'FAILED',
-      hasAffiliate: false,
       noAffiliateReason: 'Missing relayId in relay metadata',
     })
   })
 
-  it('returns PENDING when the API returns no requests (transient — retry next tick)', async () => {
-    const { result } = verify({ requests: [] })
-
-    await expect(result).resolves.toMatchObject({
-      verificationStatus: 'PENDING',
-      noAffiliateReason: 'No request data returned from Relay API',
-    })
-  })
-
-  it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
-    const result = await new SwapVerificationService(failingHttp()).verifySwap(swap)
+  it('returns PENDING when the HTTP call fails (transient, retried next tick)', async () => {
+    const result = await new SwapVerificationService(failingHttp()).verifySwap(sameChainSwap as Swap)
 
     expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'upstream 500' })
   })
