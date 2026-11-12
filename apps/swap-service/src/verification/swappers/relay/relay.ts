@@ -3,8 +3,6 @@ import { firstValueFrom } from 'rxjs'
 import { relayTokenToAssetId } from '@shapeshiftoss/swapper'
 
 import { env } from '../../../env'
-import type { Swap } from '../../../swaps/types'
-import { getAssetPriceUsdAt } from '../../../utils/pricing'
 import type { Verifier, VerifierDeps } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
@@ -56,7 +54,7 @@ type RelayRequestsResponse = {
 const fetchRelayRequest = async (relayId: string, { http }: VerifierDeps): Promise<RelayRequest | undefined> => {
   const { data } = await firstValueFrom(
     http.get<RelayRequestsResponse>(
-      `${env.VITE_RELAY_API_URL}/requests/v3?id=${relayId}&includeAuthenticatedData=true`,
+      `${env.VITE_RELAY_API_URL}/requests/v3?id=${encodeURIComponent(relayId)}&includeAuthenticatedData=true`,
       {
         headers: { 'x-api-key': env.VITE_RELAY_API_KEY },
       },
@@ -76,15 +74,6 @@ const toAssetId = (token: RelayToken): string | undefined => {
   }
 }
 
-const getAssetUsd = async (swap: Swap, assetId: string): Promise<string | undefined> => {
-  if (assetId === swap.sellAsset.assetId) return swap.sellAssetUsd ?? undefined
-  if (assetId === swap.buyAsset.assetId) return swap.buyAssetUsd ?? undefined
-
-  const priceUsd = await getAssetPriceUsdAt(assetId, swap.createdAt)
-
-  return priceUsd?.toString()
-}
-
 const isTreasury = ({ recipient }: RelayAppFee) => TREASURY_ACCOUNTS.includes(recipient?.toLowerCase() ?? '')
 
 export const verifyRelay: Verifier = async (swap, deps) => {
@@ -92,7 +81,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   if (!relayId) return noAffiliateResult('FAILED', 'Missing relayId in relay metadata')
 
   const request = await fetchRelayRequest(relayId, deps)
-  if (!request?.data) return noAffiliateResult('PENDING', 'No request data returned from Relay API')
+  if (!request) return noAffiliateResult('PENDING', 'No request data returned from Relay API')
 
   switch (request.status) {
     case 'success':
@@ -103,6 +92,8 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     default:
       return noAffiliateResult('PENDING', `Relay request ${request.status ?? 'without a status'}`)
   }
+
+  if (!request.data) return noAffiliateResult('PENDING', 'No request data returned from Relay API')
 
   const sellTxHash = swap.sellTxHash?.toLowerCase()
   if (!sellTxHash) return noAffiliateResult('PENDING', 'Missing sell txHash')
@@ -126,8 +117,9 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   const { actual = [], quoted = [], currency } = request.data.appFees ?? {}
 
   // only the fee Relay reports as collected counts, so a quote it never charged earns nothing
-  const fee = actual.find(isTreasury)
-  if (!fee?.amount || BigInt(fee.amount) === 0n) {
+  const fees = actual.filter(isTreasury)
+
+  if (!fees.length) {
     const quotedFee = quoted.find(isTreasury)
 
     if (quotedFee?.amount && BigInt(quotedFee.amount) > 0n) {
@@ -141,13 +133,16 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     return { ...noAffiliateResult('SUCCESS', reason), ...amounts }
   }
 
+  const feeAmount = fees.reduce((total, { amount }) => total + BigInt(amount ?? 0), 0n)
+  if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', 'Relay collected a 0 app fee'), ...amounts }
+
+  const [fee] = fees
+
   // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
   const actualAffiliateFeeAssetId = currency ? toAssetId(currency) : undefined
 
   // a fee in an unknown asset can't be valued, so wait for the mapping rather than finalize it
   if (!actualAffiliateFeeAssetId) return noAffiliateResult('PENDING', 'Relay app fee currency has no known asset')
-
-  const actualAffiliateFeeUsd = await getAssetUsd(swap, actualAffiliateFeeAssetId)
 
   return {
     verificationStatus: 'SUCCESS',
@@ -155,8 +150,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
     affiliateBps: Number(fee.bps),
     affiliateAddress: fee.recipient,
     ...amounts,
-    actualAffiliateFeeAmountCryptoBaseUnit: fee.amount,
+    actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toString(),
     actualAffiliateFeeAssetId,
-    actualAffiliateFeeUsd,
   }
 }
