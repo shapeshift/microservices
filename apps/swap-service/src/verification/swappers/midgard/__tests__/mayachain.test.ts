@@ -10,10 +10,6 @@ const swap = mayachainSwap as unknown as Swap
 describe('verifyMayachain', () => {
   let service: SwapVerificationService
 
-  beforeEach(() => {
-    jest.restoreAllMocks()
-  })
-
   it('verifies a successful swap with shapeshift affiliate', async () => {
     service = new SwapVerificationService(mockHttp(mayachainResponse).http)
 

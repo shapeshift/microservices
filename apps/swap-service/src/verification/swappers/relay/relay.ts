@@ -1,16 +1,17 @@
+import type { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
 
 import { relayTokenToAssetId } from '@shapeshiftoss/swapper'
 
 import { env } from '../../../env'
-import type { Verifier, VerifierDeps } from '../../types'
+import type { Verifier } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
 import type { RelayAppFee, RelayRequest, RelayRequestsResponse, RelayToken } from './types'
 
 export const TREASURY_ACCOUNTS = ['0x9c9aa90363630d4ab1d9dbf416cc3bbc8d3ed502']
 
-const fetchRelayRequest = async (relayId: string, { http }: VerifierDeps): Promise<RelayRequest | undefined> => {
+const fetchRelayRequest = async (relayId: string, http: HttpService): Promise<RelayRequest | undefined> => {
   const { data } = await firstValueFrom(
     http.get<RelayRequestsResponse>(
       `${env.VITE_RELAY_API_URL}/requests/v3?id=${encodeURIComponent(relayId)}&includeAuthenticatedData=true`,
@@ -35,11 +36,11 @@ const toAssetId = (token: RelayToken): string | undefined => {
 
 const isTreasury = ({ recipient }: RelayAppFee) => TREASURY_ACCOUNTS.includes(recipient?.toLowerCase() ?? '')
 
-export const verifyRelay: Verifier = async (swap, deps) => {
+export const verifyRelay: Verifier = async (swap, { http }) => {
   const relayId = getSwapMetadata(swap.metadata, 'relay')?.relayId
   if (!relayId) return noAffiliateResult('FAILED', 'Missing relayId in relay metadata')
 
-  const request = await fetchRelayRequest(relayId, deps)
+  const request = await fetchRelayRequest(relayId, http)
   if (!request) return noAffiliateResult('PENDING', 'No request data returned from Relay API')
 
   switch (request.status) {
@@ -84,12 +85,13 @@ export const verifyRelay: Verifier = async (swap, deps) => {
       ? 'Relay quoted a 0 app fee and collected none'
       : 'Relay request carries no ShapeShift app fee'
 
-    return { ...noAffiliateResult('SUCCESS', reason), ...amounts }
+    return noAffiliateResult('SUCCESS', reason, amounts)
   }
 
   // Relay has only ever reported one collected treasury fee, so several are flagged rather than combined
-  if (fees.length > 1)
+  if (fees.length > 1) {
     return noAffiliateResult('PENDING', 'Relay reports more than one collected app fee to the treasury')
+  }
 
   const [fee] = fees
 
@@ -97,7 +99,7 @@ export const verifyRelay: Verifier = async (swap, deps) => {
   if (!fee.amount) return noAffiliateResult('PENDING', 'Relay has not reported the collected app fee amount yet')
 
   const feeAmount = BigInt(fee.amount)
-  if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', 'Relay collected a 0 app fee'), ...amounts }
+  if (feeAmount === 0n) return noAffiliateResult('SUCCESS', 'Relay collected a 0 app fee', amounts)
 
   // the fee currency can be the sell asset, the buy asset, or neither, depending on the route
   const actualAffiliateFeeAssetId = currency ? toAssetId(currency) : undefined

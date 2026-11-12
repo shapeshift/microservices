@@ -68,16 +68,13 @@ const midgardVerifier =
       bnOrZero(0),
     )
 
-    const result = {
-      verificationStatus: 'SUCCESS',
-      hasAffiliate: false,
+    const amounts = {
       verifiedSellAmountCryptoBaseUnit: toNativePrecision(sellIn.coins[0], swap.sellAsset.precision, config),
       actualBuyAmountCryptoBaseUnit: buyAmount.toFixed(0),
-      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
-    } as const
+    }
 
     if (swapMetadata.affiliateAddress.toLowerCase() !== config.affiliate) {
-      return { ...result, noAffiliateReason: 'Midgard memo names no ShapeShift affiliate' }
+      return noAffiliateResult('SUCCESS', 'Midgard memo names no ShapeShift affiliate', amounts)
     }
 
     const affiliateCoins = action.out.filter((out) => out.affiliate).flatMap((out) => out.coins)
@@ -90,14 +87,15 @@ const midgardVerifier =
     const feeAmount = affiliateCoins.reduce((total, coin) => total.plus(bnOrZero(coin.amount)), bnOrZero(0))
 
     if (feeAmount.isZero()) {
-      return { ...result, noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing' }
+      return noAffiliateResult('SUCCESS', 'Midgard action paid the ShapeShift affiliate nothing', amounts)
     }
 
     return {
-      ...result,
+      verificationStatus: 'SUCCESS',
       hasAffiliate: true,
       affiliateBps: Number(swapMetadata.affiliateFee),
       affiliateAddress: config.affiliate,
+      ...amounts,
       actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toFixed(0),
     }
   }

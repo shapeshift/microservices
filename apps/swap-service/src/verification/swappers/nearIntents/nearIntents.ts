@@ -53,14 +53,14 @@ export const verifyNearIntents: Verifier = async (swap) => {
   // only app fees paid to the treasury are ShapeShift's
   const treasuryFees = appFees.filter(({ recipient }) => TREASURY_ACCOUNTS.includes(recipient))
   if (!treasuryFees.length) {
-    return { ...noAffiliateResult('SUCCESS', 'No ShapeShift app fee on the 1Click quote'), ...amounts }
+    return noAffiliateResult('SUCCESS', 'No ShapeShift app fee on the 1Click quote', amounts)
   }
 
   const bps = treasuryFees.reduce((total, { fee }) => total + fee, 0)
 
   // trusts 1Click to settle this fee, rounded up as it does on chain
   const feeAmount = ceilDiv(BigInt(verifiedSellAmountCryptoBaseUnit) * BigInt(bps), BPS_DENOMINATOR)
-  if (feeAmount === 0n) return { ...noAffiliateResult('SUCCESS', '1Click charged a 0 ShapeShift app fee'), ...amounts }
+  if (feeAmount === 0n) return noAffiliateResult('SUCCESS', '1Click charged a 0 ShapeShift app fee', amounts)
 
   return {
     verificationStatus: 'SUCCESS',

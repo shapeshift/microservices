@@ -11,10 +11,6 @@ const swap = thorchainSwap as unknown as Swap
 describe('verifyThorchain', () => {
   let service: SwapVerificationService
 
-  beforeEach(() => {
-    jest.restoreAllMocks()
-  })
-
   it('verifies a successful swap with shapeshift affiliate', async () => {
     service = new SwapVerificationService(mockHttp(thorchainResponse).http)
 

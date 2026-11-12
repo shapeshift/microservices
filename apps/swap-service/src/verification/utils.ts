@@ -15,14 +15,21 @@ export const getSwapMetadata = <T extends SwapperMetadata['name']>(
   }
 }
 
+type VerifiedAmounts = Pick<
+  SwapVerificationResult,
+  'verifiedSellAmountCryptoBaseUnit' | 'actualBuyAmountCryptoBaseUnit'
+>
+
 export const noAffiliateResult = (
   verificationStatus: SwapVerificationResult['verificationStatus'],
   noAffiliateReason: string,
+  amounts?: VerifiedAmounts,
 ): SwapVerificationResult => ({
   verificationStatus,
   hasAffiliate: false,
   actualBuyAmountCryptoBaseUnit: undefined,
   actualAffiliateFeeAmountCryptoBaseUnit: undefined,
+  ...amounts,
   noAffiliateReason,
 })
 
