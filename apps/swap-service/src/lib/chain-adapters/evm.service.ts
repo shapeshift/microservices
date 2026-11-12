@@ -43,6 +43,7 @@ export class EvmChainAdapterService {
       this.initializeUnichainAdapter(chainAdapterManager)
       this.initializeBobAdapter(chainAdapterManager)
       this.initializeElysiumAdapter(chainAdapterManager)
+      this.initializeRobinhoodAdapter(chainAdapterManager)
 
       this.logger.log('All EVM chain adapters initialized successfully')
     } catch (error) {
@@ -323,6 +324,16 @@ export class EvmChainAdapterService {
 
     chainAdapterManager.set(KnownChainIds.ElysiumMainnet, elysiumAdapter)
     this.logger.log('Elysium chain adapter initialized')
+  }
+
+  private initializeRobinhoodAdapter(chainAdapterManager: Map<string, any>) {
+    const robinhoodAdapter = new adapters.robinhood.ChainAdapter({
+      rpcUrl: env.VITE_ROBINHOOD_NODE_URL,
+      getKnownTokens: () => [],
+    })
+
+    chainAdapterManager.set(KnownChainIds.RobinhoodMainnet, robinhoodAdapter)
+    this.logger.log('Robinhood chain adapter initialized')
   }
 
   assertGetEvmChainAdapter(chainId: ChainId): EvmChainAdapter {
