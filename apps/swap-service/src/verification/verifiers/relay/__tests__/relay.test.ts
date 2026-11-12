@@ -2,7 +2,6 @@ import type { SwapMetadata } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../../../swaps/types'
 import { SwapVerificationService } from '../../../swap-verification.service'
-
 import { failingHttp, mockHttp } from '../../../test-helpers'
 
 import relayResponse from './relay.response.json'
