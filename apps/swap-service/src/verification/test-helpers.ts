@@ -2,7 +2,7 @@ import type { HttpService } from '@nestjs/axios'
 import { of, throwError } from 'rxjs'
 
 export const mockHttp = (response: unknown) => {
-  const get = jest.fn().mockReturnValue(of({ data: response }))
+  const get = jest.fn<unknown, [url: string, ...rest: unknown[]]>().mockReturnValue(of({ data: response }))
   return { http: { get } as unknown as HttpService, get }
 }
 

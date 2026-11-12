@@ -3,7 +3,7 @@ import { SwapperName } from '@shapeshiftoss/swapper'
 import type { Swap } from '../../swaps/types'
 import { VERIFIABLE_SWAPPERS } from '../registry'
 import { SwapVerificationService } from '../swap-verification.service'
-import { failingHttp } from '../test-helpers'
+import { mockHttp } from '../test-helpers'
 
 describe('verifier registry', () => {
   it('polls exactly the swappers that have a verifier', () => {
@@ -19,7 +19,7 @@ describe('verifier registry', () => {
   })
 
   it('verifies an Arbitrum Bridge swap without an affiliate fee and without calling out', async () => {
-    const http = failingHttp()
+    const { http, get } = mockHttp({})
 
     const result = await new SwapVerificationService(http).verifySwap({
       swapId: 'arb',
@@ -32,6 +32,6 @@ describe('verifier registry', () => {
       hasAffiliate: false,
       noAffiliateReason: 'Swapper charges no affiliate fee',
     })
-    expect(http.get).not.toHaveBeenCalled()
+    expect(get).not.toHaveBeenCalled()
   })
 })
