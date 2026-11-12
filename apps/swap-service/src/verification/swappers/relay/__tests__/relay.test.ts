@@ -14,6 +14,8 @@ import otherFeeAssetResponse from './relay.otherFeeAsset.response.json'
 import otherFeeAssetSwap from './relay.otherFeeAsset.swap'
 import sameChainResponse from './relay.sameChain.response.json'
 import sameChainSwap from './relay.sameChain.swap'
+import solanaResponse from './relay.solana.response.json'
+import solanaSwap from './relay.solana.swap'
 
 const [TREASURY] = TREASURY_ACCOUNTS
 const BASE_USDC = 'eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
@@ -90,6 +92,39 @@ describe('verifyRelay', () => {
       actualAffiliateFeeAssetId: 'eip155:1/slip44:60',
       actualAffiliateFeeUsd: crossChainSwap.sellAssetUsd,
     })
+  })
+
+  it('verifies a Solana swap whose fee is taken in native SOL', async () => {
+    const { result } = await verify(solanaSwap, solanaResponse)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 60,
+      verifiedSellAmountCryptoBaseUnit: '9482268',
+      actualBuyAmountCryptoBaseUnit: '995270',
+      actualAffiliateFeeAmountCryptoBaseUnit: '56893',
+      actualAffiliateFeeAssetId: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/slip44:501',
+      actualAffiliateFeeUsd: solanaSwap.sellAssetUsd,
+    })
+  })
+
+  it('prices a fee taken in the buy asset at the buy asset price from registration', async () => {
+    const response = withRequest(({ data }) => {
+      data.appFees.currency = {
+        ...data.appFees.currency,
+        address: sameChainSwap.buyAsset.assetId.split(':').pop() as string,
+      }
+    })
+
+    const { result } = await verify(sameChainSwap, response)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      actualAffiliateFeeAssetId: sameChainSwap.buyAsset.assetId,
+      actualAffiliateFeeUsd: sameChainSwap.buyAssetUsd,
+    })
+    expect(getAssetPriceUsdAt).not.toHaveBeenCalled()
   })
 
   it('finds no affiliate when Relay quoted a zero fee and collected none', async () => {
@@ -217,6 +252,7 @@ describe('verifyRelay', () => {
     ['pending', 'PENDING'],
     ['submitted', 'PENDING'],
     ['delayed', 'PENDING'],
+    ['depositing', 'PENDING'],
   ])('maps a %s Relay request to %s', async (status, verificationStatus) => {
     const { result } = await verify(
       sameChainSwap,
