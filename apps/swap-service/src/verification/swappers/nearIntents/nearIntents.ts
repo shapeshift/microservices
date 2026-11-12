@@ -6,17 +6,29 @@ import { ceilDiv, getSwapMetadata, noAffiliateResult } from '../../utils'
 
 const REFERRAL = 'shapeshift'
 const BPS_DENOMINATOR = 10_000n
+const STATUS_TIMEOUT_MS = 15_000
 
 export const TREASURY_ACCOUNTS = ['shapeshifttokenomics.sputnik-dao.near']
 
 OpenAPI.BASE = 'https://1click.chaindefuser.com'
 OpenAPI.TOKEN = env.VITE_NEAR_INTENTS_API_KEY
 
+const getExecutionStatus = async (depositAddress: string, depositMemo?: string) => {
+  const request = OneClickService.getExecutionStatus(depositAddress, depositMemo)
+  const timer = setTimeout(() => request.cancel(), STATUS_TIMEOUT_MS)
+
+  try {
+    return await request
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export const verifyNearIntents: Verifier = async (swap) => {
   const nearIntents = getSwapMetadata(swap.metadata, 'nearIntents')
   if (!nearIntents?.depositAddress) return noAffiliateResult('FAILED', 'Missing depositAddress in nearIntents metadata')
 
-  const { status, quoteResponse, swapDetails } = await OneClickService.getExecutionStatus(
+  const { status, quoteResponse, swapDetails } = await getExecutionStatus(
     nearIntents.depositAddress,
     nearIntents.depositMemo,
   )

@@ -73,7 +73,10 @@ export const verifyRelay: Verifier = async (swap, deps) => {
 
   const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: received?.amount }
 
-  const { actual = [], quoted = [], currency } = request.data.appFees ?? {}
+  // app fees are reported on every request, so a request without them isn't fully indexed yet
+  if (!request.data.appFees) return noAffiliateResult('PENDING', 'Relay has not reported the app fees yet')
+
+  const { actual = [], quoted = [], currency } = request.data.appFees
 
   // only the fee Relay reports as collected counts, so a quote it never charged earns nothing
   const fees = actual.filter(isTreasury)

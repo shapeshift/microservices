@@ -710,7 +710,7 @@ export class SwapsService {
           data: {
             verificationStatus: 'FAILED',
             isAffiliateVerified: false,
-            affiliateVerificationDetails: Prisma.DbNull,
+            affiliateVerificationDetails: { hasAffiliate: false, reason: 'Swap failed' },
           },
         }),
       )
