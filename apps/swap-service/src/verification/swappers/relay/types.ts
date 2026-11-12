@@ -22,7 +22,6 @@ export type RelayRequest = {
   id?: string
   status?: string
   data?: {
-    inTxs?: Array<{ txHash?: string }>
     appFees?: {
       quoted?: RelayAppFee[]
       actual?: RelayAppFee[]

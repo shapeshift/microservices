@@ -54,14 +54,6 @@ export const verifyRelay: Verifier = async (swap, deps) => {
 
   if (!request.data) return noAffiliateResult('PENDING', 'No request data returned from Relay API')
 
-  const sellTxHash = swap.sellTxHash?.toLowerCase()
-  if (!sellTxHash) return noAffiliateResult('PENDING', 'Missing sell txHash')
-
-  // the client reports the sell tx, so it must be one Relay executed for this request
-  if (!request.data.inTxs?.some(({ txHash }) => txHash?.toLowerCase() === sellTxHash)) {
-    return noAffiliateResult('PENDING', `Sell tx ${swap.sellTxHash} is not an origin tx of Relay request ${relayId}`)
-  }
-
   // a same-chain swap has no destination leg, so what it received is the origin's output
   const { origin, destination } = request.data.route?.actual ?? {}
   const received = destination ? destination.outputCurrency : origin?.outputCurrency

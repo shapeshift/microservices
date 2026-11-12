@@ -239,38 +239,12 @@ describe('verifyRelay', () => {
     })
   })
 
-  it('stays PENDING when the sell tx is not one Relay executed for the request', async () => {
-    const swap = { ...sameChainSwap, sellTxHash: `0x${'1'.repeat(64)}` }
-
-    const { result } = await verify(swap, sameChainResponse)
-
-    expect(result).toMatchObject({ verificationStatus: 'PENDING', hasAffiliate: false })
-    expect(result.noAffiliateReason).toMatch(/is not an origin tx of Relay request/)
-  })
-
-  it('finds the sell tx among several origin txs', async () => {
-    const response = withRequest(({ data }) => {
-      data.inTxs.unshift({ ...data.inTxs[0], txHash: `0x${'2'.repeat(64)}` })
-    })
-
-    const { result } = await verify(sameChainSwap, response)
-
-    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true })
-  })
-
-  it('stays PENDING when the swap has no sell tx', async () => {
-    const { result } = await verify({ ...sameChainSwap, sellTxHash: null }, sameChainResponse)
-
-    expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'Missing sell txHash' })
-  })
-
-  it('matches the sell tx and treasury regardless of case', async () => {
-    const swap = { ...sameChainSwap, sellTxHash: sameChainSwap.sellTxHash.toUpperCase().replace('0X', '0x') }
+  it('matches the treasury regardless of case', async () => {
     const response = withRequest(({ data }) => {
       data.appFees.actual[0].recipient = TREASURY
     })
 
-    const { result } = await verify(swap, response)
+    const { result } = await verify(sameChainSwap, response)
 
     expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true, affiliateAddress: TREASURY })
   })
