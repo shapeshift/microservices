@@ -6,7 +6,9 @@ import { SwapVerificationService } from '../../../swap-verification.service'
 import { mockHttp } from '../../../test-helpers'
 import { KYBER_ROUTER } from '../kyberswap'
 
+import baseReceipt from './kyberswap.base.receipt.json'
 import elysiumReceipt from './kyberswap.elysium.receipt.json'
+import ethereumReceipt from './kyberswap.ethereum.receipt.json'
 import robinhoodReceipt from './kyberswap.robinhood.receipt.json'
 import robinhoodSwap from './kyberswap.robinhood.swap'
 
@@ -24,10 +26,38 @@ const elysiumSwap = {
   sellTxHash: elysiumReceipt.transactionHash,
 }
 
+// another integrator's 25 bps fee taken from the WETH input on Base
+const BASE = 'eip155:8453'
+const BASE_WETH = `${BASE}/erc20:0x4200000000000000000000000000000000000006`
+const BASE_FEE_RECIPIENT = '0xcD6b980029E6E6e0733ac8eC3E02be9410D09799'
+const baseSwap = {
+  ...robinhoodSwap,
+  sellAsset: { ...robinhoodSwap.sellAsset, assetId: BASE_WETH, chainId: BASE },
+  buyAsset: { ...robinhoodSwap.buyAsset, assetId: `${BASE}/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`, chainId: BASE },
+  sellTxHash: baseReceipt.transactionHash,
+  affiliateBps: 25,
+  shapeshiftBps: 25,
+}
+
+// another integrator's USDC output fee split 66/10 bps between two recipients on Ethereum
+const ETHEREUM = 'eip155:1'
+const ETHEREUM_USDC = `${ETHEREUM}/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`
+const SPLIT_FEE_RECIPIENT = '0x041cbBc7d068155E5083ee619e09B433027b3290'
+const ethereumSwap = {
+  ...robinhoodSwap,
+  sellAsset: { ...robinhoodSwap.sellAsset, assetId: `${ETHEREUM}/erc20:0x24c2c6f74f7d34664d85b98bdde5b6048420476c`, chainId: ETHEREUM },
+  buyAsset: { ...robinhoodSwap.buyAsset, assetId: ETHEREUM_USDC, chainId: ETHEREUM },
+  sellTxHash: ethereumReceipt.transactionHash,
+  affiliateBps: 10,
+  shapeshiftBps: 10,
+}
+
 const getTransactionReceipt = jest.fn()
 Object.assign(viemClientByChainId, {
   [robinhoodSwap.sellAsset.chainId]: { getTransactionReceipt },
   [ELYSIUM]: { getTransactionReceipt },
+  [BASE]: { getTransactionReceipt },
+  [ETHEREUM]: { getTransactionReceipt },
 })
 
 type Receipt = typeof robinhoodReceipt
@@ -77,6 +107,44 @@ describe('verifyKyberSwap', () => {
       actualBuyAmountCryptoBaseUnit: '797181003813722',
       actualAffiliateFeeAmountCryptoBaseUnit: '4811957769499',
       actualAffiliateFeeAssetId: ELYSIUM_NATIVE,
+    })
+  })
+
+  it('reports the full sell amount when the fee is taken from the input', async () => {
+    getTransactionReceipt.mockResolvedValue(baseReceipt)
+    jest.mocked(getTreasuryAddressFromChainId).mockReturnValue(BASE_FEE_RECIPIENT)
+
+    const result = await verify(baseSwap)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 25,
+      // Swapped.spentAmount of 3456698661483050 leaves out the fee
+      verifiedSellAmountCryptoBaseUnit: '3465362066649674',
+      actualBuyAmountCryptoBaseUnit: '6734564',
+      actualAffiliateFeeAmountCryptoBaseUnit: '8663405166624',
+      actualAffiliateFeeAssetId: BASE_WETH,
+    })
+  })
+
+  it("takes only the treasury's share of a fee split between recipients", async () => {
+    getTransactionReceipt.mockResolvedValue(ethereumReceipt)
+    jest.mocked(getTreasuryAddressFromChainId).mockReturnValue(SPLIT_FEE_RECIPIENT)
+
+    const result = await verify(ethereumSwap)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: true,
+      affiliateBps: 10,
+      affiliateAddress: SPLIT_FEE_RECIPIENT,
+      verifiedSellAmountCryptoBaseUnit: '2691459404027087285515944',
+      // net of both shares
+      actualBuyAmountCryptoBaseUnit: '113662046',
+      // the 10 bps share, which is what the recipient received on chain
+      actualAffiliateFeeAmountCryptoBaseUnit: '114532',
+      actualAffiliateFeeAssetId: ETHEREUM_USDC,
     })
   })
 
@@ -143,7 +211,7 @@ describe('verifyKyberSwap', () => {
   })
 
   it('stays PENDING on a chain without an RPC client', async () => {
-    const chainId = 'eip155:1'
+    const chainId = 'eip155:10'
     const result = await verify({ ...robinhoodSwap, sellAsset: { ...robinhoodSwap.sellAsset, chainId } })
 
     expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: `No RPC client for ${chainId}` })
