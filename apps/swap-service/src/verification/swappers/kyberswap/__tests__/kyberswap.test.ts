@@ -173,16 +173,15 @@ describe('verifyKyberSwap', () => {
     })
   })
 
-  it('stays PENDING when the router swap does not match the swap assets', async () => {
-    const result = await verify({
-      ...robinhoodSwap,
-      buyAsset: { ...robinhoodSwap.buyAsset, assetId: 'eip155:4663/erc20:0x0000000000000000000000000000000000000001' },
-    })
+  it('stays PENDING when a native fee has no native asset on either side of the swap', async () => {
+    getTransactionReceipt.mockResolvedValue(elysiumReceipt)
+
+    const result = await verify({ ...elysiumSwap, buyAsset: { ...elysiumSwap.buyAsset, assetId: ELYSIUM_USDC } })
 
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
       hasAffiliate: false,
-      noAffiliateReason: 'KyberSwap router swap does not match the swap assets',
+      noAffiliateReason: 'KyberSwap fee token has no known asset',
     })
   })
 

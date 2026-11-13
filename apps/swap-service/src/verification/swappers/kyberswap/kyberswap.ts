@@ -56,13 +56,6 @@ export const verifyKyberSwap: Verifier = async (swap) => {
 
   const [swapped] = swaps
 
-  if (
-    tokenToAssetId(swap, swapped.args.srcToken) !== swap.sellAsset.assetId ||
-    tokenToAssetId(swap, swapped.args.dstToken) !== swap.buyAsset.assetId
-  ) {
-    return noAffiliateResult('PENDING', 'KyberSwap router swap does not match the swap assets')
-  }
-
   // a fee taken from the input is left out of spentAmount, so the sell is that Fee event's totalAmount
   const inputFee = events.find(
     (event) => event.eventName === 'Fee' && isAddressEqual(event.args.token, swapped.args.srcToken),
