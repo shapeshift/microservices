@@ -47,6 +47,7 @@ describe('verifyNearIntents', () => {
       actualBuyAmountCryptoBaseUnit: '1232523675089583993',
       // 31000000 × 40 / 10000, which is what the treasury received on chain
       actualAffiliateFeeAmountCryptoBaseUnit: '124000',
+      actualAffiliateFeeAssetId: exactInputSwap.sellAsset.assetId,
     })
   })
 
@@ -63,6 +64,7 @@ describe('verifyNearIntents', () => {
       actualBuyAmountCryptoBaseUnit: exactOutputResponse.swapDetails.amountOut,
       // amountIn × 40 / 10000 rounded up, which is what the treasury received in FZR7HPZ6aB3z7SwjdpytyeXuDYoCwYf2Yo3LNspdxojr
       actualAffiliateFeeAmountCryptoBaseUnit: '33308140705575',
+      actualAffiliateFeeAssetId: exactOutputSwap.sellAsset.assetId,
     })
   })
 

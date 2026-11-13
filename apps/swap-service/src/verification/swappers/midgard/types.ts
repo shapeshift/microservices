@@ -26,5 +26,5 @@ export type MidgardConfig = {
   midgardUrl: string
   affiliate: string
   // the chain's native coin, which the affiliate fee is paid in
-  nativeAsset: { asset: string; precision: number }
+  nativeAsset: { asset: string; assetId: string; precision: number }
 }

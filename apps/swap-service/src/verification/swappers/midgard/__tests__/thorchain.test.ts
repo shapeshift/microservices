@@ -1,3 +1,5 @@
+import { thorchainAssetId } from '@shapeshiftoss/caip'
+
 import type { Swap } from '../../../../swaps/types'
 import { SwapVerificationService } from '../../../swap-verification.service'
 import { failingHttp, mockHttp } from '../../../test-helpers'
@@ -24,6 +26,7 @@ describe('verifyThorchain', () => {
       verifiedSellAmountCryptoBaseUnit: '3000000000000000',
       actualBuyAmountCryptoBaseUnit: '6643738',
       actualAffiliateFeeAmountCryptoBaseUnit: '6944500',
+      actualAffiliateFeeAssetId: thorchainAssetId,
     })
   })
 

@@ -25,7 +25,6 @@ import { TronChainAdapterService } from '../lib/chain-adapters/tron.service'
 import { UtxoChainAdapterService } from '../lib/chain-adapters/utxo.service'
 import { DepositDetectionService } from '../lib/deposit-detection.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { resolveAffiliateFeeAssetId } from '../utils/affiliateFeeAsset'
 import { getNextCursor, swapCursorArgs } from '../utils/pagination'
 import { VERIFIABLE_SWAPPERS } from '../verification/registry'
 import { SwapVerificationService } from '../verification/swap-verification.service'
@@ -118,11 +117,9 @@ export class SwapsService {
 
   async createSwap(data: CreateSwapDto): Promise<Swap> {
     try {
-      const affiliateFeeAssetId = resolveAffiliateFeeAssetId(data.swapperName, data.sellAsset, data.buyAsset)
-
       const [referralCode, prices, partner] = await Promise.all([
         this.getReferralCode(data.userId),
-        fetchUsdPrices(data, affiliateFeeAssetId),
+        fetchUsdPrices(data),
         this.resolvePartner(data),
       ])
 
@@ -154,7 +151,6 @@ export class SwapsService {
             referralCode,
             sellAssetUsd: prices.sellAssetUsd,
             buyAssetUsd: prices.buyAssetUsd,
-            affiliateAssetUsd: prices.affiliateAssetUsd,
             partnerAddress: partner.partnerAddress,
             partnerCode: partner.partnerCode,
             partnerBps: data.partnerBps,
@@ -162,7 +158,6 @@ export class SwapsService {
             shapeshiftBps: data.shapeshiftBps,
             origin: data.origin ?? null,
             quotedAt: toQuotedAt(data.quotedAt),
-            affiliateFeeAssetId,
           },
         }),
       )
