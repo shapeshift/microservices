@@ -33,7 +33,11 @@ const BASE_FEE_RECIPIENT = '0xcD6b980029E6E6e0733ac8eC3E02be9410D09799'
 const baseSwap = {
   ...robinhoodSwap,
   sellAsset: { ...robinhoodSwap.sellAsset, assetId: BASE_WETH, chainId: BASE },
-  buyAsset: { ...robinhoodSwap.buyAsset, assetId: `${BASE}/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`, chainId: BASE },
+  buyAsset: {
+    ...robinhoodSwap.buyAsset,
+    assetId: `${BASE}/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`,
+    chainId: BASE,
+  },
   sellTxHash: baseReceipt.transactionHash,
   affiliateBps: 25,
   shapeshiftBps: 25,
@@ -45,7 +49,11 @@ const ETHEREUM_USDC = `${ETHEREUM}/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606e
 const SPLIT_FEE_RECIPIENT = '0x041cbBc7d068155E5083ee619e09B433027b3290'
 const ethereumSwap = {
   ...robinhoodSwap,
-  sellAsset: { ...robinhoodSwap.sellAsset, assetId: `${ETHEREUM}/erc20:0x24c2c6f74f7d34664d85b98bdde5b6048420476c`, chainId: ETHEREUM },
+  sellAsset: {
+    ...robinhoodSwap.sellAsset,
+    assetId: `${ETHEREUM}/erc20:0x24c2c6f74f7d34664d85b98bdde5b6048420476c`,
+    chainId: ETHEREUM,
+  },
   buyAsset: { ...robinhoodSwap.buyAsset, assetId: ETHEREUM_USDC, chainId: ETHEREUM },
   sellTxHash: ethereumReceipt.transactionHash,
   affiliateBps: 10,
@@ -67,9 +75,7 @@ const verify = (swap: unknown) => new SwapVerificationService(mockHttp({}).http)
 // a copy of the Robinhood receipt with its router logs moved to another address
 const withLogsFrom = (address: string): Receipt => ({
   ...robinhoodReceipt,
-  logs: robinhoodReceipt.logs.map((log) =>
-    log.address === KYBER_ROUTER.toLowerCase() ? { ...log, address } : log,
-  ),
+  logs: robinhoodReceipt.logs.map((log) => (log.address === KYBER_ROUTER.toLowerCase() ? { ...log, address } : log)),
 })
 
 describe('verifyKyberSwap', () => {
