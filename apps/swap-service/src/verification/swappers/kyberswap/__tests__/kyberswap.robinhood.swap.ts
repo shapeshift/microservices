@@ -2,7 +2,7 @@ import { SwapperName } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../../../swaps/types'
 
-// prod Robinhood ETH to USDe, fee in the buy asset, in the state verifySwap receives it
+// mainnet Robinhood ETH to USDe recorded by the develop service, fee in the buy asset, in the state verifySwap receives it
 export default {
   swapId: '2da715e3-ebd7-43d2-b6b9-8da746a252fc',
   sellAsset: {
