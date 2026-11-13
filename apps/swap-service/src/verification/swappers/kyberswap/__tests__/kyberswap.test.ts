@@ -78,6 +78,25 @@ const withLogsFrom = (address: string): Receipt => ({
   logs: robinhoodReceipt.logs.map((log) => (log.address === KYBER_ROUTER.toLowerCase() ? { ...log, address } : log)),
 })
 
+const FEE_TOPIC = '0x4c39b7ce5f4f514f45cb6f82b171b8b0b7f2cbf488ad28e4eff451588e2f014b'
+const SWAPPED_TOPIC = '0xd6d4f5681c246c9f42c203e287975af1601f8df8035a9251f79aab5c8f09e2f8'
+
+// a copy of the Robinhood receipt with the router log for this event appearing twice
+const withDuplicated = (topic: string): Receipt => ({
+  ...robinhoodReceipt,
+  logs: robinhoodReceipt.logs.flatMap((log) => (log.topics[0] === topic ? [log, log] : [log])),
+})
+
+// a copy of the Robinhood receipt whose Fee event reports amounts instead of bps, i.e. its isBps word cleared
+const withAbsoluteFee = (): Receipt => ({
+  ...robinhoodReceipt,
+  logs: robinhoodReceipt.logs.map((log) => {
+    if (log.topics[0] !== FEE_TOPIC) return log
+    const isBpsWord = 2 + 64 * 5
+    return { ...log, data: `${log.data.slice(0, isBpsWord)}${'0'.repeat(64)}${log.data.slice(isBpsWord + 64)}` }
+  }),
+})
+
 describe('verifyKyberSwap', () => {
   beforeEach(() => {
     getTransactionReceipt.mockReset().mockResolvedValue(robinhoodReceipt)
@@ -154,15 +173,40 @@ describe('verifyKyberSwap', () => {
     })
   })
 
-  it('stays PENDING when a native fee has no native asset on either side of the swap', async () => {
-    getTransactionReceipt.mockResolvedValue(elysiumReceipt)
-
-    const result = await verify({ ...elysiumSwap, buyAsset: { ...elysiumSwap.buyAsset, assetId: ELYSIUM_USDC } })
+  it('stays PENDING when the router swap does not match the swap assets', async () => {
+    const result = await verify({
+      ...robinhoodSwap,
+      buyAsset: { ...robinhoodSwap.buyAsset, assetId: 'eip155:4663/erc20:0x0000000000000000000000000000000000000001' },
+    })
 
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
       hasAffiliate: false,
-      noAffiliateReason: 'KyberSwap fee token has no known asset',
+      noAffiliateReason: 'KyberSwap router swap does not match the swap assets',
+    })
+  })
+
+  it('stays PENDING when the transaction holds more than one router swap', async () => {
+    getTransactionReceipt.mockResolvedValue(withDuplicated(SWAPPED_TOPIC))
+
+    const result = await verify(robinhoodSwap)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      hasAffiliate: false,
+      noAffiliateReason: 'KyberSwap transaction contains more than one router swap',
+    })
+  })
+
+  it('stays PENDING when the treasury fee is an absolute amount', async () => {
+    getTransactionReceipt.mockResolvedValue(withAbsoluteFee())
+
+    const result = await verify(robinhoodSwap)
+
+    expect(result).toMatchObject({
+      verificationStatus: 'PENDING',
+      hasAffiliate: false,
+      noAffiliateReason: 'KyberSwap fee is an absolute amount, not bps',
     })
   })
 

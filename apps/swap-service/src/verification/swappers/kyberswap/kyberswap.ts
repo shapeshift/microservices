@@ -21,7 +21,7 @@ const KYBER_ROUTER_ABI = parseAbi([
 ])
 
 // the router reports native as a sentinel address, so take the native asset from whichever side of the swap is native
-const toFeeAssetId = (swap: Swap, token: Address): string | undefined => {
+const tokenToAssetId = (swap: Swap, token: Address): string | undefined => {
   const { chainId } = swap.sellAsset
 
   if (!isAddressEqual(token, KYBER_NATIVE_TOKEN)) {
@@ -48,8 +48,20 @@ export const verifyKyberSwap: Verifier = async (swap) => {
     isAddressEqual(address, KYBER_ROUTER),
   )
 
-  const swapped = events.find((event) => event.eventName === 'Swapped')
-  if (!swapped) return noAffiliateResult('FAILED', 'No KyberSwap router swap in the transaction')
+  const swaps = events.filter((event) => event.eventName === 'Swapped')
+  if (!swaps.length) return noAffiliateResult('FAILED', 'No KyberSwap router swap in the transaction')
+
+  // a batched tx can hold several router swaps, and its fees can't be told apart
+  if (swaps.length > 1) return noAffiliateResult('PENDING', 'KyberSwap transaction contains more than one router swap')
+
+  const [swapped] = swaps
+
+  if (
+    tokenToAssetId(swap, swapped.args.srcToken) !== swap.sellAsset.assetId ||
+    tokenToAssetId(swap, swapped.args.dstToken) !== swap.buyAsset.assetId
+  ) {
+    return noAffiliateResult('PENDING', 'KyberSwap router swap does not match the swap assets')
+  }
 
   // a fee taken from the input is left out of spentAmount, so the sell is that Fee event's totalAmount
   const inputFee = events.find(
@@ -66,24 +78,16 @@ export const verifyKyberSwap: Verifier = async (swap) => {
 
   const treasury = getTreasuryAddressFromChainId(chainId) as Address
 
-  // each recipient's share is either bps of totalAmount or an absolute amount
   const fees = events.flatMap((event) => {
     if (event.eventName !== 'Fee') return []
 
     const { token, totalAmount, recipients, amounts: values, isBps } = event.args
-    if (totalAmount === 0n) return []
 
     return recipients.flatMap((recipient, i) => {
       const value = values[i]
       if (value === undefined || !isAddressEqual(recipient, treasury)) return []
 
-      return [
-        {
-          token,
-          amount: isBps ? (totalAmount * value) / BPS_DENOMINATOR : value,
-          bps: isBps ? value : (value * BPS_DENOMINATOR) / totalAmount,
-        },
-      ]
+      return [{ token, totalAmount, value, isBps }]
     })
   })
 
@@ -93,18 +97,23 @@ export const verifyKyberSwap: Verifier = async (swap) => {
   if (fees.length > 1) return noAffiliateResult('PENDING', 'KyberSwap reports more than one fee to the treasury')
 
   const [fee] = fees
-  if (fee.amount === 0n) return noAffiliateResult('SUCCESS', 'KyberSwap collected a 0 fee', amounts)
 
-  const actualAffiliateFeeAssetId = toFeeAssetId(swap, fee.token)
+  // our quotes always charge in bps, so an absolute fee wasn't built from one of them
+  if (!fee.isBps) return noAffiliateResult('PENDING', 'KyberSwap fee is an absolute amount, not bps')
+
+  const feeAmount = (fee.totalAmount * fee.value) / BPS_DENOMINATOR
+  if (feeAmount === 0n) return noAffiliateResult('SUCCESS', 'KyberSwap collected a 0 fee', amounts)
+
+  const actualAffiliateFeeAssetId = tokenToAssetId(swap, fee.token)
   if (!actualAffiliateFeeAssetId) return noAffiliateResult('PENDING', 'KyberSwap fee token has no known asset')
 
   return {
     verificationStatus: 'SUCCESS',
     hasAffiliate: true,
-    affiliateBps: Number(fee.bps),
+    affiliateBps: Number(fee.value),
     affiliateAddress: treasury,
     ...amounts,
-    actualAffiliateFeeAmountCryptoBaseUnit: fee.amount.toString(),
+    actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toString(),
     actualAffiliateFeeAssetId,
   }
 }
