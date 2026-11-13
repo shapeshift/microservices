@@ -10,6 +10,7 @@ describe('verifier registry', () => {
     expect([...VERIFIABLE_SWAPPERS].sort()).toEqual(
       [
         SwapperName.ArbitrumBridge,
+        SwapperName.KyberSwap,
         SwapperName.Mayachain,
         SwapperName.NearIntents,
         SwapperName.Relay,
