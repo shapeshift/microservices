@@ -69,7 +69,7 @@ export const verifyNearIntents: Verifier = async (swap) => {
     affiliateAddress: treasuryFees[0].recipient,
     ...amounts,
     actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toString(),
-    // the fee is a share of amountIn, so it's in the sell asset
+    // 1Click takes app fees out of amountIn, so they're in the sell asset
     actualAffiliateFeeAssetId: swap.sellAsset.assetId,
   }
 }
