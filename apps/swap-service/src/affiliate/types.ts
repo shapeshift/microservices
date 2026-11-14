@@ -9,7 +9,6 @@ import { PARTNER_CODE_REGEX } from './utils'
 
 const PARTNER_CODE_MESSAGE = 'Partner code must be 3-32 lowercase letters or numbers (e.g. mypartnercode)'
 
-// Postgres has no year 0, so an earlier date would fail the query instead of the request
 const MIN_DATE = new Date(0)
 
 export type AffiliateRole = 'owner' | 'admin'
