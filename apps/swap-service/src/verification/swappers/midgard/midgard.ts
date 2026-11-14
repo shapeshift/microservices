@@ -1,5 +1,6 @@
 import { firstValueFrom } from 'rxjs'
 
+import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
 import { MAYACHAIN_AFFILIATE_NAME, THORCHAIN_AFFILIATE_NAME } from '@shapeshiftoss/swapper'
 
@@ -97,17 +98,18 @@ const midgardVerifier =
       affiliateAddress: config.affiliate,
       ...amounts,
       actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toFixed(0),
+      actualAffiliateFeeAssetId: config.nativeAsset.assetId,
     }
   }
 
 export const verifyThorchain = midgardVerifier({
   midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
   affiliate: THORCHAIN_AFFILIATE_NAME,
-  nativeAsset: { asset: 'THOR.RUNE', precision: 8 },
+  nativeAsset: { asset: 'THOR.RUNE', assetId: thorchainAssetId, precision: 8 },
 })
 
 export const verifyMayachain = midgardVerifier({
   midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
   affiliate: MAYACHAIN_AFFILIATE_NAME,
-  nativeAsset: { asset: 'MAYA.CACAO', precision: 10 },
+  nativeAsset: { asset: 'MAYA.CACAO', assetId: mayachainAssetId, precision: 10 },
 })

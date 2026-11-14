@@ -1,3 +1,5 @@
+import { mayachainAssetId } from '@shapeshiftoss/caip'
+
 import type { Swap } from '../../../../swaps/types'
 import { SwapVerificationService } from '../../../swap-verification.service'
 import { failingHttp, mockHttp } from '../../../test-helpers'
@@ -24,6 +26,7 @@ describe('verifyMayachain', () => {
       actualBuyAmountCryptoBaseUnit: '7340228',
       // Midgard reports CACAO in native 1e10 precision, so the raw affiliate out amount is used as-is.
       actualAffiliateFeeAmountCryptoBaseUnit: '4237779000',
+      actualAffiliateFeeAssetId: mayachainAssetId,
     })
   })
 
