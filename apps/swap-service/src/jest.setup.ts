@@ -30,6 +30,9 @@ jest.mock('@shapeshiftoss/chain-adapters', () => {
   }
 })
 
+// each test registers the RPC clients it needs
+jest.mock('@shapeshiftoss/contracts', () => ({ viemClientByChainId: {} }))
+
 jest.mock('@shapeshiftoss/swapper', () => ({
   SwapperName: {
     Thorchain: 'THORChain',
@@ -58,6 +61,7 @@ jest.mock('@shapeshiftoss/swapper', () => ({
   THORCHAIN_AFFILIATE_NAME: 'ss',
   MAYACHAIN_AFFILIATE_NAME: 'ssmaya',
   swappers: {},
+  getTreasuryAddressFromChainId: jest.fn(),
   getSwapMetadata: (metadata: { name?: string } | undefined, name: string) => {
     if (metadata?.name !== name) throw new Error(`Expected ${name} swap metadata`)
     return metadata

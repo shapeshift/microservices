@@ -1,5 +1,6 @@
 import { SwapperName } from '@shapeshiftoss/swapper'
 
+import { verifyKyberSwap } from './swappers/kyberswap/kyberswap'
 import { verifyMayachain, verifyThorchain } from './swappers/midgard/midgard'
 import { verifyNearIntents } from './swappers/nearIntents/nearIntents'
 import { verifyRelay } from './swappers/relay/relay'
@@ -11,6 +12,7 @@ const noAffiliateFee: Verifier = () => Promise.resolve(noAffiliateResult('SUCCES
 // swappers without a verifier stay PENDING until one is registered here
 export const verifiers: Partial<Record<SwapperName, Verifier>> = {
   [SwapperName.ArbitrumBridge]: noAffiliateFee,
+  [SwapperName.KyberSwap]: verifyKyberSwap,
   [SwapperName.Mayachain]: verifyMayachain,
   [SwapperName.NearIntents]: verifyNearIntents,
   [SwapperName.Relay]: verifyRelay,
