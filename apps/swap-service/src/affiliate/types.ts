@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer'
-import { IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min } from 'class-validator'
+import { IsDate, IsEthereumAddress, IsInt, IsOptional, Matches, Max, Min, MinDate } from 'class-validator'
 
 import type { Affiliate } from '@shapeshift/prisma'
 
@@ -8,6 +8,8 @@ import { PaginationQueryDto } from '../swaps/types'
 import { PARTNER_CODE_REGEX } from './utils'
 
 const PARTNER_CODE_MESSAGE = 'Partner code must be 3-32 lowercase letters or numbers (e.g. mypartnercode)'
+
+const MIN_DATE = new Date(0)
 
 export type AffiliateRole = 'owner' | 'admin'
 
@@ -36,11 +38,13 @@ export class AffiliateStatsQueryDto {
   @IsOptional()
   @Type(() => Date)
   @IsDate()
+  @MinDate(MIN_DATE)
   startDate?: Date
 
   @IsOptional()
   @Type(() => Date)
   @IsDate()
+  @MinDate(MIN_DATE)
   endDate?: Date
 }
 
@@ -52,11 +56,13 @@ export class AffiliateSwapsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @Type(() => Date)
   @IsDate()
+  @MinDate(MIN_DATE)
   startDate?: Date
 
   @IsOptional()
   @Type(() => Date)
   @IsDate()
+  @MinDate(MIN_DATE)
   endDate?: Date
 }
 
