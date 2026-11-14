@@ -182,7 +182,6 @@ export const computeSellAmountUsd = (
   return bnOrZero(baseUnitToPrecision(sellAmountCryptoBaseUnit, precision)).times(sellAssetUsd).toNumber()
 }
 
-// the fee asset is only known once verified, so its price is backfilled then
 export const fetchUsdPrices = async (data: CreateSwapDto): Promise<Omit<UsdPrices, 'affiliateAssetUsd'>> => {
   try {
     const [sellAssetUsd, buyAssetUsd] = await Promise.all([
