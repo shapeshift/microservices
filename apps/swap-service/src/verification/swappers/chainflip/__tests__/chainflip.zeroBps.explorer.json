@@ -1,23 +1,23 @@
 {
   "data": {
     "swapRequest": {
-      "completedEventId": "18420863621",
+      "completedEventId": "18520404337",
       "refundEgress": null,
       "executedSwaps": {
         "aggregates": {
           "sum": {
-            "swapInputAmount": "3199906"
+            "swapInputAmount": "9996837"
           }
         }
       },
       "egress": {
-        "amount": "1989934751"
+        "amount": "9433835"
       },
       "beneficiaries": {
         "nodes": [
           {
             "type": "AFFILIATE",
-            "brokerCommissionRateBps": 60,
+            "brokerCommissionRateBps": 0,
             "commissions": {
               "groupedAggregates": [
                 {
@@ -25,7 +25,7 @@
                     "Usdc"
                   ],
                   "sum": {
-                    "amount": "12010758"
+                    "amount": "0"
                   }
                 }
               ]
@@ -44,7 +44,7 @@
                     "Usdc"
                   ],
                   "sum": {
-                    "amount": "1000896"
+                    "amount": "4748"
                   }
                 }
               ]

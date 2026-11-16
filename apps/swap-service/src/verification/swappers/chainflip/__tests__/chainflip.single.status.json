@@ -1,0 +1,130 @@
+{
+  "id": 81541,
+  "platform": "chainflip",
+  "status": {
+    "state": "completed",
+    "swapId": "2095482",
+    "sourceAsset": "btc.btc",
+    "destinationAsset": "usdt.eth",
+    "destinationAddress": "0x725ec58ca81bb887b79aa2189be632acca67f28f",
+    "depositChannel": {
+      "id": "15716888-Bitcoin-239491",
+      "createdAt": 1794816618000,
+      "createdAtDate": "2026-11-16T08:10:18+00:00",
+      "brokerCommissionBps": 5,
+      "depositAddress": "bc1pk9g58j7g05c06evhd44a4r2wgst7jdtexhqsp25x6ms3l4x7h30s32fz8y",
+      "sourceChainExpiryBlock": "976242",
+      "estimatedExpiryTime": 1794903912000,
+      "estimatedExpiryDate": "2026-11-17T08:25:12+00:00",
+      "isExpired": false,
+      "openedThroughBackend": false,
+      "affiliateBrokers": [
+        {
+          "account": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi",
+          "commissionBps": 60
+        }
+      ],
+      "fillOrKillParams": {
+        "retryDurationBlocks": 150,
+        "refundAddress": "bc1qrqfr846aeqhjp0zk96dnyj4k69392fcj89q763",
+        "minimumPrice": "63062.174689"
+      }
+    },
+    "fillOrKillParams": {
+      "retryDurationBlocks": 150,
+      "refundAddress": "bc1qrqfr846aeqhjp0zk96dnyj4k69392fcj89q763",
+      "minimumPrice": "63062.174689"
+    },
+    "brokers": [
+      {
+        "account": "cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH",
+        "commissionBps": 5
+      },
+      {
+        "account": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi",
+        "commissionBps": 60
+      }
+    ],
+    "estimatedDurationSeconds": 1014,
+    "estimatedDurationsSeconds": {
+      "deposit": 906,
+      "swap": 12,
+      "egress": 96
+    },
+    "sourceChainRequiredBlockConfirmations": 2,
+    "fees": [
+      {
+        "type": "network",
+        "asset": "usdc.eth",
+        "amountNative": "1988857",
+        "amount": 1.988857
+      },
+      {
+        "type": "broker",
+        "asset": "usdc.eth",
+        "amountNative": "12914643",
+        "amount": 12.914643
+      },
+      {
+        "type": "ingress",
+        "asset": "btc.btc",
+        "amountNative": "156",
+        "amount": 0.00000156
+      },
+      {
+        "type": "egress",
+        "asset": "usdt.eth",
+        "amountNative": "29918",
+        "amount": 0.029918
+      }
+    ],
+    "deposit": {
+      "amountNative": "3086372",
+      "amount": 0.03086372,
+      "transactionReference": "b58ec222b5f8d193e49f46ecfb7516d673cada9b041afbd5c435219664ffe186",
+      "witnessedAt": 1794817716000,
+      "witnessedAtDate": "2026-11-16T08:28:36+00:00",
+      "witnessedBlockIndex": "15717071-402"
+    },
+    "swap": {
+      "originalInputAmountNative": "3086216",
+      "originalInputAmount": 0.03086216,
+      "remainingInputAmountNative": "0",
+      "remainingInputAmount": 0,
+      "swappedInputAmountNative": "3086216",
+      "swappedInputAmount": 0.03086216,
+      "swappedIntermediateAmountNative": "1973953597",
+      "swappedIntermediateAmount": 1973.953597,
+      "swappedOutputAmountNative": "1975184469",
+      "swappedOutputAmount": 1975.184469,
+      "livePriceExecutionDeltaPercentage": -0.1,
+      "regular": {
+        "inputAmountNative": "3086216",
+        "inputAmount": 0.03086216,
+        "intermediateAmountNative": "1973953597",
+        "intermediateAmount": 1973.953597,
+        "outputAmountNative": "1975184469",
+        "outputAmount": 1975.184469,
+        "scheduledAt": 1794817716000,
+        "scheduledAtDate": "2026-11-16T08:28:36+00:00",
+        "scheduledBlockIndex": "15717071-401",
+        "executedAt": 1794817728000,
+        "executedAtDate": "2026-11-16T08:28:48+00:00",
+        "executedBlockIndex": "15717073-441",
+        "retryCount": 0
+      }
+    },
+    "swapEgress": {
+      "amountNative": "1975154551",
+      "amount": 1975.154551,
+      "scheduledAt": 1794817728000,
+      "scheduledAtDate": "2026-11-16T08:28:48+00:00",
+      "scheduledBlockIndex": "15717073-444",
+      "transactionReference": "0xd56f121c4fb35ce1a942e3391957c21ce900bc428083306b91d8b3576c7f7b56",
+      "witnessedAt": 1794817818000,
+      "witnessedBlockIndex": "15717088-421"
+    },
+    "lastStateChainUpdateAt": 1794817837170,
+    "lastStateChainUpdateAtDate": "2026-11-16T08:30:37.17+00:00"
+  }
+}

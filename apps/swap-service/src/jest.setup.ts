@@ -10,6 +10,8 @@ jest.mock('./env', () => ({
     VITE_THORCHAIN_MIDGARD_URL: 'https://thorchain-midgard.test',
     VITE_MAYACHAIN_MIDGARD_URL: 'https://mayachain-midgard.test',
     VITE_RELAY_API_URL: 'https://relay.test',
+    VITE_CHAINFLIP_API_KEY: 'x',
+    VITE_CHAINFLIP_API_URL: 'https://chainflip-broker.test',
     VITE_CHAINFLIP_EXPLORER_URL: 'https://chainflip-explorer.test/graphql',
   },
 }))

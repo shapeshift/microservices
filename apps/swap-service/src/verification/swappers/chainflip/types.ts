@@ -1,3 +1,15 @@
+// broker GET /status-by-id, trimmed to the fields verification reads
+export type ChainflipStatus = {
+  state?: string
+  // the swap request nativeId, set once the deposit is witnessed
+  swapId?: string | null
+}
+
+export type ChainflipStatusResponse = {
+  id?: number
+  status?: ChainflipStatus
+}
+
 export type ChainflipCommission = {
   // groupBy keys, e.g. ['Usdc']
   asset?: string[]

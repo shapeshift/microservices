@@ -1,9 +1,9 @@
 {
   "data": {
     "swapRequest": {
-      "completedEventId": "9946411795",
+      "completedEventId": "21966198862",
       "refundEgress": {
-        "amount": "5930642520880790"
+        "amount": "40256"
       },
       "executedSwaps": {
         "aggregates": {
@@ -17,7 +17,7 @@
         "nodes": [
           {
             "type": "AFFILIATE",
-            "brokerCommissionRateBps": 50,
+            "brokerCommissionRateBps": 60,
             "commissions": {
               "groupedAggregates": []
             },

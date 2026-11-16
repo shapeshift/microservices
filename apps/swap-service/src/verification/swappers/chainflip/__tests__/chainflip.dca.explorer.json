@@ -1,17 +1,17 @@
 {
   "data": {
     "swapRequest": {
-      "completedEventId": "18351629567",
+      "completedEventId": "21999302862",
       "refundEgress": null,
       "executedSwaps": {
         "aggregates": {
           "sum": {
-            "swapInputAmount": "99999949"
+            "swapInputAmount": "10019653322684281161543"
           }
         }
       },
       "egress": {
-        "amount": "98952579"
+        "amount": "15367185"
       },
       "beneficiaries": {
         "nodes": [
@@ -25,7 +25,7 @@
                     "Usdc"
                   ],
                   "sum": {
-                    "amount": "367710212"
+                    "amount": "59928344"
                   }
                 }
               ]
@@ -44,7 +44,7 @@
                     "Usdc"
                   ],
                   "sum": {
-                    "amount": "30642515"
+                    "amount": "4994027"
                   }
                 }
               ]

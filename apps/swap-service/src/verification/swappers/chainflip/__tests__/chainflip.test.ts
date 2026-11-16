@@ -1,81 +1,102 @@
+import type { HttpService } from '@nestjs/axios'
+import { Logger } from '@nestjs/common'
+import { of } from 'rxjs'
+
 import { usdcAssetId } from '@shapeshiftoss/caip'
 import type { SwapMetadata } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../../../swaps/types'
 import { SwapVerificationService } from '../../../swap-verification.service'
-import { failingHttp, mockHttp } from '../../../test-helpers'
-import { TREASURY_ACCOUNTS } from '../chainflip'
+import { failingHttp } from '../../../test-helpers'
+import { TREASURY_ACCOUNTS, verifyChainflip } from '../chainflip'
 
-import dcaResponse from './chainflip.dca.response.json'
-import partialRefundResponse from './chainflip.partialRefund.response.json'
-import refundResponse from './chainflip.refund.response.json'
-import response from './chainflip.response.json'
-import swap from './chainflip.swap'
+import dcaExplorer from './chainflip.dca.explorer.json'
+import dcaStatus from './chainflip.dca.status.json'
+import failedStatus from './chainflip.failed.status.json'
+import partialRefundExplorer from './chainflip.partialRefund.explorer.json'
+import partialRefundStatus from './chainflip.partialRefund.status.json'
+import refundExplorer from './chainflip.refund.explorer.json'
+import refundStatus from './chainflip.refund.status.json'
+import singleExplorer from './chainflip.single.explorer.json'
+import singleStatus from './chainflip.single.status.json'
+import waitingStatus from './chainflip.waiting.status.json'
+import waitingSwap from './chainflip.waiting.swap'
+import zeroBpsExplorer from './chainflip.zeroBps.explorer.json'
+import zeroBpsStatus from './chainflip.zeroBps.status.json'
 
 const [TREASURY] = TREASURY_ACCOUNTS
 
-type ChainflipResponse = typeof response
-type ChainflipSwapRequest = ChainflipResponse['data']['swapRequest']
-type ChainflipBeneficiary = ChainflipSwapRequest['beneficiaries']['nodes'][number]
+type Status = { id: number; status: { depositChannel: { depositAddress: string } } }
+type Explorer = typeof singleExplorer
+type Affiliate = Explorer['data']['swapRequest']['beneficiaries']['nodes'][number]
 
-const verify = async (response: unknown, overrides: Partial<Swap> = {}) => {
-  const { http, post } = mockHttp(response)
-  const result = await new SwapVerificationService(http).verifySwap({ ...swap, ...overrides } as Swap)
-  return { result, post }
+const mockChainflip = (status: unknown, explorer?: unknown) => {
+  const get = jest.fn<unknown, [url: string, ...rest: unknown[]]>().mockReturnValue(of({ data: status }))
+  const post = jest.fn<unknown, [url: string, ...rest: unknown[]]>().mockReturnValue(of({ data: explorer }))
+  return { http: { get, post } as unknown as HttpService, get, post }
 }
 
-// a copy of the base response with its swap request changed
-const withSwapRequest = (update: (swapRequest: ChainflipSwapRequest) => void): ChainflipResponse => {
-  const updated = structuredClone(response)
-  update(updated.data.swapRequest)
-  return updated
+// the metadata the swapper stores for the broker swap the status response describes
+const swapFor = ({ id, status }: Status) =>
+  ({
+    metadata: { swapperMetadata: { name: 'chainflip', swapId: id, depositAddress: status.depositChannel.depositAddress } },
+  }) as unknown as Swap
+
+const verify = async (status: Status, explorer?: unknown) => {
+  const mock = mockChainflip(status, explorer)
+  const result = await verifyChainflip(swapFor(status), { http: mock.http, logger: new Logger() })
+  return { result, ...mock }
 }
 
-const withAffiliate = (update: (affiliate: ChainflipBeneficiary) => void): ChainflipResponse =>
-  withSwapRequest(({ beneficiaries }) => {
-    const affiliate = beneficiaries.nodes.find(({ type }) => type === 'AFFILIATE')
-    if (!affiliate) throw new Error('fixture has no AFFILIATE beneficiary')
-    update(affiliate)
-  })
+const withAffiliate = (update: (affiliate: Affiliate) => void): Explorer => {
+  const explorer = structuredClone(singleExplorer)
+  const affiliate = explorer.data.swapRequest.beneficiaries.nodes.find(({ type }) => type === 'AFFILIATE')
+  if (!affiliate) throw new Error('fixture has no AFFILIATE beneficiary')
+  update(affiliate)
+  return explorer
+}
 
 describe('verifyChainflip', () => {
-  it('verifies a swap with the ShapeShift affiliate and reports the USDC commission', async () => {
-    const { result, post } = await verify(response)
+  it('resolves the broker swap to its swap request and reports the USDC commission', async () => {
+    const { result, get, post } = await verify(singleStatus, singleExplorer)
 
     expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
       hasAffiliate: true,
       affiliateBps: 60,
       affiliateAddress: TREASURY,
-      // the executed input, net of the ingress fee, not the 3200000 deposit
-      verifiedSellAmountCryptoBaseUnit: '3199906',
-      actualBuyAmountCryptoBaseUnit: '1989934751',
-      actualAffiliateFeeAmountCryptoBaseUnit: '12010758',
+      // the executed input, net of the 156 sat ingress fee, not the 3086372 deposit
+      verifiedSellAmountCryptoBaseUnit: '3086216',
+      actualBuyAmountCryptoBaseUnit: '1975154551',
+      actualAffiliateFeeAmountCryptoBaseUnit: '11921208',
       actualAffiliateFeeAssetId: usdcAssetId,
     })
 
+    expect(get).toHaveBeenCalledWith('https://chainflip-broker.test/status-by-id?swapId=81541', {
+      headers: { 'X-API-Key': 'x' },
+    })
     expect(post).toHaveBeenCalledWith(
       'https://chainflip-explorer.test/graphql',
-      expect.objectContaining({ operationName: 'GetSwapByNativeId', variables: { nativeId: '1640208' } }),
+      expect.objectContaining({ operationName: 'GetSwapByNativeId', variables: { nativeId: '2095482' } }),
     )
   })
 
   it('sums the commission of every DCA chunk', async () => {
-    const { result } = await verify(dcaResponse)
+    const { result } = await verify(dcaStatus, dcaExplorer)
 
     expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
       hasAffiliate: true,
       affiliateBps: 60,
-      verifiedSellAmountCryptoBaseUnit: '99999949',
-      actualBuyAmountCryptoBaseUnit: '98952579',
-      actualAffiliateFeeAmountCryptoBaseUnit: '367710212',
+      verifiedSellAmountCryptoBaseUnit: '10019653322684281161543',
+      actualBuyAmountCryptoBaseUnit: '15367185',
+      actualAffiliateFeeAmountCryptoBaseUnit: '59928344',
       actualAffiliateFeeAssetId: usdcAssetId,
     })
   })
 
   it('reports only the executed input of a partially refunded swap', async () => {
-    const { result } = await verify(partialRefundResponse, { affiliateBps: 55, shapeshiftBps: 55 })
+    const { result } = await verify(partialRefundStatus, partialRefundExplorer)
 
     expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
@@ -87,8 +108,8 @@ describe('verifyChainflip', () => {
     })
   })
 
-  it('fails a fully refunded swap', async () => {
-    const { result } = await verify(refundResponse, { affiliateBps: 50, shapeshiftBps: 50 })
+  it('fails a swap the broker completed by refunding all of it', async () => {
+    const { result } = await verify(refundStatus, refundExplorer)
 
     expect(result).toMatchObject({
       verificationStatus: 'FAILED',
@@ -97,23 +118,22 @@ describe('verifyChainflip', () => {
     })
   })
 
-  it('stays PENDING until the swap request completes', async () => {
-    const { result } = await verify(
-      withSwapRequest((swapRequest) => {
-        swapRequest.completedEventId = null as unknown as string
-      }),
-    )
+  it('fails a swap the broker reports failed without querying the explorer', async () => {
+    const { result, post } = await verify(failedStatus)
 
     expect(result).toMatchObject({
-      verificationStatus: 'PENDING',
-      noAffiliateReason: 'Chainflip swap request not completed yet',
+      verificationStatus: 'FAILED',
+      hasAffiliate: false,
+      noAffiliateReason: 'Chainflip swap failed',
     })
+    expect(post).not.toHaveBeenCalled()
   })
 
   it('finds no affiliate when the affiliate beneficiary is not ShapeShift', async () => {
     const { result } = await verify(
+      singleStatus,
       withAffiliate(({ account }) => {
-        account.idSs58 = 'cFSomeoneElsesAffiliateBroker000000000000000000000'
+        account.idSs58 = 'cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH'
       }),
     )
 
@@ -121,42 +141,27 @@ describe('verifyChainflip', () => {
       verificationStatus: 'SUCCESS',
       hasAffiliate: false,
       noAffiliateReason: 'Chainflip swap names no ShapeShift affiliate',
-      verifiedSellAmountCryptoBaseUnit: '3199906',
-      actualBuyAmountCryptoBaseUnit: '1989934751',
+      verifiedSellAmountCryptoBaseUnit: '3086216',
       actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     })
-    expect(result.affiliateBps).toBeUndefined()
   })
 
-  it('does not attribute the shared submitter broker to ShapeShift', async () => {
-    const { result } = await verify(
-      withSwapRequest(({ beneficiaries }) => {
-        beneficiaries.nodes = beneficiaries.nodes
-          .filter(({ type }) => type !== 'AFFILIATE')
-          .map((node) => ({ ...node, account: { idSs58: TREASURY } }))
-      }),
-    )
-
-    expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: false })
-  })
-
-  it('finds no affiliate fee when the affiliate commission rate is 0 bps', async () => {
-    const { result } = await verify(
-      withAffiliate((affiliate) => {
-        affiliate.brokerCommissionRateBps = 0
-        affiliate.commissions.groupedAggregates = []
-      }),
-    )
+  it('finds no affiliate fee on a fee-free related-asset swap, which registers the affiliate at 0 bps', async () => {
+    const { result } = await verify(zeroBpsStatus, zeroBpsExplorer)
 
     expect(result).toMatchObject({
       verificationStatus: 'SUCCESS',
       hasAffiliate: false,
       noAffiliateReason: 'Chainflip affiliate commission is 0 bps',
+      verifiedSellAmountCryptoBaseUnit: '9996837',
+      actualBuyAmountCryptoBaseUnit: '9433835',
+      actualAffiliateFeeAmountCryptoBaseUnit: undefined,
     })
   })
 
   it('stays PENDING while the explorer has not indexed the commission', async () => {
     const { result } = await verify(
+      singleStatus,
       withAffiliate(({ commissions }) => {
         commissions.groupedAggregates = []
       }),
@@ -168,23 +173,11 @@ describe('verifyChainflip', () => {
     })
   })
 
-  it('stays PENDING when the commission spans more than one asset', async () => {
-    const { result } = await verify(
-      withAffiliate(({ commissions }) => {
-        commissions.groupedAggregates.push({ asset: ['Usdt'], sum: { amount: '5000000' } })
-      }),
-    )
-
-    expect(result).toMatchObject({
-      verificationStatus: 'PENDING',
-      noAffiliateReason: 'Chainflip reports affiliate commission in more than one asset',
-    })
-  })
-
   it('stays PENDING when the commission is not in USDC', async () => {
     const { result } = await verify(
+      singleStatus,
       withAffiliate(({ commissions }) => {
-        commissions.groupedAggregates = [{ asset: ['Usdt'], sum: { amount: '5000000' } }]
+        commissions.groupedAggregates[0].asset = ['Usdt']
       }),
     )
 
@@ -194,31 +187,34 @@ describe('verifyChainflip', () => {
     })
   })
 
-  it('stays PENDING when the commission bps differs from the swap', async () => {
-    const { result } = await verify(response, { affiliateBps: 50, shapeshiftBps: 50 })
+  it('stays PENDING when the commission spans more than one asset', async () => {
+    const { result } = await verify(
+      singleStatus,
+      withAffiliate(({ commissions }) => {
+        commissions.groupedAggregates.push({ ...commissions.groupedAggregates[0], asset: ['Usdt'] })
+      }),
+    )
 
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
-      hasAffiliate: false,
-      noAffiliateReason: "Chainflip affiliate fee of 60 bps differs from the swap's 50 bps",
+      noAffiliateReason: 'Chainflip reports affiliate commission in more than one asset',
     })
   })
 
-  it('returns FAILED when the swap metadata has no swapId', async () => {
-    const { result, post } = await verify(response, {
-      metadata: { quoteId: swap.metadata.quoteId, stepIndex: 0 } as SwapMetadata,
-    })
+  it('stays PENDING until the swap request completes', async () => {
+    const explorer = structuredClone(singleExplorer) as { data: { swapRequest: { completedEventId: string | null } } }
+    explorer.data.swapRequest.completedEventId = null
+
+    const { result } = await verify(singleStatus, explorer)
 
     expect(result).toMatchObject({
-      verificationStatus: 'FAILED',
-      hasAffiliate: false,
-      noAffiliateReason: 'Missing swapId in chainflip metadata',
+      verificationStatus: 'PENDING',
+      noAffiliateReason: 'Chainflip swap request not completed yet',
     })
-    expect(post).not.toHaveBeenCalled()
   })
 
   it('stays PENDING when the explorer has no swap request yet', async () => {
-    const { result } = await verify({ data: { swapRequest: null } })
+    const { result } = await verify(singleStatus, { data: { swapRequest: null } })
 
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
@@ -226,18 +222,46 @@ describe('verifyChainflip', () => {
     })
   })
 
-  it('stays PENDING when the explorer returns GraphQL errors', async () => {
-    const { result } = await verify({ errors: [{ message: 'rate limited' }] })
-
-    expect(result).toMatchObject({
-      verificationStatus: 'PENDING',
-      noAffiliateReason: 'Chainflip explorer error: rate limited',
-    })
+  it('throws when the explorer returns GraphQL errors, which the service keeps PENDING', async () => {
+    await expect(verify(singleStatus, { errors: [{ message: 'rate limited' }] })).rejects.toThrow(
+      'Chainflip explorer error: rate limited',
+    )
   })
 
-  it('stays PENDING when the explorer request fails', async () => {
-    const result = await new SwapVerificationService(failingHttp()).verifySwap(swap as unknown as Swap)
+  describe('through the verification service', () => {
+    it('stays PENDING while the broker waits for the deposit of a recorded swap', async () => {
+      const { http, get, post } = mockChainflip(waitingStatus)
 
-    expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'upstream 500' })
+      const result = await new SwapVerificationService(http).verifySwap(waitingSwap as unknown as Swap)
+
+      expect(result).toMatchObject({
+        verificationStatus: 'PENDING',
+        hasAffiliate: false,
+        noAffiliateReason: 'Chainflip swap waiting',
+      })
+      expect(get.mock.calls[0][0]).toBe('https://chainflip-broker.test/status-by-id?swapId=81350')
+      expect(post).not.toHaveBeenCalled()
+    })
+
+    it('returns FAILED when the swap metadata has no swapId', async () => {
+      const { http, get } = mockChainflip(waitingStatus)
+
+      const result = await new SwapVerificationService(http).verifySwap({
+        ...waitingSwap,
+        metadata: { quoteId: waitingSwap.metadata.quoteId, stepIndex: 0 } as SwapMetadata,
+      } as unknown as Swap)
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        noAffiliateReason: 'Missing swapId in chainflip metadata',
+      })
+      expect(get).not.toHaveBeenCalled()
+    })
+
+    it('stays PENDING when the broker request fails', async () => {
+      const result = await new SwapVerificationService(failingHttp()).verifySwap(waitingSwap as unknown as Swap)
+
+      expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: 'upstream 500' })
+    })
   })
 })

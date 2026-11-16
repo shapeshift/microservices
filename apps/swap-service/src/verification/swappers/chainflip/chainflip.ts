@@ -7,7 +7,12 @@ import { env } from '../../../env'
 import type { Verifier } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
-import type { ChainflipExplorerResponse, ChainflipSwapRequest } from './types'
+import type {
+  ChainflipExplorerResponse,
+  ChainflipStatus,
+  ChainflipStatusResponse,
+  ChainflipSwapRequest,
+} from './types'
 
 // the broker-as-a-service submitter is shared, so only our affiliate beneficiary attributes a swap
 export const TREASURY_ACCOUNTS = ['cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi']
@@ -51,6 +56,18 @@ const GET_SWAP_BY_NATIVE_ID_QUERY = `query GetSwapByNativeId($nativeId: BigInt!)
   }
 }`
 
+// the broker only resolves swaps opened under our api key, which binds the stored id to our swap
+const fetchStatus = async (id: number | string, http: HttpService): Promise<ChainflipStatus | undefined> => {
+  const { data } = await firstValueFrom(
+    http.get<ChainflipStatusResponse>(
+      `${env.VITE_CHAINFLIP_API_URL}/status-by-id?swapId=${encodeURIComponent(String(id))}`,
+      { headers: { 'X-API-Key': env.VITE_CHAINFLIP_API_KEY } },
+    ),
+  )
+
+  return data?.status
+}
+
 const fetchSwapRequest = async (nativeId: string, http: HttpService): Promise<ChainflipSwapRequest | undefined> => {
   const { data } = await firstValueFrom(
     http.post<ChainflipExplorerResponse>(env.VITE_CHAINFLIP_EXPLORER_URL, {
@@ -71,7 +88,15 @@ export const verifyChainflip: Verifier = async (swap, { http }) => {
   const swapId = getSwapMetadata(swap.metadata, 'chainflip')?.swapId
   if (!swapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
 
-  const swapRequest = await fetchSwapRequest(String(swapId), http)
+  const status = await fetchStatus(swapId, http)
+  if (!status) return noAffiliateResult('PENDING', 'No status returned from the Chainflip broker')
+
+  if (status.state === 'failed') return noAffiliateResult('FAILED', 'Chainflip swap failed')
+
+  // the stored id is the broker's own, and only its status names the swap request the explorer knows
+  if (!status.swapId) return noAffiliateResult('PENDING', `Chainflip swap ${status.state ?? 'without a state'}`)
+
+  const swapRequest = await fetchSwapRequest(status.swapId, http)
   if (!swapRequest) return noAffiliateResult('PENDING', 'No swap request returned from the Chainflip explorer')
 
   if (!swapRequest.completedEventId) return noAffiliateResult('PENDING', 'Chainflip swap request not completed yet')
