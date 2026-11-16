@@ -26,7 +26,7 @@ import zeroBpsStatus from './chainflip.zeroBps.status.json'
 
 const [TREASURY] = TREASURY_ACCOUNTS
 
-type Status = { id: number; status: { depositChannel: { depositAddress: string } } }
+type Status = { id: number; status: { destinationAddress: string; depositChannel: { depositAddress: string } } }
 type Explorer = typeof singleExplorer
 type Affiliate = Explorer['data']['swapRequest']['beneficiaries']['nodes'][number]
 
@@ -36,9 +36,10 @@ const mockChainflip = (status: unknown, explorer?: unknown) => {
   return { http: { get, post } as unknown as HttpService, get, post }
 }
 
-// the metadata the swapper stores for the broker swap the status response describes
+// the recipient and metadata the swapper stores for the broker swap the status response describes
 const swapFor = ({ id, status }: Status) =>
   ({
+    receiveAddress: status.destinationAddress,
     metadata: { swapperMetadata: { name: 'chainflip', swapId: id, depositAddress: status.depositChannel.depositAddress } },
   }) as unknown as Swap
 
@@ -129,6 +130,21 @@ describe('verifyChainflip', () => {
     expect(post).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['deposit channel', { status: { ...singleStatus.status, depositChannel: dcaStatus.status.depositChannel } }],
+    ['recipient', { status: { ...singleStatus.status, destinationAddress: dcaStatus.status.destinationAddress } }],
+  ])('fails a broker swap with another %s without querying the explorer', async (_, other) => {
+    const { http, post } = mockChainflip({ ...singleStatus, ...other }, singleExplorer)
+
+    const result = await verifyChainflip(swapFor(singleStatus), { http, logger: new Logger() })
+
+    expect(result).toMatchObject({
+      verificationStatus: 'FAILED',
+      noAffiliateReason: 'Chainflip broker swap does not match the swap deposit channel or recipient',
+    })
+    expect(post).not.toHaveBeenCalled()
+  })
+
   it('finds no affiliate when the affiliate beneficiary is not ShapeShift', async () => {
     const { result } = await verify(
       singleStatus,
@@ -198,7 +214,7 @@ describe('verifyChainflip', () => {
 
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
-      noAffiliateReason: 'Chainflip affiliate commission is in Usdt, not USDC',
+      noAffiliateReason: 'Chainflip affiliate commission is in Usdt, not only USDC',
     })
   })
 
@@ -212,7 +228,7 @@ describe('verifyChainflip', () => {
 
     expect(result).toMatchObject({
       verificationStatus: 'PENDING',
-      noAffiliateReason: 'Chainflip reports affiliate commission in more than one asset',
+      noAffiliateReason: 'Chainflip affiliate commission is in Usdc, Usdt, not only USDC',
     })
   })
 

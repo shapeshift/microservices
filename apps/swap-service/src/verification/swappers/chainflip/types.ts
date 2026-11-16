@@ -3,6 +3,8 @@ export type ChainflipStatus = {
   state?: string
   // the swap request nativeId, set once the deposit is witnessed
   swapId?: string | null
+  destinationAddress?: string
+  depositChannel?: { depositAddress?: string }
 }
 
 export type ChainflipStatusResponse = {

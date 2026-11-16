@@ -7,12 +7,7 @@ import { env } from '../../../env'
 import type { Verifier } from '../../types'
 import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
-import type {
-  ChainflipExplorerResponse,
-  ChainflipStatus,
-  ChainflipStatusResponse,
-  ChainflipSwapRequest,
-} from './types'
+import type { ChainflipExplorerResponse, ChainflipStatus, ChainflipStatusResponse, ChainflipSwapRequest } from './types'
 
 // the broker-as-a-service submitter is shared, so only our affiliate beneficiary attributes a swap
 export const TREASURY_ACCOUNTS = ['cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi']
@@ -82,16 +77,28 @@ const fetchSwapRequest = async (nativeId: string, http: HttpService): Promise<Ch
 }
 
 export const verifyChainflip: Verifier = async (swap, { http }) => {
-  const swapId = getSwapMetadata(swap.metadata, 'chainflip')?.swapId
-  if (!swapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
+  const chainflip = getSwapMetadata(swap.metadata, 'chainflip')
+  if (!chainflip?.swapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
 
-  const status = await fetchStatus(swapId, http)
+  const status = await fetchStatus(chainflip.swapId, http)
   if (!status) return noAffiliateResult('PENDING', 'No status returned from the Chainflip broker')
 
-  if (status.state === 'failed') return noAffiliateResult('FAILED', 'Chainflip swap failed')
+  // broker ids are sequential, so a swap only counts if it went to this swap's channel and recipient
+  const isSameAddress = (a?: string | null, b?: string | null) => a?.toLowerCase() === b?.toLowerCase()
+  if (
+    !isSameAddress(status.depositChannel?.depositAddress, chainflip.depositAddress) ||
+    (swap.receiveAddress && !isSameAddress(status.destinationAddress, swap.receiveAddress))
+  ) {
+    return noAffiliateResult('FAILED', 'Chainflip broker swap does not match the swap deposit channel or recipient')
+  }
 
   // the stored id is the broker's own, and only its status names the swap request the explorer knows
-  if (!status.swapId) return noAffiliateResult('PENDING', `Chainflip swap ${status.state ?? 'without a state'}`)
+  if (!status.swapId) {
+    // a failed swap with a swap request may still have executed and paid commission, so only fail one without
+    if (status.state === 'failed') return noAffiliateResult('FAILED', 'Chainflip swap failed')
+
+    return noAffiliateResult('PENDING', `Chainflip swap ${status.state ?? 'without a state'}`)
+  }
 
   const swapRequest = await fetchSwapRequest(status.swapId, http)
   if (!swapRequest) return noAffiliateResult('PENDING', 'No swap request returned from the Chainflip explorer')
@@ -122,15 +129,12 @@ export const verifyChainflip: Verifier = async (swap, { http }) => {
   // a completed swap that charged a commission records it, so none yet means the explorer is still indexing
   if (!commissions.length) return noAffiliateResult('PENDING', 'Chainflip has not indexed the affiliate commission yet')
 
-  // commissions are always taken in USDC, so another asset or several can't be valued as the fee
-  if (commissions.length > 1) {
-    return noAffiliateResult('PENDING', 'Chainflip reports affiliate commission in more than one asset')
-  }
-
   const [commission] = commissions
 
-  if (commission.asset?.[0] !== 'Usdc') {
-    return noAffiliateResult('PENDING', `Chainflip affiliate commission is in ${commission.asset?.[0]}, not USDC`)
+  // commissions are always taken in USDC, so another asset or several can't be valued as the fee
+  if (commissions.length > 1 || commission.asset?.[0] !== 'Usdc') {
+    const assets = commissions.map(({ asset }) => asset?.[0]).join(', ')
+    return noAffiliateResult('PENDING', `Chainflip affiliate commission is in ${assets}, not only USDC`)
   }
 
   if (!commission.sum?.amount) return noAffiliateResult('PENDING', 'Chainflip has not reported the commission amount')
