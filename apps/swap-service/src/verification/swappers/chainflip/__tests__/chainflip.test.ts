@@ -40,7 +40,9 @@ const mockChainflip = (status: unknown, explorer?: unknown) => {
 const swapFor = ({ id, status }: Status) =>
   ({
     receiveAddress: status.destinationAddress,
-    metadata: { swapperMetadata: { name: 'chainflip', swapId: id, depositAddress: status.depositChannel.depositAddress } },
+    metadata: {
+      swapperMetadata: { name: 'chainflip', swapId: id, depositAddress: status.depositChannel.depositAddress },
+    },
   }) as unknown as Swap
 
 const verify = async (status: Status, explorer?: unknown) => {
@@ -133,6 +135,16 @@ describe('verifyChainflip', () => {
   it.each([
     ['deposit channel', { status: { ...singleStatus.status, depositChannel: dcaStatus.status.depositChannel } }],
     ['recipient', { status: { ...singleStatus.status, destinationAddress: dcaStatus.status.destinationAddress } }],
+    // only evm addresses ignore case, so a non-evm channel must match exactly
+    [
+      'non-evm deposit channel case',
+      {
+        status: {
+          ...singleStatus.status,
+          depositChannel: { depositAddress: singleStatus.status.depositChannel.depositAddress.toUpperCase() },
+        },
+      },
+    ],
   ])('fails a broker swap with another %s without querying the explorer', async (_, other) => {
     const { http, post } = mockChainflip({ ...singleStatus, ...other }, singleExplorer)
 

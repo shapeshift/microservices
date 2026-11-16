@@ -1,5 +1,6 @@
 import type { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
+import { isAddress, isAddressEqual } from 'viem'
 
 import { usdcAssetId } from '@shapeshiftoss/caip'
 
@@ -76,6 +77,13 @@ const fetchSwapRequest = async (nativeId: string, http: HttpService): Promise<Ch
   return data?.data?.swapRequest ?? undefined
 }
 
+// evm addresses ignore case, while base58 and other formats are case sensitive
+const isSameAddress = (a?: string | null, b?: string | null) => {
+  if (!a || !b) return false
+  if (isAddress(a, { strict: false }) && isAddress(b, { strict: false })) return isAddressEqual(a, b)
+  return a === b
+}
+
 export const verifyChainflip: Verifier = async (swap, { http }) => {
   const chainflip = getSwapMetadata(swap.metadata, 'chainflip')
   if (!chainflip?.swapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
@@ -84,7 +92,6 @@ export const verifyChainflip: Verifier = async (swap, { http }) => {
   if (!status) return noAffiliateResult('PENDING', 'No status returned from the Chainflip broker')
 
   // broker ids are sequential, so a swap only counts if it went to this swap's channel and recipient
-  const isSameAddress = (a?: string | null, b?: string | null) => a?.toLowerCase() === b?.toLowerCase()
   if (
     !isSameAddress(status.depositChannel?.depositAddress, chainflip.depositAddress) ||
     (swap.receiveAddress && !isSameAddress(status.destinationAddress, swap.receiveAddress))

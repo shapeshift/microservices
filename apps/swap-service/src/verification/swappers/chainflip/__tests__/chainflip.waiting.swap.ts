@@ -14,12 +14,13 @@ export default {
     chainId: 'eip155:1',
     explorer: 'https://etherscan.io',
     precision: 18,
-    networkIcon: 'https://rawcdn.githack.com/trustwallet/assets/32e51d582a890b3dd3135fe3ee7c20c2fd699a6d/blockchains/ethereum/info/logo.png',
+    networkIcon:
+      'https://rawcdn.githack.com/trustwallet/assets/32e51d582a890b3dd3135fe3ee7c20c2fd699a6d/blockchains/ethereum/info/logo.png',
     networkName: 'Ethereum',
     networkColor: '#5C6BC0',
     explorerTxLink: 'https://etherscan.io/tx/',
     relatedAssetKey: 'eip155:1/slip44:60',
-    explorerAddressLink: 'https://etherscan.io/address/'
+    explorerAddressLink: 'https://etherscan.io/address/',
   },
   buyAsset: {
     icon: 'https://assets.coingecko.com/coins/images/6319/large/USDC.png?1769615602',
@@ -30,12 +31,13 @@ export default {
     chainId: 'eip155:1',
     explorer: 'https://etherscan.io',
     precision: 6,
-    networkIcon: 'https://rawcdn.githack.com/trustwallet/assets/32e51d582a890b3dd3135fe3ee7c20c2fd699a6d/blockchains/ethereum/info/logo.png',
+    networkIcon:
+      'https://rawcdn.githack.com/trustwallet/assets/32e51d582a890b3dd3135fe3ee7c20c2fd699a6d/blockchains/ethereum/info/logo.png',
     networkName: 'Ethereum',
     networkColor: '#5C6BC0',
     explorerTxLink: 'https://etherscan.io/tx/',
     relatedAssetKey: 'eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    explorerAddressLink: 'https://etherscan.io/address/'
+    explorerAddressLink: 'https://etherscan.io/address/',
   },
   sellAmountCryptoBaseUnit: '10000000000000000',
   expectedBuyAmountCryptoBaseUnit: '17689868',
@@ -59,8 +61,8 @@ export default {
     swapperMetadata: {
       name: 'chainflip',
       swapId: 81350,
-      depositAddress: '0x1674b213130a17b17bbca5f1b0d12904ff39d3a2'
-    }
+      depositAddress: '0x1674b213130a17b17bbca5f1b0d12904ff39d3a2',
+    },
   },
   userId: 'api',
   referralCode: null,
