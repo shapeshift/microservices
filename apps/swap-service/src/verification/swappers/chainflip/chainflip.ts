@@ -1,0 +1,129 @@
+import type { HttpService } from '@nestjs/axios'
+import { firstValueFrom } from 'rxjs'
+
+import { usdcAssetId } from '@shapeshiftoss/caip'
+
+import { env } from '../../../env'
+import type { Verifier } from '../../types'
+import { getSwapMetadata, noAffiliateResult } from '../../utils'
+
+import type { ChainflipExplorerResponse, ChainflipSwapRequest } from './types'
+
+// the broker-as-a-service submitter is shared, so only our affiliate beneficiary attributes a swap
+export const TREASURY_ACCOUNTS = ['cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi']
+
+// executedSwaps excludes gas swaps and any refunded input, and commissions group DCA chunks by asset
+const GET_SWAP_BY_NATIVE_ID_QUERY = `query GetSwapByNativeId($nativeId: BigInt!) {
+  swapRequest: swapRequestByNativeId(nativeId: $nativeId) {
+    completedEventId
+    refundEgress: egressByRefundEgressId {
+      amount
+    }
+    executedSwaps: swapsBySwapRequestId(
+      filter: { swapExecutedEventId: { isNull: false }, type: { notEqualTo: GAS } }
+    ) {
+      aggregates {
+        sum {
+          swapInputAmount
+        }
+      }
+    }
+    egress: egressByEgressId {
+      amount
+    }
+    beneficiaries: swapRequestBeneficiariesBySwapRequestId {
+      nodes {
+        type
+        brokerCommissionRateBps
+        commissions: swapCommissionsBySwapRequestBeneficiaryId {
+          groupedAggregates(groupBy: ASSET) {
+            asset: keys
+            sum {
+              amount
+            }
+          }
+        }
+        account: accountByAccountId {
+          idSs58
+        }
+      }
+    }
+  }
+}`
+
+const fetchSwapRequest = async (nativeId: string, http: HttpService): Promise<ChainflipSwapRequest | undefined> => {
+  const { data } = await firstValueFrom(
+    http.post<ChainflipExplorerResponse>(env.VITE_CHAINFLIP_EXPLORER_URL, {
+      operationName: 'GetSwapByNativeId',
+      query: GET_SWAP_BY_NATIVE_ID_QUERY,
+      variables: { nativeId },
+    }),
+  )
+
+  if (data?.errors?.length) {
+    throw new Error(`Chainflip explorer error: ${data.errors.map(({ message }) => message).join('; ')}`)
+  }
+
+  return data?.data?.swapRequest ?? undefined
+}
+
+export const verifyChainflip: Verifier = async (swap, { http }) => {
+  const swapId = getSwapMetadata(swap.metadata, 'chainflip')?.swapId
+  if (!swapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
+
+  const swapRequest = await fetchSwapRequest(String(swapId), http)
+  if (!swapRequest) return noAffiliateResult('PENDING', 'No swap request returned from the Chainflip explorer')
+
+  if (!swapRequest.completedEventId) return noAffiliateResult('PENDING', 'Chainflip swap request not completed yet')
+
+  // the executed input, which excludes any part a partial fill refunded
+  const verifiedSellAmountCryptoBaseUnit = swapRequest.executedSwaps?.aggregates?.sum?.swapInputAmount
+  if (!verifiedSellAmountCryptoBaseUnit) {
+    return noAffiliateResult('PENDING', 'Chainflip has not reported the executed swap yet')
+  }
+
+  if (BigInt(verifiedSellAmountCryptoBaseUnit) === 0n) return noAffiliateResult('FAILED', 'Chainflip swap refunded')
+
+  const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: swapRequest.egress?.amount }
+
+  const affiliate = swapRequest.beneficiaries?.nodes?.find(
+    ({ type, account }) => type === 'AFFILIATE' && TREASURY_ACCOUNTS.includes(account?.idSs58 ?? ''),
+  )
+
+  if (!affiliate) return noAffiliateResult('SUCCESS', 'Chainflip swap names no ShapeShift affiliate', amounts)
+
+  if (!affiliate.brokerCommissionRateBps) {
+    return noAffiliateResult('SUCCESS', 'Chainflip affiliate commission is 0 bps', amounts)
+  }
+
+  const commissions = affiliate.commissions?.groupedAggregates ?? []
+
+  // a completed swap that charged a commission records it, so none yet means the explorer is still indexing
+  if (!commissions.length) return noAffiliateResult('PENDING', 'Chainflip has not indexed the affiliate commission yet')
+
+  // commissions are always taken in USDC, so another asset or several can't be valued as the fee
+  if (commissions.length > 1) {
+    return noAffiliateResult('PENDING', 'Chainflip reports affiliate commission in more than one asset')
+  }
+
+  const [commission] = commissions
+
+  if (commission.asset?.[0] !== 'Usdc') {
+    return noAffiliateResult('PENDING', `Chainflip affiliate commission is in ${commission.asset?.[0]}, not USDC`)
+  }
+
+  if (!commission.sum?.amount) return noAffiliateResult('PENDING', 'Chainflip has not reported the commission amount')
+
+  const feeAmount = BigInt(commission.sum.amount)
+  if (feeAmount === 0n) return noAffiliateResult('SUCCESS', 'Chainflip collected a 0 affiliate commission', amounts)
+
+  return {
+    verificationStatus: 'SUCCESS',
+    hasAffiliate: true,
+    affiliateBps: affiliate.brokerCommissionRateBps,
+    affiliateAddress: affiliate.account?.idSs58,
+    ...amounts,
+    actualAffiliateFeeAmountCryptoBaseUnit: feeAmount.toString(),
+    actualAffiliateFeeAssetId: usdcAssetId,
+  }
+}
