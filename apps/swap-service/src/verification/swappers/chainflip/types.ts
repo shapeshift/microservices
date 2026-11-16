@@ -6,7 +6,6 @@ export type ChainflipStatus = {
 }
 
 export type ChainflipStatusResponse = {
-  id?: number
   status?: ChainflipStatus
 }
 
@@ -26,7 +25,6 @@ export type ChainflipBeneficiary = {
 // explorer GetSwapByNativeId, trimmed to the fields verification reads
 export type ChainflipSwapRequest = {
   completedEventId?: string | null
-  refundEgress?: { amount?: string } | null
   executedSwaps?: { aggregates?: { sum?: { swapInputAmount?: string } } }
   egress?: { amount?: string } | null
   beneficiaries?: { nodes?: ChainflipBeneficiary[] }

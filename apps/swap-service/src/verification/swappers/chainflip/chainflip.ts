@@ -21,9 +21,6 @@ export const TREASURY_ACCOUNTS = ['cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2
 const GET_SWAP_BY_NATIVE_ID_QUERY = `query GetSwapByNativeId($nativeId: BigInt!) {
   swapRequest: swapRequestByNativeId(nativeId: $nativeId) {
     completedEventId
-    refundEgress: egressByRefundEgressId {
-      amount
-    }
     executedSwaps: swapsBySwapRequestId(
       filter: { swapExecutedEventId: { isNull: false }, type: { notEqualTo: GAS } }
     ) {
@@ -101,7 +98,6 @@ export const verifyChainflip: Verifier = async (swap, { http }) => {
 
   if (!swapRequest.completedEventId) return noAffiliateResult('PENDING', 'Chainflip swap request not completed yet')
 
-  // the executed input, which excludes any part a partial fill refunded
   const verifiedSellAmountCryptoBaseUnit = swapRequest.executedSwaps?.aggregates?.sum?.swapInputAmount
   if (!verifiedSellAmountCryptoBaseUnit) {
     return noAffiliateResult('PENDING', 'Chainflip has not reported the executed swap yet')

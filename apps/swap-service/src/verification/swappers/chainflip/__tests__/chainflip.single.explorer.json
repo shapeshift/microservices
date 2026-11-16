@@ -2,7 +2,6 @@
   "data": {
     "swapRequest": {
       "completedEventId": "21999586558",
-      "refundEgress": null,
       "executedSwaps": {
         "aggregates": {
           "sum": {

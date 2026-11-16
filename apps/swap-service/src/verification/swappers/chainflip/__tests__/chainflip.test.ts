@@ -159,6 +159,21 @@ describe('verifyChainflip', () => {
     })
   })
 
+  it('finds no affiliate fee when the commission at a nonzero rate rounds down to 0', async () => {
+    const { result } = await verify(
+      singleStatus,
+      withAffiliate(({ commissions }) => {
+        commissions.groupedAggregates[0].sum.amount = '0'
+      }),
+    )
+
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Chainflip collected a 0 affiliate commission',
+    })
+  })
+
   it('stays PENDING while the explorer has not indexed the commission', async () => {
     const { result } = await verify(
       singleStatus,
