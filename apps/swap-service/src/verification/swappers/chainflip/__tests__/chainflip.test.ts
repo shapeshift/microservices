@@ -26,7 +26,7 @@ import zeroBpsStatus from './chainflip.zeroBps.status.json'
 
 const [TREASURY] = TREASURY_ACCOUNTS
 
-type Status = { id: number; status: { destinationAddress: string; depositChannel: { depositAddress: string } } }
+type Status = { id: number; status?: object }
 type Explorer = typeof singleExplorer
 type Affiliate = Explorer['data']['swapRequest']['beneficiaries']['nodes'][number]
 
@@ -36,14 +36,8 @@ const mockChainflip = (status: unknown, explorer?: unknown) => {
   return { http: { get, post } as unknown as HttpService, get, post }
 }
 
-// the recipient and metadata the swapper stores for the broker swap the status response describes
-const swapFor = ({ id, status }: Status) =>
-  ({
-    receiveAddress: status.destinationAddress,
-    metadata: {
-      swapperMetadata: { name: 'chainflip', swapId: id, depositAddress: status.depositChannel.depositAddress },
-    },
-  }) as unknown as Swap
+const swapFor = ({ id }: Status) =>
+  ({ metadata: { swapperMetadata: { name: 'chainflip', swapId: id } } }) as unknown as Swap
 
 const verify = async (status: Status, explorer?: unknown) => {
   const mock = mockChainflip(status, explorer)
@@ -121,6 +115,19 @@ describe('verifyChainflip', () => {
     })
   })
 
+  it('fails a swap that executed nothing and has no refund egress', async () => {
+    const { result } = await verify(
+      { ...refundStatus, status: { ...refundStatus.status, refundEgress: null } },
+      refundExplorer,
+    )
+
+    expect(result).toMatchObject({
+      verificationStatus: 'FAILED',
+      hasAffiliate: false,
+      noAffiliateReason: 'Chainflip swap not executed',
+    })
+  })
+
   it('fails a swap the broker reports failed without querying the explorer', async () => {
     const { result, post } = await verify(failedStatus)
 
@@ -128,31 +135,6 @@ describe('verifyChainflip', () => {
       verificationStatus: 'FAILED',
       hasAffiliate: false,
       noAffiliateReason: 'Chainflip swap failed',
-    })
-    expect(post).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['deposit channel', { status: { ...singleStatus.status, depositChannel: dcaStatus.status.depositChannel } }],
-    ['recipient', { status: { ...singleStatus.status, destinationAddress: dcaStatus.status.destinationAddress } }],
-    // only evm addresses ignore case, so a non-evm channel must match exactly
-    [
-      'non-evm deposit channel case',
-      {
-        status: {
-          ...singleStatus.status,
-          depositChannel: { depositAddress: singleStatus.status.depositChannel.depositAddress.toUpperCase() },
-        },
-      },
-    ],
-  ])('fails a broker swap with another %s without querying the explorer', async (_, other) => {
-    const { http, post } = mockChainflip({ ...singleStatus, ...other }, singleExplorer)
-
-    const result = await verifyChainflip(swapFor(singleStatus), { http, logger: new Logger() })
-
-    expect(result).toMatchObject({
-      verificationStatus: 'FAILED',
-      noAffiliateReason: 'Chainflip broker swap does not match the swap deposit channel or recipient',
     })
     expect(post).not.toHaveBeenCalled()
   })

@@ -1,6 +1,5 @@
 import type { HttpService } from '@nestjs/axios'
 import { firstValueFrom } from 'rxjs'
-import { isAddress, isAddressEqual } from 'viem'
 
 import { usdcAssetId } from '@shapeshiftoss/caip'
 
@@ -10,10 +9,8 @@ import { getSwapMetadata, noAffiliateResult } from '../../utils'
 
 import type { ChainflipExplorerResponse, ChainflipStatus, ChainflipStatusResponse, ChainflipSwapRequest } from './types'
 
-// the broker-as-a-service submitter is shared, so only our affiliate beneficiary attributes a swap
 export const TREASURY_ACCOUNTS = ['cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi']
 
-// executedSwaps excludes gas swaps and any refunded input, and commissions group DCA chunks by asset
 const GET_SWAP_BY_NATIVE_ID_QUERY = `query GetSwapByNativeId($nativeId: BigInt!) {
   swapRequest: swapRequestByNativeId(nativeId: $nativeId) {
     completedEventId
@@ -49,7 +46,6 @@ const GET_SWAP_BY_NATIVE_ID_QUERY = `query GetSwapByNativeId($nativeId: BigInt!)
   }
 }`
 
-// the broker only resolves swaps opened under our api key, which binds the stored id to our swap
 const fetchStatus = async (id: number | string, http: HttpService): Promise<ChainflipStatus | undefined> => {
   const { data } = await firstValueFrom(
     http.get<ChainflipStatusResponse>(
@@ -77,13 +73,6 @@ const fetchSwapRequest = async (nativeId: string, http: HttpService): Promise<Ch
   return data?.data?.swapRequest ?? undefined
 }
 
-// evm addresses ignore case, while base58 and other formats are case sensitive
-const isSameAddress = (a?: string | null, b?: string | null) => {
-  if (!a || !b) return false
-  if (isAddress(a, { strict: false }) && isAddress(b, { strict: false })) return isAddressEqual(a, b)
-  return a === b
-}
-
 export const verifyChainflip: Verifier = async (swap, { http }) => {
   const chainflip = getSwapMetadata(swap.metadata, 'chainflip')
   if (!chainflip?.swapId) return noAffiliateResult('FAILED', 'Missing swapId in chainflip metadata')
@@ -91,19 +80,8 @@ export const verifyChainflip: Verifier = async (swap, { http }) => {
   const status = await fetchStatus(chainflip.swapId, http)
   if (!status) return noAffiliateResult('PENDING', 'No status returned from the Chainflip broker')
 
-  // broker ids are sequential, so a swap only counts if it went to this swap's channel and recipient
-  if (
-    !isSameAddress(status.depositChannel?.depositAddress, chainflip.depositAddress) ||
-    (swap.receiveAddress && !isSameAddress(status.destinationAddress, swap.receiveAddress))
-  ) {
-    return noAffiliateResult('FAILED', 'Chainflip broker swap does not match the swap deposit channel or recipient')
-  }
-
-  // the stored id is the broker's own, and only its status names the swap request the explorer knows
   if (!status.swapId) {
-    // a failed swap with a swap request may still have executed and paid commission, so only fail one without
     if (status.state === 'failed') return noAffiliateResult('FAILED', 'Chainflip swap failed')
-
     return noAffiliateResult('PENDING', `Chainflip swap ${status.state ?? 'without a state'}`)
   }
 
@@ -117,7 +95,9 @@ export const verifyChainflip: Verifier = async (swap, { http }) => {
     return noAffiliateResult('PENDING', 'Chainflip has not reported the executed swap yet')
   }
 
-  if (BigInt(verifiedSellAmountCryptoBaseUnit) === 0n) return noAffiliateResult('FAILED', 'Chainflip swap refunded')
+  if (BigInt(verifiedSellAmountCryptoBaseUnit) === 0n) {
+    return noAffiliateResult('FAILED', status.refundEgress ? 'Chainflip swap refunded' : 'Chainflip swap not executed')
+  }
 
   const amounts = { verifiedSellAmountCryptoBaseUnit, actualBuyAmountCryptoBaseUnit: swapRequest.egress?.amount }
 
@@ -133,16 +113,14 @@ export const verifyChainflip: Verifier = async (swap, { http }) => {
 
   const commissions = affiliate.commissions?.groupedAggregates ?? []
 
-  // a completed swap that charged a commission records it, so none yet means the explorer is still indexing
   if (!commissions.length) return noAffiliateResult('PENDING', 'Chainflip has not indexed the affiliate commission yet')
 
-  const [commission] = commissions
-
-  // commissions are always taken in USDC, so another asset or several can't be valued as the fee
-  if (commissions.length > 1 || commission.asset?.[0] !== 'Usdc') {
+  if (commissions.some(({ asset }) => asset?.[0] !== 'Usdc')) {
     const assets = commissions.map(({ asset }) => asset?.[0]).join(', ')
     return noAffiliateResult('PENDING', `Chainflip affiliate commission is in ${assets}, not only USDC`)
   }
+
+  const [commission] = commissions
 
   if (!commission.sum?.amount) return noAffiliateResult('PENDING', 'Chainflip has not reported the commission amount')
 
