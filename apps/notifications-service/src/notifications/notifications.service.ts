@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import { HttpService } from '@nestjs/axios'
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk'
@@ -11,7 +10,6 @@ import { PrismaService } from '../prisma/prisma.service'
 
 @Injectable()
 export class NotificationsService {
-  readonly events = new EventEmitter()
   private readonly logger = new Logger(NotificationsService.name)
   private expo: Expo
 
@@ -40,10 +38,8 @@ export class NotificationsService {
         throw new BadRequestException('Failed to create notification')
       })
 
-    this.events.emit('notification', notification)
-
-    // The notification is stored and delivered over WebSocket at this point. A push failure must not
-    // fail the request, or callers that retry would store and deliver it twice.
+    // The notification is stored at this point. A push failure must not fail the request, or callers
+    // that retry would store and push it twice. sendPushNotification logs its own failures.
     await this.sendPushNotification(notification).catch(() => undefined)
 
     return notification
@@ -177,21 +173,6 @@ export class NotificationsService {
     this.logger.log(`Sent ${tickets.length} push notifications`)
 
     return tickets
-  }
-
-  async sendDeviceVerification(data: { deviceToken: string; registrationId: string; nonce: string }) {
-    if (!Expo.isExpoPushToken(data.deviceToken)) throw new BadRequestException('Invalid push token')
-    const tickets = await this.expo.sendPushNotificationsAsync([
-      {
-        to: data.deviceToken,
-        _contentAvailable: true,
-        ttl: 300,
-        data: { type: 'DEVICE_VERIFICATION', registrationId: data.registrationId, nonce: data.nonce },
-      },
-    ])
-    if (tickets.some((ticket) => ticket.status === 'error'))
-      throw new BadRequestException('Could not deliver device verification')
-    return { success: true }
   }
 
   async registerDevice(userId: string, deviceToken: string, deviceType: 'MOBILE' | 'WEB') {

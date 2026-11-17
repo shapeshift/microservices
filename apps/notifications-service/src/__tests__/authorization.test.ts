@@ -31,10 +31,12 @@ afterAll(async () => {
 })
 
 test.each([
+  ['POST', '/notifications'],
   ['POST', '/notifications/send-to-user'],
   ['POST', '/notifications/send-to-device'],
   ['POST', '/notifications/register-device'],
   ['GET', '/notifications/user/victim'],
+  ['GET', '/notifications/devices/victim'],
 ])('anonymous %s %s is rejected by the real HTTP guard', async (method, path) => {
   const response = await fetch(baseUrl + path, {
     method,

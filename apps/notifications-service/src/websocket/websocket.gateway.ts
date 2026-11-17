@@ -1,79 +1,62 @@
-import { Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
+import { createHash, timingSafeEqual } from 'node:crypto'
+import { Logger } from '@nestjs/common'
 import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets'
-import type { DefaultEventsMap } from 'socket.io'
 import { Server, Socket } from 'socket.io'
 
-import type { Notification } from '@shapeshift/prisma'
-import { allowedOrigins, clientIp, DeviceSessions, SecurityRateLimiter } from '@shapeshift/shared-utils'
+import { API_KEY_HEADER } from '@shapeshift/shared-utils'
 
 import { NotificationsService } from '../notifications/notifications.service'
 
-type DeviceSocketData = { token?: string; userId?: string; expiryTimer?: NodeJS.Timeout; checkTimer?: NodeJS.Timeout }
-type AuthenticatedSocket = Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, DeviceSocketData>
+const digest = (value: string) => createHash('sha256').update(value).digest()
+
+/** No app uses this socket; until one needs it, only callers holding the service key may connect. */
+export function hasServiceKey(supplied: unknown, expected = process.env.SERVICE_API_KEY): boolean {
+  return Boolean(expected) && typeof supplied === 'string' && timingSafeEqual(digest(supplied), digest(expected))
+}
+
+interface AuthenticatedSocket extends Socket {
+  userId?: string
+}
 
 @WebSocketGateway({
-  maxHttpBufferSize: 8192,
-  cors: { origin: (origin, callback) => callback(null, Boolean(origin && allowedOrigins().includes(origin))) },
+  cors: {
+    origin: '*',
+  },
 })
-export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy {
-  @WebSocketServer() server: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, DeviceSocketData>
-  private readonly logger = new Logger(WebsocketGateway.name)
-  constructor(
-    private readonly notificationsService: NotificationsService,
-    private readonly sessions: DeviceSessions,
-    private readonly limits: SecurityRateLimiter,
-  ) {}
+export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+  @WebSocketServer()
+  server: Server
 
-  private readonly onNotification = (notification: Notification) => {
-    void this.sendNotificationToUser(notification.userId, notification).catch(() =>
-      this.logger.error('WebSocket delivery failed'),
+  private readonly logger = new Logger(WebsocketGateway.name)
+  private connectedClients = new Map<string, AuthenticatedSocket>()
+
+  constructor(private notificationsService: NotificationsService) {}
+
+  afterInit(server: Server) {
+    // Rejects the handshake itself, so unauthenticated clients never reach a handler.
+    server.use((socket, next) =>
+      hasServiceKey(socket.handshake.headers[API_KEY_HEADER]) ? next() : next(new Error('Service credential required')),
     )
   }
 
-  onModuleInit() {
-    this.notificationsService.events.on('notification', this.onNotification)
-  }
-  onModuleDestroy() {
-    this.notificationsService.events.off('notification', this.onNotification)
-  }
-
-  async handleConnection(client: AuthenticatedSocket) {
-    try {
-      await this.limits.consume(
-        'notification-connect',
-        clientIp(client.handshake.address, client.handshake.headers['x-forwarded-for'] as string | undefined),
-        30,
-      )
-      const token: unknown = client.handshake.auth?.token
-      const session = await this.sessions.authenticate(token)
-      if (!client.connected) return
-      client.data.token = token as string
-      client.data.userId = session.userId
-      await client.join(`user:${session.userId}`)
-      client.data.expiryTimer = setTimeout(
-        () => client.disconnect(true),
-        Math.max(0, session.expiresAt.getTime() - Date.now()),
-      )
-      client.data.checkTimer = setInterval(() => {
-        void this.sessions.authenticate(client.data.token).catch(() => client.disconnect(true))
-      }, 30_000)
-    } catch {
-      client.disconnect(true)
-    }
+  handleConnection(client: AuthenticatedSocket) {
+    this.logger.log(`Client connected: ${client.id}`)
   }
 
   handleDisconnect(client: AuthenticatedSocket) {
-    clearTimeout(client.data.expiryTimer)
-    clearInterval(client.data.checkTimer)
-    client.data.token = undefined
+    this.logger.log(`Client disconnected: ${client.id}`)
+    if (client.userId) {
+      this.connectedClients.delete(client.userId)
+    }
   }
 
   @SubscribeMessage('getNotifications')
@@ -81,39 +64,38 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() data: { limit?: number },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
+    if (!client.userId) {
+      return { error: 'Not authenticated' }
+    }
+
     try {
-      const session = await this.sessions.authenticate(client.data.token)
-      await this.limits.consume('notification-read', session.userId, 60)
-      const limit = data?.limit ?? 50
-      if (!Number.isInteger(limit) || limit < 1 || limit > 100) return { error: 'Invalid limit' }
-      return {
-        success: true,
-        notifications: await this.notificationsService.getUserNotifications(session.userId, limit),
-      }
-    } catch {
-      client.disconnect(true)
-      return { error: 'Sign in required' }
+      const notifications = await this.notificationsService.getUserNotifications(client.userId, data.limit || 50)
+      return { success: true, notifications }
+    } catch (error) {
+      this.logger.error('Failed to get notifications', error)
+      return { error: 'Failed to get notifications' }
     }
   }
 
-  async sendNotificationToUser(
+  sendNotificationToUser(
     userId: string,
-    notification: Pick<Notification, 'id' | 'title' | 'body' | 'type' | 'swapId'>,
+    notification: {
+      id: string
+      title: string
+      body: string
+      type: string
+      swapId?: string
+    },
   ) {
-    const sockets = await this.server.in(`user:${userId}`).fetchSockets()
-    await Promise.all(
-      sockets.map(async (socket) => {
-        try {
-          const session = await this.sessions.authenticate(socket.data.token)
-          if (session.userId !== userId) {
-            socket.disconnect(true)
-            return
-          }
-          socket.emit('notification', notification)
-        } catch {
-          socket.disconnect(true)
-        }
-      }),
-    )
+    const client = this.connectedClients.get(userId)
+    if (client) {
+      client.emit('notification', notification)
+    }
+
+    this.server.to(`user:${userId}`).emit('notification', notification)
+  }
+
+  broadcastToAll(event: string, data: Record<string, unknown>) {
+    this.server.emit(event, data)
   }
 }
