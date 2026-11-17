@@ -32,14 +32,23 @@ afterAll(async () => {
 
 test.each([
   ['GET', '/users'],
+  ['GET', '/users/victim'],
+  ['GET', '/users/account/eip155:1:0x0000000000000000000000000000000000000000'],
   ['POST', '/users/get-or-create'],
+  ['POST', '/users/victim/account-ids'],
+  ['GET', '/users/victim/devices'],
   ['POST', '/users/victim/devices'],
+  ['DELETE', '/users/victim/devices/device'],
+  ['GET', '/referrals/codes'],
   ['GET', '/referrals/codes/test'],
+  ['GET', '/referrals/usage/test'],
+  ['POST', '/referrals/codes'],
+  ['PUT', '/referrals/codes/test/deactivate'],
 ])('anonymous %s %s is rejected by the real HTTP guard', async (method, path) => {
   const response = await fetch(baseUrl + path, {
     method,
     headers: { 'content-type': 'application/json' },
-    ...(method === 'POST' ? { body: '{}' } : {}),
+    ...(method === 'POST' || method === 'PUT' ? { body: '{}' } : {}),
   })
   expect(response.status).toBe(401)
 })

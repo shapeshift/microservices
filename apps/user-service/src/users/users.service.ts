@@ -1,6 +1,6 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 
-import { Device, Prisma, User, UserAccount } from '@shapeshift/prisma'
+import { Device, User, UserAccount } from '@shapeshift/prisma'
 import { AddAccountIdDto, CreateUserDto, DeviceType, RegisterDeviceDto } from '@shapeshift/shared-types'
 import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils'
 
@@ -29,10 +29,20 @@ export class UsersService {
   }
 
   private async findUserByHashedAccountId(hashedAccountId: string) {
-    return this.prisma.user.findFirst({
-      where: { userAccounts: { some: { accountId: hashedAccountId } } },
-      include: { userAccounts: true, devices: true },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        userAccounts: {
+          some: {
+            accountId: hashedAccountId,
+          },
+        },
+      },
+      include: {
+        userAccounts: true,
+        devices: true,
+      },
     })
+    return user
   }
 
   async createUser(data: CreateUserDto): Promise<User> {
@@ -49,7 +59,7 @@ export class UsersService {
           )
 
           if (newAccountIds.length > 0) {
-            throw new ConflictException('Account linking requires a separate authorized operation')
+            await this.addHashedAccountIds(existingUser.id, newAccountIds)
           }
 
           return this.getUserById(existingUser.id)
@@ -171,7 +181,20 @@ export class UsersService {
 
     const hashedAccountId = hashNormalizedAccountId(accountId)
 
-    return this.findUserByHashedAccountId(hashedAccountId)
+    const user = await this.prisma.user.findFirst({
+      where: {
+        userAccounts: {
+          some: {
+            accountId: hashedAccountId,
+          },
+        },
+      },
+      include: {
+        userAccounts: true,
+        devices: true,
+      },
+    })
+    return user
   }
 
   async getAllUsers(limit = 50): Promise<User[]> {
@@ -217,6 +240,10 @@ export class UsersService {
   }
 
   async getOrCreateUserByAccountIds(accountIds: string[], referralCode?: string): Promise<User> {
+    this.logger.log(
+      `getOrCreateUserByAccountIds called with accountIds: ${JSON.stringify(accountIds)}, referralCode: ${referralCode}`,
+    )
+
     if (!accountIds || accountIds.length === 0) {
       throw new Error('At least one account ID is required')
     }
@@ -229,6 +256,7 @@ export class UsersService {
     })
 
     const hashedAccountIds = accountIds.map((id) => hashNormalizedAccountId(id))
+    this.logger.log(`Hashed account IDs: ${JSON.stringify(hashedAccountIds)}`)
 
     for (const hashedAccountId of hashedAccountIds) {
       const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
@@ -240,7 +268,7 @@ export class UsersService {
         )
 
         if (newAccountIds.length > 0) {
-          throw new ConflictException('Account linking requires a separate authorized operation')
+          await this.addHashedAccountIds(existingUser.id, newAccountIds)
         }
 
         // Try to apply referral code for existing user if provided
@@ -307,14 +335,12 @@ export class UsersService {
         throw new Error('User not found')
       }
 
-      // Prisma runs this as a native INSERT ... ON CONFLICT DO UPDATE WHERE "userId" = ..., which returns no row
-      // when another profile owns the token; the emulated path raises P2002 instead.
-      const device: Device | null = await this.prisma.device.upsert({
+      const device = await this.prisma.device.upsert({
         where: {
           deviceToken: data.deviceToken,
-          userId: data.userId,
         },
         update: {
+          userId: data.userId,
           deviceType: data.deviceType,
           isActive: true,
         },
@@ -325,13 +351,9 @@ export class UsersService {
         },
       })
 
-      if (!device) throw new ConflictException('Device is registered to another profile')
-      this.logger.log(`Device registered for user ${data.userId}`)
+      this.logger.log(`Device registered: ${data.deviceToken} for user ${data.userId} (${data.deviceType})`)
       return device
     } catch (error) {
-      // The token belongs to another profile; only a mobile push proof may move it.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
-        throw new ConflictException('Device is registered to another profile')
       this.logger.error('Failed to register device', error)
       throw error
     }

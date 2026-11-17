@@ -115,10 +115,6 @@ export class NotificationsServiceClient {
     )
   }
 
-  async sendDeviceVerification(data: { deviceToken: string; registrationId: string; nonce: string }): Promise<void> {
-    await this.axios.post('/notifications/verify-device', data)
-  }
-
   async createNotification(data: CreateNotificationDto): Promise<Record<string, unknown>> {
     const response = await this.axios.post<Record<string, unknown>>('/notifications', data)
     return response.data

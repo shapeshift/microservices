@@ -1,7 +1,3 @@
-import { ConflictException } from '@nestjs/common'
-
-import { Prisma } from '@shapeshift/prisma'
-
 import { UsersService } from '../users/users.service'
 
 jest.mock('@shapeshiftoss/chain-adapters', () => ({ bnOrZero: jest.fn() }))
@@ -27,36 +23,4 @@ test('an EVM account written with a checksummed address is found by any casing',
 
   expect(await users.getUserByAccountId(`eip155:1:${address.toLowerCase()}`)).toMatchObject({ id: 'user' })
   expect(await users.userExistsWithAccountId(`eip155:1:${address}`)).toBe(true)
-})
-
-test('a WEB token owned by another profile is refused with 409 instead of being taken over', async () => {
-  const upsert = jest.fn(() => {
-    throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed on deviceToken', {
-      code: 'P2002',
-      clientVersion: 'test',
-    })
-  })
-  const prisma = { user: { findUnique: jest.fn(() => ({ id: 'new-profile' })) }, device: { upsert } }
-  const users = new UsersService(prisma as never, {} as never)
-
-  await expect(
-    users.registerDevice({ userId: 'new-profile', deviceToken: 'web-token', deviceType: 'WEB' }),
-  ).rejects.toBeInstanceOf(ConflictException)
-  expect(upsert).toHaveBeenCalledWith(
-    expect.objectContaining({ where: { deviceToken: 'web-token', userId: 'new-profile' } }),
-  )
-  const [{ update }] = upsert.mock.calls[0] as unknown as [{ update: Record<string, unknown> }]
-  expect(update).not.toHaveProperty('userId')
-})
-
-test('a WEB token owned by another profile is refused when the native upsert returns no row', async () => {
-  const prisma = {
-    user: { findUnique: jest.fn(() => ({ id: 'new-profile' })) },
-    device: { upsert: jest.fn().mockResolvedValue(null) },
-  }
-  const users = new UsersService(prisma as never, {} as never)
-
-  await expect(
-    users.registerDevice({ userId: 'new-profile', deviceToken: 'web-token', deviceType: 'WEB' }),
-  ).rejects.toBeInstanceOf(ConflictException)
 })

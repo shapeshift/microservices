@@ -14,16 +14,16 @@ test('a failed internal call does not expose the service key or payload in its e
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   process.env.NOTIFICATIONS_SERVICE_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   process.env.SERVICE_API_KEY = 'secret-service-key-for-test'
-  const nonce = 'ab'.repeat(32)
+  const body = 'payload-text-that-must-not-be-logged'
   try {
     const error: unknown = await new NotificationsServiceClient()
-      .sendDeviceVerification({ deviceToken: 'ExpoPushToken[x]', registrationId: 'id', nonce })
+      .createNotification({ userId: 'user', title: 'Swap', body, type: 'SWAP_COMPLETED' as never })
       .catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(ServiceRequestError)
     expect((error as ServiceRequestError).status).toBe(400)
     const logged = inspect(error, { depth: 10 })
     expect(logged).not.toContain('secret-service-key-for-test')
-    expect(logged).not.toContain(nonce)
+    expect(logged).not.toContain(body)
   } finally {
     server.close()
   }

@@ -1,16 +1,20 @@
 import { NestFactory } from '@nestjs/core'
 import type { Response } from 'express'
 
-import { allowedOrigins } from '@shapeshift/shared-utils'
-
 import { AppModule } from './app.module'
-import { checkoutOrigins } from './onramper/config'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
+
+  // Enable CORS
   app.enableCors({
-    origin: [...allowedOrigins(), ...(process.env.ONRAMPER_ALLOWED_ORIGINS ? checkoutOrigins() : [])],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: [
+      ...(process.env.ALLOWED_ORIGINS?.split(',') || [/^http:\/\/(\w+\.)?localhost(:\d+)?$/, /\.shapeshift\.com$/]),
+      ...(process.env.ONRAMPER_ALLOWED_ORIGINS?.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean) ?? []),
+    ],
+    credentials: true,
   })
 
   app.getHttpAdapter().get('/health', (_, res: Response) => {
