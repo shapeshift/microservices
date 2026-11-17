@@ -62,6 +62,7 @@ const buildService = (claims: Claim[]) => {
     stub,
     stub,
     stub,
+    stub,
     blockTime as never,
     stub,
   )

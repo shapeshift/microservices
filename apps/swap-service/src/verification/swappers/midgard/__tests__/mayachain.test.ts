@@ -1,28 +1,19 @@
-import type { HttpService } from '@nestjs/axios'
-import { of, throwError } from 'rxjs'
+import { mayachainAssetId } from '@shapeshiftoss/caip'
 
-import type { Swap } from '../../swaps/types'
-import { SwapVerificationService } from '../swap-verification.service'
+import type { Swap } from '../../../../swaps/types'
+import { SwapVerificationService } from '../../../swap-verification.service'
+import { failingHttp, mockHttp } from '../../../test-helpers'
 
-import mayachainResponse from './fixtures/mayachain/response.json'
-import mayachainSwap from './fixtures/mayachain/swap'
+import mayachainResponse from './mayachain.response.json'
+import mayachainSwap from './mayachain.swap'
 
 const swap = mayachainSwap as unknown as Swap
-
-const makeHttpMock = (response: unknown): HttpService => {
-  const get = jest.fn().mockReturnValue(of({ data: response }))
-  return { get } as unknown as HttpService
-}
 
 describe('verifyMayachain', () => {
   let service: SwapVerificationService
 
-  beforeEach(() => {
-    jest.restoreAllMocks()
-  })
-
   it('verifies a successful swap with shapeshift affiliate', async () => {
-    service = new SwapVerificationService(makeHttpMock(mayachainResponse))
+    service = new SwapVerificationService(mockHttp(mayachainResponse).http)
 
     const result = await service.verifySwap(swap)
 
@@ -35,6 +26,7 @@ describe('verifyMayachain', () => {
       actualBuyAmountCryptoBaseUnit: '7340228',
       // Midgard reports CACAO in native 1e10 precision, so the raw affiliate out amount is used as-is.
       actualAffiliateFeeAmountCryptoBaseUnit: '4237779000',
+      actualAffiliateFeeAssetId: mayachainAssetId,
     })
   })
 
@@ -52,7 +44,7 @@ describe('verifyMayachain', () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].in[0].coins[0] = { amount: '241570000000000', asset: 'MAYA.CACAO' }
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap({ ...swap, sellAsset: cacaoAsset } as Swap)
 
@@ -64,7 +56,7 @@ describe('verifyMayachain', () => {
     const buyOut = response.actions[0].out.find((out) => !('affiliate' in out && out.affiliate))
     buyOut.coins[0] = { amount: '84513804751580', asset: 'MAYA.CACAO' }
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap({ ...swap, buyAsset: cacaoAsset } as Swap)
 
@@ -72,8 +64,8 @@ describe('verifyMayachain', () => {
   })
 
   it('strips 0x prefix from sellTxHash before calling Midgard', async () => {
-    const get = jest.fn<unknown, [string]>().mockReturnValue(of({ data: mayachainResponse }))
-    service = new SwapVerificationService({ get } as unknown as HttpService)
+    const { http, get } = mockHttp(mayachainResponse)
+    service = new SwapVerificationService(http)
 
     await service.verifySwap(swap)
 
@@ -86,33 +78,37 @@ describe('verifyMayachain', () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].metadata.swap.affiliateAddress = 'other'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
     expect(result.verificationStatus).toBe('SUCCESS')
     expect(result.hasAffiliate).toBe(false)
+    expect(result.noAffiliateReason).toBe('Midgard memo names no ShapeShift affiliate')
     expect(result.affiliateAddress).toBeUndefined()
     expect(result.affiliateBps).toBeUndefined()
     expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
-  it('attributes affiliate with no fee amount when affiliateAddress is ssmaya but no fee was paid out', async () => {
+  it('finds no affiliate when the memo names ssmaya but the protocol paid it nothing', async () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].out = response.actions[0].out.filter((out) => !('affiliate' in out && out.affiliate))
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
-    expect(result.hasAffiliate).toBe(true)
-    expect(result.affiliateAddress).toBe('ssmaya')
-    expect(result.affiliateBps).toBe(60)
-    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBe('0')
+    expect(result).toMatchObject({
+      verificationStatus: 'SUCCESS',
+      hasAffiliate: false,
+      noAffiliateReason: 'Midgard action paid the ShapeShift affiliate nothing',
+      verifiedSellAmountCryptoBaseUnit: '4000000000000000',
+    })
+    expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
   })
 
   it('returns FAILED when sellTxHash is missing', async () => {
-    service = new SwapVerificationService(makeHttpMock(mayachainResponse))
+    service = new SwapVerificationService(mockHttp(mayachainResponse).http)
 
     const result = await service.verifySwap({ ...swap, sellTxHash: null } as Swap)
 
@@ -124,7 +120,7 @@ describe('verifyMayachain', () => {
   })
 
   it('returns PENDING when Midgard returns no actions', async () => {
-    service = new SwapVerificationService(makeHttpMock({ actions: [] }))
+    service = new SwapVerificationService(mockHttp({ actions: [] }).http)
 
     const result = await service.verifySwap(swap)
 
@@ -136,7 +132,7 @@ describe('verifyMayachain', () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].status = 'pending'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -148,7 +144,7 @@ describe('verifyMayachain', () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].type = 'addLiquidity'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -162,7 +158,7 @@ describe('verifyMayachain', () => {
     }
     delete response.actions[0].metadata.swap
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -174,7 +170,7 @@ describe('verifyMayachain', () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].out.reverse()
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -187,7 +183,7 @@ describe('verifyMayachain', () => {
       'affiliate' in out && out.affiliate ? out : { ...out, address: '0xdeadbeef' },
     )
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -199,7 +195,7 @@ describe('verifyMayachain', () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].status = 'failed'
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -211,7 +207,7 @@ describe('verifyMayachain', () => {
     const response = structuredClone(mayachainResponse)
     response.actions[0].metadata.swap.memo = ''
 
-    service = new SwapVerificationService(makeHttpMock(response))
+    service = new SwapVerificationService(mockHttp(response).http)
 
     const result = await service.verifySwap(swap)
 
@@ -219,12 +215,19 @@ describe('verifyMayachain', () => {
     expect(result.noAffiliateReason).toBe('Could not parse destination address from memo')
   })
 
-  it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
-    const httpMock = {
-      get: jest.fn().mockReturnValue(throwError(() => new Error('upstream 500'))),
-    } as unknown as HttpService
+  it('stays PENDING when the memo affiliate fee differs from what the swap charged', async () => {
+    const response = structuredClone(mayachainResponse)
+    response.actions[0].metadata.swap.affiliateFee = '40'
 
-    service = new SwapVerificationService(httpMock)
+    service = new SwapVerificationService(mockHttp(response).http)
+
+    const result = await service.verifySwap(swap)
+
+    expect(result).toMatchObject({ verificationStatus: 'PENDING', hasAffiliate: false })
+  })
+
+  it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
+    service = new SwapVerificationService(failingHttp())
 
     const result = await service.verifySwap(swap)
 

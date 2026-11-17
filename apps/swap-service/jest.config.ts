@@ -6,7 +6,7 @@ const config: Config = {
   transform: { '^.+\\.ts$': 'ts-jest' },
   moduleFileExtensions: ['ts', 'js', 'json'],
   testEnvironment: 'node',
-  setupFiles: ['<rootDir>/verification/__tests__/setup.ts'],
+  setupFiles: ['<rootDir>/jest.setup.ts'],
 }
 
 export default config
