@@ -1,0 +1,174 @@
+{
+  "id": 33887,
+  "platform": "chainflip",
+  "status": {
+    "state": "completed",
+    "swapId": "744024",
+    "sourceAsset": "eth.eth",
+    "destinationAsset": "btc.btc",
+    "destinationAddress": "bc1q4v298xws7g83mkefnq0v8tag497nn42r3ryd9q",
+    "depositChannel": {
+      "id": "9285562-Ethereum-3144",
+      "createdAt": 1755959352001,
+      "createdAtDate": "2025-08-23T14:29:12.001+00:00",
+      "brokerCommissionBps": 5,
+      "depositAddress": "0x4319a2cb418db599069d2951d1bd627577e533a4",
+      "sourceChainExpiryBlock": "23210558",
+      "estimatedExpiryTime": 1756033422000,
+      "estimatedExpiryDate": "2025-08-24T11:03:42+00:00",
+      "isExpired": false,
+      "openedThroughBackend": false,
+      "affiliateBrokers": [
+        {
+          "account": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi",
+          "commissionBps": 55
+        }
+      ],
+      "fillOrKillParams": {
+        "retryDurationBlocks": 150,
+        "refundAddress": "0x71ec3419300e4935b041961c807b8efbc851e59b",
+        "minimumPrice": "0.04039043"
+      },
+      "dcaParams": {
+        "numberOfChunks": 28,
+        "chunkIntervalBlocks": 2
+      }
+    },
+    "fillOrKillParams": {
+      "retryDurationBlocks": 150,
+      "refundAddress": "0x71ec3419300e4935b041961c807b8efbc851e59b",
+      "minimumPrice": "0.04039043"
+    },
+    "brokers": [
+      {
+        "account": "cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH",
+        "commissionBps": 5
+      },
+      {
+        "account": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi",
+        "commissionBps": 55
+      }
+    ],
+    "dcaParams": {
+      "numberOfChunks": 28,
+      "chunkIntervalBlocks": 2
+    },
+    "estimatedDurationSeconds": 462,
+    "estimatedDurationsSeconds": {
+      "deposit": 60,
+      "swap": 12,
+      "egress": 390
+    },
+    "sourceChainRequiredBlockConfirmations": 5,
+    "fees": [
+      {
+        "type": "network",
+        "asset": "usdc.eth",
+        "amountNative": "202486062",
+        "amount": 202.486062
+      },
+      {
+        "type": "broker",
+        "asset": "usdc.eth",
+        "amountNative": "1213701455",
+        "amount": 1213.701455
+      },
+      {
+        "type": "ingress",
+        "asset": "eth.eth",
+        "amountNative": "24060957200000",
+        "amount": 0.0000240609572
+      },
+      {
+        "type": "egress",
+        "asset": "eth.eth",
+        "amountNative": "59686456270000",
+        "amount": 0.00005968645627
+      },
+      {
+        "type": "refund",
+        "asset": "eth.eth",
+        "amountNative": "105761209696716",
+        "amount": 0.000105761209696716
+      },
+      {
+        "type": "egress",
+        "asset": "btc.btc",
+        "amountNative": "420",
+        "amount": 0.0000042
+      }
+    ],
+    "deposit": {
+      "amountNative": "57000000000000000000",
+      "amount": 57,
+      "transactionReference": "0x8527cb611999254344aafb63aecb3e19a088d803fd5d327d7a05e1e11553fe62",
+      "witnessedAt": 1755959538000,
+      "witnessedAtDate": "2025-08-23T14:32:18+00:00",
+      "witnessedBlockIndex": "9285593-838"
+    },
+    "swap": {
+      "originalInputAmountNative": "56999975939042800000",
+      "originalInputAmount": 56.9999759390428,
+      "remainingInputAmountNative": "14249993984760700005",
+      "remainingInputAmount": 14.249993984760700005,
+      "swappedInputAmountNative": "42749981954282099995",
+      "swappedInputAmount": 42.749981954282099995,
+      "swappedIntermediateAmountNative": "201069874594",
+      "swappedIntermediateAmount": 201069.874594,
+      "swappedOutputAmountNative": "174325925",
+      "swappedOutputAmount": 1.74325925,
+      "dca": {
+        "lastExecutedChunk": {
+          "inputAmountNative": "2035713426394385715",
+          "inputAmount": 2.035713426394385715,
+          "intermediateAmountNative": "9542467988",
+          "intermediateAmount": 9542.467988,
+          "outputAmountNative": "8256167",
+          "outputAmount": 0.08256167,
+          "scheduledAt": 1755959928000,
+          "scheduledAtDate": "2025-08-23T14:38:48+00:00",
+          "scheduledBlockIndex": "9285658-1148",
+          "executedAt": 1755959940000,
+          "executedAtDate": "2025-08-23T14:39:00+00:00",
+          "executedBlockIndex": "9285660-1344",
+          "retryCount": 0
+        },
+        "currentChunk": {
+          "inputAmountNative": "2035713426394385715",
+          "inputAmount": 2.035713426394385715,
+          "scheduledAt": 1755959940000,
+          "scheduledAtDate": "2025-08-23T14:39:00+00:00",
+          "scheduledBlockIndex": "9285660-1345",
+          "retryCount": 30,
+          "latestSwapRescheduledAt": 1755960822000,
+          "latestSwapRescheduledAtDate": "2025-08-23T14:53:42+00:00",
+          "latestSwapRescheduledBlockIndex": "9285807-2020"
+        },
+        "executedChunks": 21,
+        "remainingChunks": 7
+      }
+    },
+    "swapEgress": {
+      "amountNative": "174325505",
+      "amount": 1.74325505,
+      "scheduledAt": 1755960852000,
+      "scheduledAtDate": "2025-08-23T14:54:12+00:00",
+      "scheduledBlockIndex": "9285812-1555",
+      "transactionReference": "36fe2a78334c2620bc3009ed6379504c26f59b2f100a514fdb0907c8998ff0b2",
+      "witnessedAt": 1755961908000,
+      "witnessedBlockIndex": "9285988-1630"
+    },
+    "refundEgress": {
+      "amountNative": "14249828537094733289",
+      "amount": 14.249828537094733289,
+      "scheduledAt": 1755960852000,
+      "scheduledAtDate": "2025-08-23T14:54:12+00:00",
+      "scheduledBlockIndex": "9285812-1554",
+      "transactionReference": "0x57e71cd754f4b7a02d4d80cfe0398494c8118e3751859024e967644405de5903",
+      "witnessedAt": 1755960942000,
+      "witnessedBlockIndex": "9285827-915"
+    },
+    "lastStateChainUpdateAt": 1755961926990,
+    "lastStateChainUpdateAtDate": "2025-08-23T15:12:06.99+00:00"
+  }
+}

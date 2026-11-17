@@ -1,0 +1,124 @@
+{
+  "id": 80231,
+  "platform": "chainflip",
+  "status": {
+    "state": "completed",
+    "swapId": "2055414",
+    "sourceAsset": "cbbtc.eth",
+    "destinationAsset": "btc.btc",
+    "destinationAddress": "bc1qtkkn0wexf6vsam7fuc8kxy4gsct400l6gjct3d",
+    "depositChannel": {
+      "id": "15641754-Ethereum-11478",
+      "createdAt": 1794365778000,
+      "createdAtDate": "2026-11-11T02:56:18+00:00",
+      "brokerCommissionBps": 5,
+      "depositAddress": "0xccfffd34ba781526daab1dfdb428f2b3970e5693",
+      "sourceChainExpiryBlock": "26395006",
+      "estimatedExpiryTime": 1794439848000,
+      "estimatedExpiryDate": "2026-11-11T23:30:48+00:00",
+      "isExpired": false,
+      "openedThroughBackend": false,
+      "affiliateBrokers": [
+        {
+          "account": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi",
+          "commissionBps": 60
+        }
+      ],
+      "fillOrKillParams": {
+        "retryDurationBlocks": 150,
+        "refundAddress": "0x3d504949ca5ff1143caca57d75ead1179ba1dd3a",
+        "minimumPrice": "0.95125257"
+      }
+    },
+    "fillOrKillParams": {
+      "retryDurationBlocks": 150,
+      "refundAddress": "0x3d504949ca5ff1143caca57d75ead1179ba1dd3a",
+      "minimumPrice": "0.95125257"
+    },
+    "brokers": [
+      {
+        "account": "cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH",
+        "commissionBps": 5
+      },
+      {
+        "account": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi",
+        "commissionBps": 60
+      }
+    ],
+    "estimatedDurationSeconds": 462,
+    "estimatedDurationsSeconds": {
+      "deposit": 60,
+      "swap": 12,
+      "egress": 390
+    },
+    "sourceChainRequiredBlockConfirmations": 5,
+    "fees": [
+      {
+        "type": "ingress",
+        "asset": "cbbtc.eth",
+        "amountNative": "11",
+        "amount": 0.00000011
+      },
+      {
+        "type": "egress",
+        "asset": "cbbtc.eth",
+        "amountNative": "16",
+        "amount": 0.00000016
+      },
+      {
+        "type": "refund",
+        "asset": "cbbtc.eth",
+        "amountNative": "625",
+        "amount": 0.00000625
+      }
+    ],
+    "deposit": {
+      "amountNative": "40908",
+      "amount": 0.00040908,
+      "transactionReference": "0xa53bfdbec32187d2f9934d50fb0d07c41213300e1ce8623bde0fc1ff060bb1a2",
+      "witnessedAt": 1794365856000,
+      "witnessedAtDate": "2026-11-11T02:57:36+00:00",
+      "witnessedBlockIndex": "15641767-452"
+    },
+    "swap": {
+      "originalInputAmountNative": "40897",
+      "originalInputAmount": 0.00040897,
+      "remainingInputAmountNative": "40897",
+      "remainingInputAmount": 0.00040897,
+      "swappedInputAmountNative": "0",
+      "swappedInputAmount": 0,
+      "swappedIntermediateAmountNative": "0",
+      "swappedIntermediateAmount": 0,
+      "swappedOutputAmountNative": "0",
+      "swappedOutputAmount": 0,
+      "regular": {
+        "inputAmountNative": "40897",
+        "inputAmount": 0.00040897,
+        "scheduledAt": 1794365856000,
+        "scheduledAtDate": "2026-11-11T02:57:36+00:00",
+        "scheduledBlockIndex": "15641767-451",
+        "retryCount": 30,
+        "latestSwapRescheduledAt": 1794366738000,
+        "latestSwapRescheduledAtDate": "2026-11-11T03:12:18+00:00",
+        "latestSwapRescheduledBlockIndex": "15641914-431",
+        "latestSwapRescheduledReason": "PriceImpactLimit",
+        "abortedAt": 1794366768000,
+        "abortedAtDate": "2026-11-11T03:12:48+00:00",
+        "abortedBlockIndex": "15641919-631",
+        "abortedReason": "PriceImpactLimit"
+      }
+    },
+    "refundEgress": {
+      "amountNative": "40256",
+      "amount": 0.00040256,
+      "scheduledAt": 1794366768000,
+      "scheduledAtDate": "2026-11-11T03:12:48+00:00",
+      "scheduledBlockIndex": "15641919-636",
+      "transactionReference": "0x6247edd25cf91b81f1c9f6ea9f35d39eac451b67ded770091d5887146acf3812",
+      "witnessedAt": 1794366864000,
+      "witnessedBlockIndex": "15641935-459"
+    },
+    "lastStateChainUpdateAt": 1794366884584,
+    "lastStateChainUpdateAtDate": "2026-11-11T03:14:44.584+00:00"
+  }
+}

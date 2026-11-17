@@ -134,6 +134,7 @@ export const env = Object.freeze({
   VITE_APTOS_NODE_URL: 'https://fullnode.mainnet.aptoslabs.com',
   VITE_ACROSS_API_URL: 'https://app.across.to/api',
   VITE_CHAINFLIP_API_URL: 'https://chainflip-broker.io',
+  VITE_CHAINFLIP_EXPLORER_URL: 'https://explorer-service-processor.chainflip.io/graphql',
   VITE_COWSWAP_BASE_URL: 'https://api.cow.fi',
   VITE_DEBRIDGE_API_URL: '',
   VITE_FYND_BASE_URL: 'https://api.proxy.shapeshift.com/api/v1/fynd',
