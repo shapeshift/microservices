@@ -1,0 +1,8 @@
+model SiweNonce {
+  nonce     String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("siwe_nonces")
+}
