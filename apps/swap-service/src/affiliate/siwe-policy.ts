@@ -20,7 +20,7 @@ export function assertSiwePolicy(message: SiweMessage, allowedOrigins: string[],
     uri.username ||
     uri.password ||
     message.version !== '1' ||
-    message.chainId !== 42161 ||
+    message.chainId !== 1 ||
     message.statement !== 'Sign in to ShapeShift Affiliate Dashboard' ||
     !Number.isFinite(issuedAt) ||
     issuedAt > now + CLOCK_SKEW_MS ||

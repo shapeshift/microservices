@@ -21,7 +21,7 @@ const makeMessage = (address: string, nonce: string) =>
     address,
     uri: 'https://affiliate.shapeshift.com',
     version: '1',
-    chainId: 42161,
+    chainId: 1,
     nonce,
     statement: 'Sign in to ShapeShift Affiliate Dashboard',
     issuedAt: new Date().toISOString(),
@@ -78,7 +78,7 @@ test.each(['domain', 'uri', 'chain', 'statement', 'future', 'expired', 'resource
     const message = makeMessage(Wallet.createRandom().address, 'a'.repeat(32))
     if (field === 'domain') message.domain = 'attacker.invalid'
     if (field === 'uri') message.uri += '/unexpected'
-    if (field === 'chain') message.chainId = 1
+    if (field === 'chain') message.chainId = 42161
     if (field === 'statement') message.statement = 'Sign in somewhere else'
     if (field === 'future') message.issuedAt = new Date(Date.now() + 60000).toISOString()
     if (field === 'expired') message.issuedAt = new Date(Date.now() - 600000).toISOString()
