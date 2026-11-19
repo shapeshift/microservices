@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { APP_GUARD } from '@nestjs/core'
 
-import { SecurityRateLimiter } from '@shapeshift/shared-utils'
+import { ApiKeyGuard, SecurityRateLimiter } from '@shapeshift/shared-utils'
 
 import { OnramperCatalogue, OnramperController } from './onramper/onramper.controller'
 import { OnramperAuthController, OnramperSessions, WalletProofVerifier } from './onramper/wallet-auth'
@@ -19,7 +20,9 @@ import { UsersService } from './users/users.service'
     }),
   ],
   controllers: [UsersController, ReferralController, OnramperController, OnramperAuthController],
+  // Every route needs the shared service key except the Onramper wallet-auth routes marked PUBLIC_ACCESS.
   providers: [
+    { provide: APP_GUARD, useClass: ApiKeyGuard },
     UsersService,
     ReferralService,
     PrismaService,
