@@ -70,6 +70,8 @@ model Swap {
   attributionStatus                      AttributionStatus  @default(PENDING)
   attributionResolvedAt                  DateTime?
   attributionDetails                     Json?
+  // chainId:sellTxHash while the claim is ACCEPTED, so no two swaps hold the same transaction
+  acceptedSellTxKey                      String?            @unique
 
   @@index([referralCode])
   @@index([partnerAddress])

@@ -137,14 +137,21 @@ describe('checkSwapStatus', () => {
     expect(depositDetection.findDepositOnChain).not.toHaveBeenCalled()
   })
 
+  it('reports the sell hash in its canonical spelling, so the poller compares like for like', async () => {
+    checkTradeStatus.mockResolvedValue({ ...pending, sellTxHash: '0xABCDEF0123' })
+    const { service } = buildService(row(), undefined)
+
+    await expect(service.checkSwapStatus('swap-1')).resolves.toMatchObject({ sellTxHash: '0xabcdef0123' })
+  })
+
   it('falls back to the chain when the provider settles without reporting a deposit', async () => {
     checkTradeStatus.mockResolvedValue({ status: 'Confirmed', buyTxHash: '0xbuy', message: undefined })
-    const { service, depositDetection } = buildService(row(), 'f85da1de')
+    const { service, depositDetection } = buildService(row(), '0xf85da1de')
 
     await expect(service.checkSwapStatus('swap-1')).resolves.toEqual({
       status: 'SUCCESS',
       statusMessage: '',
-      sellTxHash: 'f85da1de',
+      sellTxHash: '0xf85da1de',
       buyTxHash: '0xbuy',
       txLink: undefined,
     })

@@ -7,7 +7,7 @@ export type MidgardCoin = {
 export type MidgardAction = {
   type: string
   status: 'pending' | 'success' | 'failed'
-  in: Array<{ txID: string; coins: MidgardCoin[] }>
+  in: Array<{ address: string; txID: string; coins: MidgardCoin[] }>
   out: Array<{ address: string; affiliate?: boolean; coins: MidgardCoin[] }>
   metadata: {
     swap?: {
@@ -27,4 +27,6 @@ export type MidgardConfig = {
   affiliate: string
   // the chain's native coin, which the affiliate fee is paid in
   nativeAsset: { asset: string; assetId: string; precision: number }
+  // maps a Midgard asset (e.g. ETH.USDC-0XA0B8…) to its asset id, undefined when the protocol's list lacks it
+  toAssetId: (asset: string) => string | undefined
 }

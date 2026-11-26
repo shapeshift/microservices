@@ -73,6 +73,13 @@ export type UnresolvedFeeSwap = {
 
 export type ResolutionStage = 'status' | 'verification' | 'attribution'
 
+// A payable swap whose sell transaction other swaps also claim, withheld until a person decides whose it is
+export type ContestedSwap = {
+  swapId: string
+  partnerCode: string
+  otherSwapIds: string[]
+}
+
 // A partner swap whose outcome a deadline decided rather than evidence, so a person should confirm it
 export type DeadlineResolvedSwap = {
   swapId: string
@@ -100,6 +107,7 @@ export type AggregateResult = {
   noAffiliateFee: NoAffiliateFeeSwap[]
   partnerBpsUnset: PartnerBpsUnsetSwap[]
   unresolvedFee: UnresolvedFeeSwap[]
+  contested: ContestedSwap[]
 }
 
 export type FeeDeps<S> = {
@@ -117,6 +125,7 @@ export type PayoutWarning = {
     | 'partner-bps-unset'
     | 'no-verified-fee'
     | 'unpriceable'
+    | 'contested-tx'
   partnerCode: string
   swapId: string | null
   reason: string | null
@@ -137,6 +146,7 @@ export type PayoutRecord = {
     noAffiliateFeeSwaps: number
     partnerBpsUnsetSwaps: number
     noVerifiedFeeSwaps: number
+    contestedSwaps: number
     deadlineResolvedSwaps: number
   }
   partners: {

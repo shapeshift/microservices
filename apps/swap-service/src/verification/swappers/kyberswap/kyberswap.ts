@@ -1,11 +1,13 @@
 import type { Address, Hex } from 'viem'
-import { isAddressEqual, parseAbi, parseEventLogs } from 'viem'
+import { isAddress, isAddressEqual, parseAbi, parseEventLogs } from 'viem'
 
+import type { SwapVerificationResult } from '@shapeshift/shared-types'
 import { fromAssetId, toAssetId } from '@shapeshiftoss/caip'
 import { viemClientByChainId } from '@shapeshiftoss/contracts'
 import { getTreasuryAddressFromChainId } from '@shapeshiftoss/swapper'
 
 import type { Swap } from '../../../swaps/types'
+import { accountAddress, isSellAmountWithinTolerance } from '../../binding'
 import type { Verifier } from '../../types'
 import { noAffiliateResult } from '../../utils'
 
@@ -31,6 +33,49 @@ const tokenToAssetId = (swap: Swap, token: Address): string | undefined => {
   return [swap.sellAsset, swap.buyAsset].find(
     ({ assetId }) => fromAssetId(assetId).chainId === chainId && fromAssetId(assetId).assetNamespace === 'slip44',
   )?.assetId
+}
+
+type SwappedArgs = {
+  sender: Address
+  srcToken: Address
+  dstToken: Address
+  dstReceiver: Address
+}
+
+const isSameAddress = (address: Address, other: string): boolean =>
+  isAddress(other, { strict: false }) && isAddressEqual(address, other)
+
+const isSameAsset = (swap: Swap, token: Address, assetId: string): boolean =>
+  tokenToAssetId(swap, token)?.toLowerCase() === assetId.toLowerCase()
+
+// the receipt is fetched by hash alone, so its router swap has to be shown to be this swap's before its fee counts
+const checkSwapBinding = (
+  swap: Swap,
+  swapped: SwappedArgs,
+  verifiedSellAmountCryptoBaseUnit: string,
+): SwapVerificationResult | undefined => {
+  if (!isSameAddress(swapped.sender, accountAddress(swap.sellAccountId))) {
+    return noAffiliateResult('FAILED', 'KyberSwap router swap was not sent from the swap sell account')
+  }
+
+  if (!isSameAddress(swapped.dstReceiver, swap.receiveAddress)) {
+    return noAffiliateResult('FAILED', 'KyberSwap router swap does not pay the swap receive address')
+  }
+
+  if (!isSameAsset(swap, swapped.srcToken, swap.sellAsset.assetId)) {
+    return noAffiliateResult('FAILED', 'KyberSwap router swap sold another asset than the swap')
+  }
+
+  if (!isSameAsset(swap, swapped.dstToken, swap.buyAsset.assetId)) {
+    return noAffiliateResult('FAILED', 'KyberSwap router swap bought another asset than the swap')
+  }
+
+  if (!isSellAmountWithinTolerance(swap.sellAmountCryptoBaseUnit, verifiedSellAmountCryptoBaseUnit)) {
+    return noAffiliateResult(
+      'FAILED',
+      `KyberSwap router swap sold ${verifiedSellAmountCryptoBaseUnit}, not the swap's sell amount of ${swap.sellAmountCryptoBaseUnit}`,
+    )
+  }
 }
 
 export const verifyKyberSwap: Verifier = async (swap) => {
@@ -68,6 +113,9 @@ export const verifyKyberSwap: Verifier = async (swap) => {
     ).toString(),
     actualBuyAmountCryptoBaseUnit: swapped.args.returnAmount.toString(),
   }
+
+  const unbound = checkSwapBinding(swap, swapped.args, amounts.verifiedSellAmountCryptoBaseUnit)
+  if (unbound) return unbound
 
   const treasury = getTreasuryAddressFromChainId(chainId) as Address
 

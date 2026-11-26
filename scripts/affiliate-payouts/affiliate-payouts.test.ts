@@ -9,6 +9,7 @@ import {
   buildPayouts,
   buildRecord,
   describeFeeAnomaly,
+  findContestedClaims,
   findDeadlineResolved,
   findUnsettled,
   formatUsdc,
@@ -195,6 +196,71 @@ describe('aggregateByPartner', () => {
   })
 })
 
+describe('findContestedClaims', () => {
+  const HASH = '4a4ce957a047378c3f3ac57ca3cc3ab03e61814a7b415f493704d84a9e42d0eb'
+  const claim = (swapId: string, sellTxHash: string | null, chainId = 'eip155:1') =>
+    ({ swapId, sellTxHash, sellAsset: { chainId } }) as unknown as PrismaSwap
+
+  it('finds a transaction claimed under different spellings of its hash', () => {
+    const rows = [claim('a', `0x${HASH}`)]
+    const claims = [claim('a', `0x${HASH}`), claim('b', HASH.toUpperCase())]
+
+    expect(findContestedClaims(rows, claims)).toEqual(new Map([['a', ['b']]]))
+  })
+
+  it('counts a claim from outside the window', () => {
+    const rows = [claim('a', `0x${HASH}`), claim('b', `0x${HASH}`)]
+    const claims = [claim('c', `0x${HASH}`)]
+
+    expect(findContestedClaims(rows, claims)).toEqual(
+      new Map([
+        ['a', ['b', 'c']],
+        ['b', ['a', 'c']],
+      ]),
+    )
+  })
+
+  it('keeps the same hash on two chains apart, and ignores swaps with no hash', () => {
+    const rows = [claim('a', `0x${HASH}`), claim('n', null)]
+    const claims = [claim('b', `0x${HASH}`, 'eip155:56'), claim('m', null)]
+
+    expect(findContestedClaims(rows, claims).size).toBe(0)
+  })
+})
+
+describe('aggregateByPartner on a contested transaction', () => {
+  it('withholds a payable swap whose transaction another swap claims, and pays the rest', () => {
+    const rows = [makeRow({ swapId: 'a' }), makeRow({ swapId: 'b' })]
+
+    const result = aggregateByPartner(rows, stubDeps, undefined, new Map([['a', ['x']]]))
+
+    expect(result.contested).toEqual([{ swapId: 'a', partnerCode: 'acme', otherSwapIds: ['x'] }])
+    expect(result.partners.get('acme')).toMatchObject({ swapCount: 1 })
+  })
+
+  it('leaves an unpayable contested swap in its own bucket', () => {
+    const rows = [makeRow({ swapId: 'a', attributionStatus: 'DISPUTED' })]
+
+    const result = aggregateByPartner(rows, stubDeps, undefined, new Map([['a', ['x']]]))
+
+    expect(result.contested).toHaveLength(0)
+    expect(result.unattributed).toHaveLength(1)
+  })
+
+  it('pays a transaction at most once across partners', () => {
+    const rows = [makeRow({ swapId: 'a', partnerCode: 'one' }), makeRow({ swapId: 'b', partnerCode: 'two' })]
+    const contested = findContestedClaims(
+      rows.map((row) => ({ ...row, sellTxHash: '0xabc', sellAsset: { chainId: 'eip155:1' } })),
+      [],
+    )
+
+    const result = aggregateByPartner(rows, stubDeps, undefined, contested)
+
+    expect(result.partners.size).toBe(0)
+    expect(result.contested.map(({ swapId }) => swapId)).toEqual(['a', 'b'])
+  })
+})
+
 describe('describeFeeAnomaly', () => {
   const row = { swapId: 's1', partnerCode: 'acme' }
   const fee = (over: Partial<FeeResult>): FeeResult => ({
@@ -328,6 +394,7 @@ describe('buildRecord', () => {
       ],
       partnerBpsUnset: [{ swapId: 'p1', partnerCode: 'acme', verifiedBps: 60, partnerBps: 0 }],
       unresolvedFee: [{ swapId: 'r1', partnerCode: 'acme' }],
+      contested: [{ swapId: 'c1', partnerCode: 'acme', otherSwapIds: ['c2'] }],
       deadlineResolved: [
         {
           swapId: 'd1',
@@ -352,12 +419,14 @@ describe('buildRecord', () => {
       noAffiliateFeeSwaps: 2,
       partnerBpsUnsetSwaps: 1,
       noVerifiedFeeSwaps: 1,
+      contestedSwaps: 1,
       deadlineResolvedSwaps: 1,
     })
 
     // Every surfaced bucket is warned per-swap except noAffiliateFee, which is counted-only.
     expect(record.warnings.map((w) => w.type).sort()).toEqual([
       'address',
+      'contested-tx',
       'fee-anomaly',
       'no-verified-fee',
       'partner-bps-unset',

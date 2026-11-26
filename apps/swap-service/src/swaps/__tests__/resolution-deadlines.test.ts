@@ -286,7 +286,7 @@ describe('polling queries and writes', () => {
   const build = (prisma: Record<string, unknown>) => {
     const stub = {} as never
     return new SwapsService(
-      { swap: prisma } as never,
+      { swap: prisma, $transaction: (operations: Promise<unknown>[]) => Promise.all(operations) } as never,
       stub,
       stub,
       stub,
@@ -391,6 +391,23 @@ describe('polling queries and writes', () => {
     expect(write?.where).toMatchObject({ ...finds[0], swapId: { in: ['stalled-1', 'stalled-2'] } })
     expect(write?.data).toMatchObject({ status: 'FAILED', settledAt: expect.any(Date) as Date })
     expect(abandoned.map((swap) => swap.swapId)).toEqual(['stalled-1'])
+  })
+
+  it('stores a reported sell hash in the canonical spelling for the swap chain', async () => {
+    const writes: Record<string, unknown>[] = []
+    const service = build({
+      findUnique: () => Promise.resolve({ sellAsset: { chainId: 'cosmos:thorchain-1' } }),
+      update: (args: { where: { swapId: string }; data: Record<string, unknown> }) => {
+        writes.push(args.data)
+        return Promise.resolve({ ...args.data, swapId: args.where.swapId })
+      },
+      updateMany: () => Promise.resolve({ count: 0 }),
+      findUniqueOrThrow: () => Promise.resolve({ swapId: 'swap-1' }),
+    })
+
+    await service.updateSwapTxHashes({ swapId: 'swap-1', sellTxHash: `0x${'ab'.repeat(32)}` })
+
+    expect(writes[0]).toMatchObject({ sellTxHash: 'AB'.repeat(32) })
   })
 
   it('stamps settledAt when a swap settles, and only then', async () => {

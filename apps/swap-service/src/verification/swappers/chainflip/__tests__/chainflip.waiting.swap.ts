@@ -84,5 +84,6 @@ export default {
   attributionStatus: 'PENDING',
   attributionResolvedAt: null,
   attributionDetails: null,
+  acceptedSellTxKey: null,
   settledAt: null,
 } satisfies Swap

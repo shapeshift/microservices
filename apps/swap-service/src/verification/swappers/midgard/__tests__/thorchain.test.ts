@@ -234,9 +234,14 @@ describe('verifyThorchain', () => {
   })
 
   it('takes the swap action of a partially filled streaming swap, not the refund of the unfilled part', async () => {
-    const response = structuredClone(thorchainResponse) as { actions: Array<Record<string, unknown>> }
+    const response = structuredClone(thorchainResponse)
     const [swapAction] = response.actions
-    response.actions = [{ ...swapAction, type: 'refund' }, swapAction]
+    // the deposit is split between the two, the swap taking what filled and the refund the rest
+    const refundAction = structuredClone(swapAction)
+    refundAction.type = 'refund'
+    refundAction.in[0].coins[0].amount = '100000'
+    swapAction.in[0].coins[0].amount = '200000'
+    response.actions = [refundAction, swapAction]
 
     service = new SwapVerificationService(mockHttp(response).http)
 
@@ -250,6 +255,9 @@ describe('verifyThorchain', () => {
     const partialFillSwap = {
       ...swap,
       sellTxHash: '0xa4e275f02a68a79305cc5dbb9641ae52b97bd1cf2b3b7ef62bdba4f341637374',
+      sellAccountId: 'eip155:1:0x31b116a71f99cf1f9ac718e5ba06b633e10f118d',
+      receiveAddress: 't1b8BGrC5PK468aqcg2UK73pyALFhRjJAH2',
+      sellAmountCryptoBaseUnit: '2000000000000000000',
       buyAsset: {
         ...swap.buyAsset,
         symbol: 'ZEC',
@@ -359,6 +367,111 @@ describe('verifyThorchain', () => {
     const result = await service.verifySwap(swap)
 
     expect(result).toMatchObject({ verificationStatus: 'SUCCESS', actualAffiliateFeeAmountCryptoBaseUnit: '13889000' })
+  })
+
+  describe('binding the transaction to the swap', () => {
+    const OTHER_ADDRESS = '0x1111111111111111111111111111111111111111'
+
+    it('accepts a CAIP-10 sell account id', async () => {
+      service = new SwapVerificationService(mockHttp(thorchainResponse).http)
+
+      const result = await service.verifySwap({
+        ...swap,
+        sellAccountId: 'eip155:1:0xA44C286BA83Bb771cd0107B2c1Df678435Bd1535',
+      } as Swap)
+
+      expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true })
+    })
+
+    it('returns FAILED when the transaction was sent from another account', async () => {
+      service = new SwapVerificationService(mockHttp(thorchainResponse).http)
+
+      const result = await service.verifySwap({ ...swap, sellAccountId: OTHER_ADDRESS } as Swap)
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        hasAffiliate: false,
+        noAffiliateReason: 'Midgard inbound was not sent from the swap sell account',
+      })
+      expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
+    })
+
+    it('returns FAILED when the memo pays out to another address', async () => {
+      service = new SwapVerificationService(mockHttp(thorchainResponse).http)
+
+      const result = await service.verifySwap({ ...swap, receiveAddress: OTHER_ADDRESS } as Swap)
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        hasAffiliate: false,
+        noAffiliateReason: 'Midgard memo destination is not the swap receive address',
+      })
+    })
+
+    it('returns FAILED when the transaction sold another asset', async () => {
+      const response = structuredClone(thorchainResponse)
+      response.actions[0].in[0].coins[0].asset = 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48'
+
+      service = new SwapVerificationService(mockHttp(response).http)
+
+      const result = await service.verifySwap(swap)
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        noAffiliateReason: 'Midgard inbound asset is not the swap sell asset',
+      })
+    })
+
+    it('stays PENDING when the inbound asset is not one the protocol list knows', async () => {
+      const response = structuredClone(thorchainResponse)
+      response.actions[0].in[0].coins[0].asset = 'ETH.UNKNOWN-0X0000000000000000000000000000000000000001'
+
+      service = new SwapVerificationService(mockHttp(response).http)
+
+      const result = await service.verifySwap(swap)
+
+      expect(result.verificationStatus).toBe('PENDING')
+    })
+
+    it.each([
+      ['more', '3100000000000000'],
+      ['less', '2900000000000000'],
+    ])('returns FAILED when the swap quoted %s than the transaction sold', async (_, sellAmountCryptoBaseUnit) => {
+      service = new SwapVerificationService(mockHttp(thorchainResponse).http)
+
+      const result = await service.verifySwap({ ...swap, sellAmountCryptoBaseUnit } as Swap)
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        noAffiliateReason: `Midgard inbound of 3000000000000000 differs from the swap's sell amount of ${sellAmountCryptoBaseUnit}`,
+      })
+    })
+
+    it('accepts a sell amount within tolerance of the quote', async () => {
+      service = new SwapVerificationService(mockHttp(thorchainResponse).http)
+
+      const result = await service.verifySwap({ ...swap, sellAmountCryptoBaseUnit: '3020000000000000' } as Swap)
+
+      expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true })
+    })
+
+    it('does not compare the sender of a UTXO sell, whose account is an xpub', async () => {
+      const response = structuredClone(thorchainResponse)
+      response.actions[0].in[0].address = 'bc1qinputaddress'
+      response.actions[0].in[0].coins[0] = { amount: '300000', asset: 'BTC.BTC' }
+
+      service = new SwapVerificationService(mockHttp(response).http)
+
+      const result = await service.verifySwap({
+        ...swap,
+        sellAsset: { ...swap.sellAsset, assetId: 'bip122:000000000019d6689c085ae165831e93/slip44:0', precision: 8 },
+        sellAccountId:
+          'bip122:000000000019d6689c085ae165831e93:xpub6CUGRUonZSQ4TWtTMmzXdrXDtypWKiKrhko4egpiMZbpiaQL2jkwSB1icqYh2cfDfVxdx4df189oLKnC5fSwqPfgyP3hooxujYzAu3fDVmz',
+        sellAmountCryptoBaseUnit: '300000',
+      } as Swap)
+
+      expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true })
+    })
   })
 
   it('returns PENDING when the HTTP call fails (transient — retry next tick)', async () => {
