@@ -6,6 +6,7 @@ const THORCHAIN = 'cosmos:thorchain-1'
 const TRON = 'tron:0x2b6653dc'
 const SOLANA = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'
 const STARKNET = 'starknet:SN_MAIN'
+const TON = 'ton:mainnet'
 
 const HEX = '4a4ce957a047378c3f3ac57ca3cc3ab03e61814a7b415f493704d84a9e42d0eb'
 
@@ -28,7 +29,38 @@ describe('canonicalizeTxHash', () => {
   })
 
   it('lowercases a 0x hex hash on other chains', () => {
-    expect(canonicalizeTxHash(STARKNET, '0xABC')).toBe('0xabc')
+    expect(canonicalizeTxHash('aptos:mainnet', '0xABC')).toBe('0xabc')
+  })
+
+  it.each([
+    `0x${HEX}`,
+    HEX.toUpperCase(),
+    'SkzpV6BHN4w/OsV8o8w6sD5hgUp7QV9JNwTYSp5C0Os=',
+    'SkzpV6BHN4w_OsV8o8w6sD5hgUp7QV9JNwTYSp5C0Os',
+  ])('spells every encoding of a TON hash as lowercase hex: %s', (hash) => {
+    expect(canonicalizeTxHash(TON, hash)).toBe(HEX)
+  })
+
+  it('keeps a TON hash that decodes to no 32 byte digest as given', () => {
+    expect(canonicalizeTxHash(TON, 'notahash')).toBe('notahash')
+  })
+
+  it.each([
+    ['0x00ABC', '0xabc'],
+    [`0x00${HEX.slice(2)}`, `0x${HEX.slice(2)}`],
+    ['0x0000', '0x0'],
+    ['0x0', '0x0'],
+  ])('strips leading zeros from a Starknet hash: %s', (hash, expected) => {
+    expect(canonicalizeTxHash(STARKNET, hash)).toBe(expected)
+  })
+
+  it('does not treat a value past the Starknet field as a field element', () => {
+    const prime = '0x0800000000000011000000000000000000000000000000000000000000000001'
+
+    expect(canonicalizeTxHash(STARKNET, prime.toUpperCase().replace(/^0X/, '0x'))).toBe(prime)
+    expect(canonicalizeTxHash(STARKNET, '0x0800000000000011000000000000000000000000000000000000000000000000')).toBe(
+      '0x800000000000011000000000000000000000000000000000000000000000000',
+    )
   })
 
   it('keeps a case-sensitive encoding as given', () => {

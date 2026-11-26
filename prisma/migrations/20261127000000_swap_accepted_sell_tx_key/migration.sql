@@ -1,8 +1,17 @@
 -- One spelling per sell transaction, and at most one accepted claim on it.
 
--- mirrors canonicalizeTxHash: hex hashes take each chain's usual form, anything else is only trimmed
+-- mirrors canonicalizeTxHash: hex hashes take each chain's usual form, a TON hash in base64 or base64url becomes hex,
+-- a Starknet field element loses its leading zeros, anything else is only trimmed
 UPDATE "swaps" s
 SET "sellTxHash" = CASE
+  WHEN c.namespace = 'ton' AND c.hash ~* '^(0x)?[0-9a-f]{64}$' THEN lower(c.digits)
+  WHEN c.namespace = 'ton' AND c.hash ~ '^[A-Za-z0-9+/_-]{43}=?$'
+    THEN encode(decode(translate(left(c.hash, 43), '-_', '+/') || '=', 'base64'), 'hex')
+  -- below 2^251 + 17 * 2^192 + 1; same length lowercase hex orders by value under C collation
+  WHEN c.namespace = 'starknet' AND c.hash ~* '^0x[0-9a-f]{1,64}$' AND (
+    length(c.felt) < 63
+    OR (length(c.felt) = 63 AND c.felt COLLATE "C" < '800000000000011000000000000000000000000000000000000000000000001')
+  ) THEN '0x' || CASE WHEN c.felt = '' THEN '0' ELSE c.felt END
   WHEN c.hash !~* '^(0x)?[0-9a-f]+$' THEN c.hash
   WHEN c.namespace = 'eip155' THEN '0x' || lower(c.digits)
   WHEN c.namespace IN ('bip122', 'tron') THEN lower(c.digits)
@@ -13,11 +22,19 @@ END
 FROM (
   SELECT
     "swapId",
-    split_part("sellAsset"->>'chainId', ':', 1) AS namespace,
-    regexp_replace("sellTxHash", '^\s+|\s+$', '', 'g') AS hash,
-    regexp_replace(regexp_replace("sellTxHash", '^\s+|\s+$', '', 'g'), '^0[xX]', '') AS digits
-  FROM "swaps"
-  WHERE "sellTxHash" IS NOT NULL
+    namespace,
+    hash,
+    digits,
+    ltrim(lower(digits), '0') AS felt
+  FROM (
+    SELECT
+      "swapId",
+      split_part("sellAsset"->>'chainId', ':', 1) AS namespace,
+      regexp_replace("sellTxHash", '^\s+|\s+$', '', 'g') AS hash,
+      regexp_replace(regexp_replace("sellTxHash", '^\s+|\s+$', '', 'g'), '^0[xX]', '') AS digits
+    FROM "swaps"
+    WHERE "sellTxHash" IS NOT NULL
+  ) t
 ) c
 WHERE s."swapId" = c."swapId";
 
