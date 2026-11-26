@@ -187,3 +187,21 @@ describe('createSwap quote provenance', () => {
     expect(createCalls[0]?.data).toMatchObject({ quotedAt: null })
   })
 })
+
+describe('createSwap sell tx hash', () => {
+  it('stores the hash in its canonical spelling for the sell chain', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest({ sellTxHash: ` ${'AB'.repeat(32)} ` }))
+
+    expect(createCalls[0]?.data).toMatchObject({ sellTxHash: `0x${'ab'.repeat(32)}` })
+  })
+
+  it('stores a null hash when the payload carries none', async () => {
+    const { service, createCalls } = buildService(null)
+
+    await service.createSwap(swapRequest())
+
+    expect(createCalls[0]?.data).toMatchObject({ sellTxHash: null })
+  })
+})

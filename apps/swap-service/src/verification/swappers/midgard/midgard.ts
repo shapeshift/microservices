@@ -1,10 +1,18 @@
 import { firstValueFrom } from 'rxjs'
 
-import { mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
+import type { SwapVerificationResult } from '@shapeshift/shared-types'
+import { CHAIN_NAMESPACE, fromAssetId, mayachainAssetId, thorchainAssetId } from '@shapeshiftoss/caip'
 import { bnOrZero } from '@shapeshiftoss/chain-adapters'
-import { MAYACHAIN_AFFILIATE_NAME, THORCHAIN_AFFILIATE_NAME } from '@shapeshiftoss/swapper'
+import {
+  MAYACHAIN_AFFILIATE_NAME,
+  mayaPoolAssetIdToAssetId,
+  THORCHAIN_AFFILIATE_NAME,
+  thorPoolAssetIdToAssetId,
+} from '@shapeshiftoss/swapper'
 
 import { env } from '../../../env'
+import type { Swap } from '../../../swaps/types'
+import { accountAddress, isSellAmountWithinTolerance } from '../../binding'
 import type { Verifier } from '../../types'
 import { noAffiliateResult } from '../../utils'
 
@@ -20,6 +28,55 @@ const toNativePrecision = (coin: MidgardCoin, precision: number, config: Midgard
   return bnOrZero(coin.amount)
     .shiftedBy(precision - midgardPrecision)
     .toFixed(0, 1)
+}
+
+// BCH memos and outbounds drop the cashaddr prefix
+const normalizeAddress = (address: string): string => address.toLowerCase().replace(/^(bitcoincash|bchtest):/, '')
+
+// Midgard finds an action by hash alone, so the action has to be shown to be this swap's before its fee counts
+const checkSwapBinding = (
+  swap: Swap,
+  sellIns: MidgardAction['in'],
+  destinationAddress: string,
+  config: MidgardConfig,
+): SwapVerificationResult | undefined => {
+  // a UTXO sell account is an xpub and Midgard names a single input address, so only the rest is compared there
+  const isUtxoSell = fromAssetId(swap.sellAsset.assetId).chainNamespace === CHAIN_NAMESPACE.Utxo
+
+  if (!isUtxoSell) {
+    const sellAddress = normalizeAddress(accountAddress(swap.sellAccountId))
+    if (sellIns.some(({ address }) => normalizeAddress(address) !== sellAddress)) {
+      return noAffiliateResult('FAILED', 'Midgard inbound was not sent from the swap sell account')
+    }
+  }
+
+  if (normalizeAddress(destinationAddress) !== normalizeAddress(swap.receiveAddress)) {
+    return noAffiliateResult('FAILED', 'Midgard memo destination is not the swap receive address')
+  }
+
+  const sellCoins = sellIns.map(({ coins }) => coins[0])
+  if (sellCoins.some((coin) => !coin)) return noAffiliateResult('FAILED', 'Midgard inbound carries no coin')
+
+  for (const { asset } of sellCoins) {
+    const assetId = config.toAssetId(asset)
+    if (!assetId) return noAffiliateResult('PENDING', `Midgard inbound asset ${asset} has no known asset id`)
+
+    if (assetId.toLowerCase() !== swap.sellAsset.assetId.toLowerCase()) {
+      return noAffiliateResult('FAILED', 'Midgard inbound asset is not the swap sell asset')
+    }
+  }
+
+  // a partially filled streaming swap splits the deposit between its swap and refund actions
+  const deposited = sellCoins
+    .reduce((total, coin) => total.plus(toNativePrecision(coin, swap.sellAsset.precision, config)), bnOrZero(0))
+    .toFixed(0)
+
+  if (!isSellAmountWithinTolerance(swap.sellAmountCryptoBaseUnit, deposited)) {
+    return noAffiliateResult(
+      'FAILED',
+      `Midgard inbound of ${deposited} differs from the swap's sell amount of ${swap.sellAmountCryptoBaseUnit}`,
+    )
+  }
 }
 
 const midgardVerifier =
@@ -54,6 +111,14 @@ const midgardVerifier =
     // memo format: =:ASSET:DESTADDR[/REFUNDADDR]:LIM/INTERVAL/QUANTITY:AFFILIATE:FEE
     const destinationAddress = swapMetadata.memo.split(':')[2]?.split('/')[0]?.toLowerCase()
     if (!destinationAddress) return noAffiliateResult('FAILED', 'Could not parse destination address from memo')
+
+    const unbound = checkSwapBinding(
+      swap,
+      matches.map(({ sellIn }) => sellIn),
+      destinationAddress,
+      config,
+    )
+    if (unbound) return unbound
 
     // an outbound can be split across vaults, and a partial refund in the sell coin can go to the same address
     const buyOuts = action.out.filter(
@@ -106,10 +171,12 @@ export const verifyThorchain = midgardVerifier({
   midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
   affiliate: THORCHAIN_AFFILIATE_NAME,
   nativeAsset: { asset: 'THOR.RUNE', assetId: thorchainAssetId, precision: 8 },
+  toAssetId: thorPoolAssetIdToAssetId,
 })
 
 export const verifyMayachain = midgardVerifier({
   midgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
   affiliate: MAYACHAIN_AFFILIATE_NAME,
   nativeAsset: { asset: 'MAYA.CACAO', assetId: mayachainAssetId, precision: 10 },
+  toAssetId: mayaPoolAssetIdToAssetId,
 })

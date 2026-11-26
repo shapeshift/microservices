@@ -23,6 +23,8 @@ const elysiumSwap = {
   sellAsset: { ...robinhoodSwap.sellAsset, assetId: ELYSIUM_USDC, chainId: ELYSIUM, precision: 6 },
   buyAsset: { ...robinhoodSwap.buyAsset, assetId: ELYSIUM_NATIVE, chainId: ELYSIUM },
   sellAmountCryptoBaseUnit: '60000',
+  sellAccountId: '0xBb3F2DF9C79758Bf350255eb411c4e18DAF31A82',
+  receiveAddress: '0xBb3F2DF9C79758Bf350255eb411c4e18DAF31A82',
   sellTxHash: elysiumReceipt.transactionHash,
 }
 
@@ -38,6 +40,9 @@ const baseSwap = {
     assetId: `${BASE}/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`,
     chainId: BASE,
   },
+  sellAmountCryptoBaseUnit: '3465362066649674',
+  sellAccountId: '0x7288C3C9c3DDF888064c76f3a72c06e14fA641a5',
+  receiveAddress: '0x7288C3C9c3DDF888064c76f3a72c06e14fA641a5',
   sellTxHash: baseReceipt.transactionHash,
   affiliateBps: 25,
   shapeshiftBps: 25,
@@ -55,6 +60,9 @@ const ethereumSwap = {
     chainId: ETHEREUM,
   },
   buyAsset: { ...robinhoodSwap.buyAsset, assetId: ETHEREUM_USDC, chainId: ETHEREUM },
+  sellAmountCryptoBaseUnit: '2691459404027087285515944',
+  sellAccountId: '0xB186b2AFB730CcF498BC68eD0C8404cdAD6C7CcE',
+  receiveAddress: '0xB186b2AFB730CcF498BC68eD0C8404cdAD6C7CcE',
   sellTxHash: ethereumReceipt.transactionHash,
   affiliateBps: 10,
   shapeshiftBps: 10,
@@ -173,15 +181,15 @@ describe('verifyKyberSwap', () => {
     })
   })
 
-  it('stays PENDING when a native fee has no native asset on either side of the swap', async () => {
+  it('fails a router swap into the native token when the swap bought a token', async () => {
     getTransactionReceipt.mockResolvedValue(elysiumReceipt)
 
     const result = await verify({ ...elysiumSwap, buyAsset: { ...elysiumSwap.buyAsset, assetId: ELYSIUM_USDC } })
 
     expect(result).toMatchObject({
-      verificationStatus: 'PENDING',
+      verificationStatus: 'FAILED',
       hasAffiliate: false,
-      noAffiliateReason: 'KyberSwap fee token has no known asset',
+      noAffiliateReason: 'KyberSwap router swap bought another asset than the swap',
     })
   })
 
@@ -264,6 +272,69 @@ describe('verifyKyberSwap', () => {
     const result = await verify({ ...robinhoodSwap, sellAsset: { ...robinhoodSwap.sellAsset, chainId } })
 
     expect(result).toMatchObject({ verificationStatus: 'PENDING', noAffiliateReason: `No RPC client for ${chainId}` })
+  })
+
+  describe('binding the transaction to the swap', () => {
+    const OTHER_ADDRESS = '0x1111111111111111111111111111111111111111'
+
+    it('accepts a CAIP-10 sell account id', async () => {
+      const result = await verify({
+        ...robinhoodSwap,
+        sellAccountId: `${robinhoodSwap.sellAsset.chainId}:0xa44c286ba83bb771cd0107b2c1df678435bd1535`,
+      })
+
+      expect(result).toMatchObject({ verificationStatus: 'SUCCESS', hasAffiliate: true })
+    })
+
+    it('fails a router swap sent from another account', async () => {
+      const result = await verify({ ...robinhoodSwap, sellAccountId: OTHER_ADDRESS })
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        hasAffiliate: false,
+        noAffiliateReason: 'KyberSwap router swap was not sent from the swap sell account',
+      })
+      expect(result.actualAffiliateFeeAmountCryptoBaseUnit).toBeUndefined()
+    })
+
+    it('fails a router swap whose sell account is not an address', async () => {
+      const result = await verify({ ...robinhoodSwap, sellAccountId: 'not-an-address' })
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        noAffiliateReason: 'KyberSwap router swap was not sent from the swap sell account',
+      })
+    })
+
+    it('fails a router swap paying another receiver', async () => {
+      const result = await verify({ ...robinhoodSwap, receiveAddress: OTHER_ADDRESS })
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        noAffiliateReason: 'KyberSwap router swap does not pay the swap receive address',
+      })
+    })
+
+    it('fails a router swap selling another asset', async () => {
+      const result = await verify({
+        ...robinhoodSwap,
+        sellAsset: { ...robinhoodSwap.sellAsset, assetId: `${robinhoodSwap.sellAsset.chainId}/erc20:${OTHER_ADDRESS}` },
+      })
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        noAffiliateReason: 'KyberSwap router swap sold another asset than the swap',
+      })
+    })
+
+    it('fails a router swap whose sell amount is off the quote', async () => {
+      const result = await verify({ ...robinhoodSwap, sellAmountCryptoBaseUnit: '600000000000000' })
+
+      expect(result).toMatchObject({
+        verificationStatus: 'FAILED',
+        noAffiliateReason: "KyberSwap router swap sold 515078935846919, not the swap's sell amount of 600000000000000",
+      })
+    })
   })
 
   it('fails without a sell tx hash', async () => {

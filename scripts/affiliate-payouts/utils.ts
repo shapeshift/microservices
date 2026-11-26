@@ -3,10 +3,12 @@ import { getAddress, isAddress, zeroAddress } from 'viem'
 
 import { ABANDONED_STATUS_PREFIX, SETTLED_STATUSES } from '../../apps/swap-service/src/swaps/constants'
 import { FEE_DEVIATION_TOLERANCE, resolvePartnerFee } from '../../apps/swap-service/src/swaps/partner-fee'
+import { acceptedSellTxKey } from '../../apps/swap-service/src/swaps/tx-hash'
 import type { Swap as PrismaSwap } from '../../packages/prisma'
 
 import type {
   AggregateResult,
+  ContestedSwap,
   DeadlineResolvedSwap,
   FeeAnomaly,
   FeeDeps,
@@ -92,6 +94,38 @@ export function describeFeeAnomaly(
   }
 }
 
+type ClaimRow = Pick<PrismaSwap, 'swapId' | 'sellTxHash' | 'sellAsset'>
+
+const sellTxKeyOf = (row: ClaimRow): string | null => {
+  const chainId = (row.sellAsset as { chainId?: string } | null)?.chainId
+  return row.sellTxHash && chainId ? acceptedSellTxKey(chainId, row.sellTxHash) : null
+}
+
+// Each row whose sell transaction another swap also claims, with the other claimants. `claims` is every swap on
+// any of the rows' transactions, from any month, partner or not, so a claim registered elsewhere still counts.
+export function findContestedClaims(rows: ClaimRow[], claims: ClaimRow[]): Map<string, string[]> {
+  const claimantsByKey = new Map<string, Set<string>>()
+
+  for (const claim of [...rows, ...claims]) {
+    const key = sellTxKeyOf(claim)
+    if (!key) continue
+
+    const claimants = claimantsByKey.get(key) ?? new Set<string>()
+    claimants.add(claim.swapId)
+    claimantsByKey.set(key, claimants)
+  }
+
+  const contested = new Map<string, string[]>()
+
+  for (const row of rows) {
+    const key = sellTxKeyOf(row)
+    const others = [...(key ? (claimantsByKey.get(key) ?? []) : [])].filter((swapId) => swapId !== row.swapId)
+    if (others.length) contested.set(row.swapId, others.sort())
+  }
+
+  return contested
+}
+
 // Accrue each partner's fee share from the verified on-chain fee, using the injected swap-service
 // fee math. Rows are the window query — swap status SUCCESS with a partner code, in any
 // verification state — and each falls into exactly one bucket, tested top to bottom:
@@ -103,12 +137,14 @@ export function describeFeeAnomaly(
 //   on-chain fee is null           → unresolvedFee         (nothing verified to pay on)
 //   fails the deviation guard      → anomalies             (on-chain fee looks wrong)
 //   partner share rate ≤ 0         → partnerBpsUnset       (no partner share configured)
+//   tx claimed by another swap     → contested             (withheld: one transaction's fee is paid at most once)
 //   otherwise                      → paid: verified fee × rate, accrued to the partner
 // Only the verified on-chain fee is ever paid — never the bps-implied estimate.
 export function aggregateByPartner<S>(
   rows: PrismaSwap[],
   deps: FeeDeps<S>,
   tolerance: number = FEE_DEVIATION_TOLERANCE,
+  contestedClaims: Map<string, string[]> = new Map(),
 ): AggregateResult {
   const partners = new Map<string, PartnerAccrual>()
   const anomalies: FeeAnomaly[] = []
@@ -117,6 +153,7 @@ export function aggregateByPartner<S>(
   const noAffiliateFee: NoAffiliateFeeSwap[] = []
   const partnerBpsUnset: PartnerBpsUnsetSwap[] = []
   const unresolvedFee: UnresolvedFeeSwap[] = []
+  const contested: ContestedSwap[] = []
 
   const unpriceable: UnpriceableSwap[] = []
 
@@ -162,6 +199,12 @@ export function aggregateByPartner<S>(
       continue
     }
 
+    const otherSwapIds = contestedClaims.get(row.swapId)
+    if (otherSwapIds) {
+      contested.push({ swapId: row.swapId, partnerCode, otherSwapIds })
+      continue
+    }
+
     const { fee } = outcome
 
     const accrual = partners.get(partnerCode) ?? {
@@ -190,6 +233,7 @@ export function aggregateByPartner<S>(
     noAffiliateFee,
     partnerBpsUnset,
     unresolvedFee,
+    contested,
   }
 }
 
@@ -307,6 +351,7 @@ export function buildRecord(input: {
   noAffiliateFee: NoAffiliateFeeSwap[]
   partnerBpsUnset: PartnerBpsUnsetSwap[]
   unresolvedFee: UnresolvedFeeSwap[]
+  contested: ContestedSwap[]
   deadlineResolved: DeadlineResolvedSwap[]
 }): PayoutRecord {
   const {
@@ -320,6 +365,7 @@ export function buildRecord(input: {
     noAffiliateFee,
     partnerBpsUnset,
     unresolvedFee,
+    contested,
     deadlineResolved,
   } = input
   const included = payouts.filter((p) => p.included)
@@ -366,6 +412,12 @@ export function buildRecord(input: {
       swapId: n.swapId,
       reason: 'no verified on-chain fee — not paid (bps-implied fee is never a payout basis)',
     })),
+    ...contested.map((c) => ({
+      type: 'contested-tx' as const,
+      partnerCode: c.partnerCode,
+      swapId: c.swapId,
+      reason: `sell transaction also claimed by swap ${c.otherSwapIds.join(', ')} — not paid, confirm which swap it belongs to`,
+    })),
   ]
 
   return {
@@ -383,6 +435,7 @@ export function buildRecord(input: {
       noAffiliateFeeSwaps: noAffiliateFee.length,
       partnerBpsUnsetSwaps: partnerBpsUnset.length,
       noVerifiedFeeSwaps: unresolvedFee.length,
+      contestedSwaps: contested.length,
       deadlineResolvedSwaps: deadlineResolved.length,
     },
     partners: payouts.map((p) => ({

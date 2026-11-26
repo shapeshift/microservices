@@ -1,3 +1,5 @@
+import { Prisma } from '@shapeshift/prisma'
+
 import { SwapsService } from '../swaps.service'
 import type { Swap } from '../types'
 
@@ -11,16 +13,18 @@ process.env.NOTIFICATIONS_SERVICE_URL ??= 'http://notifications.test'
 process.env.USER_SERVICE_URL ??= 'http://user.test'
 process.env.SERVICE_API_KEY ??= 'test-api-key'
 
-const TX = '0xsharedtx'
+const TX = '0x5badc0ffee'
 const BLOCK_TIME = Math.floor(Date.UTC(2026, 8, 7, 15, 13, 56) / 1000)
 
 type Claim = { swapId: string; quotedAt: Date }
 
-const buildService = (claims: Claim[]) => {
+const buildService = (claims: Claim[], { failAcceptWith }: { failAcceptWith?: Error } = {}) => {
   const updates: { swapId: string; data: Record<string, unknown> }[] = []
   const sweeps: { where: Record<string, unknown>; data: Record<string, unknown> }[] = []
 
   const prisma = {
+    $transaction: (operations: Promise<unknown>[]) =>
+      failAcceptWith ? Promise.reject(failAcceptWith) : Promise.all(operations),
     swap: {
       // mirrors the real predicate: an older quote, or the same quote time with a lower swapId
       findFirst: (args: {
@@ -117,9 +121,45 @@ describe('resolveAttribution contest', () => {
 
     expect(updates[0]?.data).toMatchObject({ attributionStatus: 'ACCEPTED' })
     expect(sweeps[0]).toMatchObject({
-      where: { sellTxHash: TX, swapId: { not: 'first' }, attributionStatus: 'ACCEPTED' },
-      data: { attributionStatus: 'DISPUTED', attributionDetails: { reason: 'quote-superseded' } },
+      where: {
+        swapId: { not: 'first' },
+        attributionStatus: 'ACCEPTED',
+        OR: [{ sellTxHash: TX }, { acceptedSellTxKey: `eip155:1:${TX}` }],
+      },
+      data: {
+        attributionStatus: 'DISPUTED',
+        attributionDetails: { reason: 'quote-superseded' },
+        acceptedSellTxKey: null,
+      },
     })
+  })
+
+  it('holds the transaction key while the claim is accepted, so no other swap can be accepted on it', async () => {
+    const { service, updates } = buildService([first])
+
+    await service.resolveAttribution(swapOf(first))
+
+    expect(updates[0]?.data).toMatchObject({ attributionStatus: 'ACCEPTED', acceptedSellTxKey: `eip155:1:${TX}` })
+  })
+
+  it('leaves the claim pending when another is accepted on the transaction at the same time', async () => {
+    const conflict = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: 'test',
+    })
+    const { service } = buildService([first], { failAcceptWith: conflict })
+
+    const swap = swapOf(first)
+
+    await expect(service.resolveAttribution(swap)).resolves.toBe(swap)
+  })
+
+  it('does not hold a key for a claim that is not accepted', async () => {
+    const { service, updates } = buildService([first, second])
+
+    await service.resolveAttribution(swapOf(second))
+
+    expect(updates[0]?.data).not.toHaveProperty('acceptedSellTxKey')
   })
 
   it('leaves other claims alone when this one loses', async () => {

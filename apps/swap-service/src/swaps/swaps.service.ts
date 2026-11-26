@@ -41,6 +41,7 @@ import {
   REFERRER_FEE_RATE,
 } from './constants'
 import { buildChainAdapterAsserts, getSwapperConfig } from './swapper-config'
+import { acceptedSellTxKey, canonicalizeOptionalTxHash } from './tx-hash'
 import type {
   AffiliateVerificationDetails,
   AggregateFeesParams,
@@ -137,7 +138,7 @@ export class SwapsService {
             swapId: data.swapId,
             sellAsset: data.sellAsset,
             buyAsset: data.buyAsset,
-            sellTxHash: data.sellTxHash ?? null,
+            sellTxHash: canonicalizeOptionalTxHash(data.sellAsset.chainId, data.sellTxHash) ?? null,
             sellAmountCryptoBaseUnit: data.sellAmountCryptoBaseUnit,
             expectedBuyAmountCryptoBaseUnit: data.expectedBuyAmountCryptoBaseUnit,
             source: data.source,
@@ -235,14 +236,26 @@ export class SwapsService {
     return { partnerCode: null, partnerAddress: null }
   }
 
+  // hashes are stored in one spelling per chain, so the same transaction can't be claimed again under another
+  private async canonicalSellTxHash(swapId: string, sellTxHash: string | undefined): Promise<string | undefined> {
+    if (!sellTxHash) return sellTxHash
+
+    const row = await this.prisma.swap.findUnique({ where: { swapId }, select: { sellAsset: true } })
+    const chainId = (row?.sellAsset as { chainId?: string } | null | undefined)?.chainId
+
+    return chainId ? canonicalizeOptionalTxHash(chainId, sellTxHash) : sellTxHash
+  }
+
   async updateSwapStatus(data: UpdateSwapStatusDto): Promise<Swap> {
     try {
+      const sellTxHash = await this.canonicalSellTxHash(data.swapId, data.sellTxHash)
+
       const swap = toSwap(
         await this.prisma.swap.update({
           where: { swapId: data.swapId },
           data: {
             status: data.status,
-            sellTxHash: data.sellTxHash,
+            sellTxHash,
             buyTxHash: data.buyTxHash,
             txLink: data.txLink,
             statusMessage: data.statusMessage,
@@ -273,11 +286,13 @@ export class SwapsService {
     txLink?: string
     statusMessage?: string
   }): Promise<Swap> {
+    const sellTxHash = await this.canonicalSellTxHash(data.swapId, data.sellTxHash)
+
     const swap = toSwap(
       await this.prisma.swap.update({
         where: { swapId: data.swapId },
         data: {
-          sellTxHash: data.sellTxHash,
+          sellTxHash,
           buyTxHash: data.buyTxHash,
           txLink: data.txLink,
           statusMessage: data.statusMessage,
@@ -411,7 +426,7 @@ export class SwapsService {
 
     if (sameVerdict) return swap
 
-    if (attribution.status === 'ACCEPTED') await this.disputeSupersededQuotes(swap)
+    if (attribution.status === 'ACCEPTED') return this.acceptClaim(swap, attribution)
 
     return toSwap(
       await this.prisma.swap.update({
@@ -478,20 +493,52 @@ export class SwapsService {
     return preceding !== null
   }
 
-  private async disputeSupersededQuotes(swap: Swap): Promise<void> {
-    await this.prisma.swap.updateMany({
-      where: {
-        sellTxHash: swap.sellTxHash,
-        sellAsset: { path: ['chainId'], equals: swap.sellAsset.chainId },
-        swapId: { not: swap.swapId },
-        attributionStatus: 'ACCEPTED',
-      },
-      data: {
-        attributionStatus: 'DISPUTED',
-        attributionDetails: { checked: true, reason: 'quote-superseded' },
-        attributionResolvedAt: new Date(),
-      },
-    })
+  // demotes any other accepted claim and takes the transaction's key in one step; the key is unique, so a claim
+  // accepted concurrently fails this one, which stays PENDING for the next pass to contest again
+  private async acceptClaim(swap: Swap, attribution: AttributionVerdict): Promise<Swap> {
+    if (!swap.sellTxHash) return swap
+
+    const key = acceptedSellTxKey(swap.sellAsset.chainId, swap.sellTxHash)
+    const resolvedAt = new Date()
+
+    try {
+      const [, accepted] = await this.prisma.$transaction([
+        this.prisma.swap.updateMany({
+          where: {
+            swapId: { not: swap.swapId },
+            attributionStatus: 'ACCEPTED',
+            OR: [
+              { sellTxHash: swap.sellTxHash, sellAsset: { path: ['chainId'], equals: swap.sellAsset.chainId } },
+              { acceptedSellTxKey: key },
+            ],
+          },
+          data: {
+            attributionStatus: 'DISPUTED',
+            attributionDetails: { checked: true, reason: 'quote-superseded' },
+            attributionResolvedAt: resolvedAt,
+            acceptedSellTxKey: null,
+          },
+        }),
+        this.prisma.swap.update({
+          where: { swapId: swap.swapId },
+          data: {
+            attributionStatus: attribution.status,
+            attributionDetails: attribution.details,
+            attributionResolvedAt: resolvedAt,
+            acceptedSellTxKey: key,
+          },
+        }),
+      ])
+
+      return toSwap(accepted)
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        logger.warn(`Swap ${swap.swapId} lost the claim on ${key} to a concurrent acceptance; contesting next pass`)
+        return swap
+      }
+
+      throw error
+    }
   }
 
   // A price still missing a week after settling stops retrying and is left to the payout report
@@ -654,10 +701,13 @@ export class SwapsService {
       })
 
       // The provider's hash outranks one supplied at registration, which a fee bump may have replaced since
-      const sellTxHash =
+      // canonical, so the poller compares it to the stored hash like for like
+      const sellTxHash = canonicalizeOptionalTxHash(
+        swap.sellAsset.chainId,
         reportedSellTxHash ??
-        swap.sellTxHash ??
-        (isExternal ? await this.depositDetectionService.findDepositOnChain(swap) : undefined)
+          swap.sellTxHash ??
+          (isExternal ? await this.depositDetectionService.findDepositOnChain(swap) : undefined),
+      )
 
       // A success needs a deposit to verify, so a confirmed shielded zcash swap waits on unchained rather than settling
       if (status === TxStatus.Confirmed && !sellTxHash) {

@@ -83,4 +83,5 @@ export default {
     blockTime: 1794596942000,
   },
   settledAt: new Date('2026-11-13T19:09:05.135Z'),
+  acceptedSellTxKey: null,
 } satisfies Swap

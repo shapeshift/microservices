@@ -36,6 +36,14 @@ jest.mock('@shapeshiftoss/chain-adapters', () => {
 // each test registers the RPC clients it needs
 jest.mock('@shapeshiftoss/contracts', () => ({ viemClientByChainId: {} }))
 
+const MIDGARD_POOL_ASSETS: Record<string, string> = {
+  'BTC.BTC': 'bip122:000000000019d6689c085ae165831e93/slip44:0',
+  'ETH.ETH': 'eip155:1/slip44:60',
+  'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48': 'eip155:1/erc20:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  'MAYA.CACAO': 'cosmos:mayachain-mainnet-v1/slip44:931',
+  'THOR.RUNE': 'cosmos:thorchain-1/slip44:931',
+}
+
 jest.mock('@shapeshiftoss/swapper', () => ({
   SwapperName: {
     Thorchain: 'THORChain',
@@ -63,6 +71,9 @@ jest.mock('@shapeshiftoss/swapper', () => ({
   },
   THORCHAIN_AFFILIATE_NAME: 'ss',
   MAYACHAIN_AFFILIATE_NAME: 'ssmaya',
+  // a slice of the protocols' pool lists, enough for the fixtures
+  thorPoolAssetIdToAssetId: (asset: string) => MIDGARD_POOL_ASSETS[asset],
+  mayaPoolAssetIdToAssetId: (asset: string) => MIDGARD_POOL_ASSETS[asset],
   swappers: {},
   getTreasuryAddressFromChainId: jest.fn(),
   getSwapMetadata: (metadata: { name?: string } | undefined, name: string) => {

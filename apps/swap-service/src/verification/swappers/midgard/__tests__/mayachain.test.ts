@@ -46,7 +46,11 @@ describe('verifyMayachain', () => {
 
     service = new SwapVerificationService(mockHttp(response).http)
 
-    const result = await service.verifySwap({ ...swap, sellAsset: cacaoAsset } as Swap)
+    const result = await service.verifySwap({
+      ...swap,
+      sellAsset: cacaoAsset,
+      sellAmountCryptoBaseUnit: '241570000000000',
+    } as Swap)
 
     expect(result.verifiedSellAmountCryptoBaseUnit).toBe('241570000000000')
   })

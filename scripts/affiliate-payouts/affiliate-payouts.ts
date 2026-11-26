@@ -17,6 +17,7 @@ import {
   aggregateByPartner,
   buildPayouts,
   buildRecord,
+  findContestedClaims,
   findDeadlineResolved,
   findUnsettled,
   resolveWindow,
@@ -41,7 +42,7 @@ function printSummary(record: PayoutRecord, payouts: PartnerPayout[]): void {
   console.log(`Total USDC:     ${record.totals.totalUsdc}`)
   console.log(`Paid swaps:     ${record.totals.paidSwaps}`)
   console.log(
-    `Excluded/review: ${record.totals.unpriceableSwaps} unpriceable | ${record.totals.feeAnomalySwaps} fee anomalies | ${record.totals.unverifiedSwaps} unverified | ${record.totals.unattributedSwaps} unattributed | ${record.totals.noAffiliateFeeSwaps} no-affiliate-fee | ${record.totals.partnerBpsUnsetSwaps} partner-bps-unset | ${record.totals.noVerifiedFeeSwaps} no-verified-fee`,
+    `Excluded/review: ${record.totals.unpriceableSwaps} unpriceable | ${record.totals.feeAnomalySwaps} fee anomalies | ${record.totals.unverifiedSwaps} unverified | ${record.totals.unattributedSwaps} unattributed | ${record.totals.noAffiliateFeeSwaps} no-affiliate-fee | ${record.totals.partnerBpsUnsetSwaps} partner-bps-unset | ${record.totals.noVerifiedFeeSwaps} no-verified-fee | ${record.totals.contestedSwaps} contested-tx`,
   )
 
   const top = payouts.filter((p) => p.included).slice(0, 10)
@@ -143,12 +144,36 @@ async function generate(monthArg: string | undefined, force: boolean, allowUnset
   // throws rather than leaving fees in a third asset unpaid as if they had no verified fee
   const assetPrecisions = await getAssetPrecisions()
 
-  const { partners, unpriceable, anomalies, unverified, unattributed, noAffiliateFee, partnerBpsUnset, unresolvedFee } =
-    aggregateByPartner(rows, {
+  // every claim on the window's transactions, whenever it was registered, so a fee is never paid twice
+  const sellTxHashes = [...new Set(rows.flatMap((row) => (row.sellTxHash ? [row.sellTxHash] : [])))]
+  const claims = sellTxHashes.length
+    ? await prisma.swap.findMany({
+        where: { sellTxHash: { in: sellTxHashes } },
+        select: { swapId: true, sellTxHash: true, sellAsset: true },
+      })
+    : []
+  const contestedClaims = findContestedClaims(rows, claims)
+
+  const {
+    partners,
+    unpriceable,
+    anomalies,
+    unverified,
+    unattributed,
+    noAffiliateFee,
+    partnerBpsUnset,
+    unresolvedFee,
+    contested,
+  } = aggregateByPartner(
+    rows,
+    {
       toSwap,
       calculateFeeForSwap: (swap) => calculateFeeForSwap(swap, assetPrecisions),
       getPartnerFeeUsd,
-    })
+    },
+    undefined,
+    contestedClaims,
+  )
 
   const affiliates = await prisma.affiliate.findMany({
     where: { partnerCode: { in: Array.from(partners.keys()) } },
@@ -170,6 +195,7 @@ async function generate(monthArg: string | undefined, force: boolean, allowUnset
     noAffiliateFee,
     partnerBpsUnset,
     unresolvedFee,
+    contested,
     deadlineResolved: findDeadlineResolved(allRows),
   })
 

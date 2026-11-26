@@ -393,6 +393,21 @@ describe('polling queries and writes', () => {
     expect(abandoned.map((swap) => swap.swapId)).toEqual(['stalled-1'])
   })
 
+  it('stores a reported sell hash in the canonical spelling for the swap chain', async () => {
+    const writes: Record<string, unknown>[] = []
+    const service = build({
+      findUnique: () => Promise.resolve({ sellAsset: { chainId: 'cosmos:thorchain-1' } }),
+      update: (args: { where: { swapId: string }; data: Record<string, unknown> }) => {
+        writes.push(args.data)
+        return Promise.resolve({ ...args.data, swapId: args.where.swapId })
+      },
+    })
+
+    await service.updateSwapTxHashes({ swapId: 'swap-1', sellTxHash: `0x${'ab'.repeat(32)}` })
+
+    expect(writes[0]).toMatchObject({ sellTxHash: 'AB'.repeat(32) })
+  })
+
   it('stamps settledAt when a swap settles, and only then', async () => {
     const writes: Record<string, unknown>[] = []
     const service = build({
