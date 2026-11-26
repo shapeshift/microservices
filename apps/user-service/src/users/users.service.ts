@@ -7,10 +7,6 @@ import { hashAccountId, isValidAccountId } from '@shapeshift/shared-utils'
 import { PrismaService } from '../prisma/prisma.service'
 import { ReferralService } from '../referral/referral.service'
 
-// EVM addresses are case-insensitive, so every read and write must hash the same form.
-const hashNormalizedAccountId = (accountId: string): string =>
-  hashAccountId(accountId.startsWith('eip155:') ? accountId.toLowerCase() : accountId)
-
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name)
@@ -47,7 +43,7 @@ export class UsersService {
 
   async createUser(data: CreateUserDto): Promise<User> {
     try {
-      const hashedAccountIds = data.accountIds.map((id) => hashNormalizedAccountId(id))
+      const hashedAccountIds = data.accountIds.map((id) => hashAccountId(id))
 
       for (const hashedAccountId of hashedAccountIds) {
         const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
@@ -90,7 +86,7 @@ export class UsersService {
         if (!isValidAccountId(id)) {
           throw new Error('Invalid account ID')
         }
-        return hashNormalizedAccountId(id)
+        return hashAccountId(id)
       })
 
       return this.addHashedAccountIds(userId, hashedAccountIds)
@@ -134,7 +130,7 @@ export class UsersService {
         throw new Error('Invalid account ID')
       }
 
-      const hashedAccountId = hashNormalizedAccountId(data.accountId)
+      const hashedAccountId = hashAccountId(data.accountId)
 
       const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
       if (existingUser && existingUser.id !== data.userId) {
@@ -179,7 +175,7 @@ export class UsersService {
       throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashNormalizedAccountId(accountId)
+    const hashedAccountId = hashAccountId(accountId)
 
     const user = await this.prisma.user.findFirst({
       where: {
@@ -216,7 +212,7 @@ export class UsersService {
       return false
     }
 
-    const hashedAccountId = hashNormalizedAccountId(accountId)
+    const hashedAccountId = hashAccountId(accountId)
     const user = await this.findUserByHashedAccountId(hashedAccountId)
     return !!user
   }
@@ -226,7 +222,7 @@ export class UsersService {
       throw new Error('Invalid account ID')
     }
 
-    const hashedAccountId = hashNormalizedAccountId(accountId)
+    const hashedAccountId = hashAccountId(accountId)
     const existingUser = await this.findUserByHashedAccountId(hashedAccountId)
 
     if (existingUser) {
@@ -255,7 +251,7 @@ export class UsersService {
       }
     })
 
-    const hashedAccountIds = accountIds.map((id) => hashNormalizedAccountId(id))
+    const hashedAccountIds = accountIds.map((id) => hashAccountId(id))
     this.logger.log(`Hashed account IDs: ${JSON.stringify(hashedAccountIds)}`)
 
     for (const hashedAccountId of hashedAccountIds) {
