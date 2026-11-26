@@ -237,30 +237,64 @@ export class SwapsService {
   }
 
   // hashes are stored in one spelling per chain, so the same transaction can't be claimed again under another
-  private async canonicalSellTxHash(swapId: string, sellTxHash: string | undefined): Promise<string | undefined> {
-    if (!sellTxHash) return sellTxHash
+  private async canonicalSellTxHash(
+    swapId: string,
+    sellTxHash: string | undefined,
+  ): Promise<{ sellTxHash: string | undefined; chainId: string | undefined }> {
+    if (!sellTxHash) return { sellTxHash, chainId: undefined }
 
     const row = await this.prisma.swap.findUnique({ where: { swapId }, select: { sellAsset: true } })
     const chainId = (row?.sellAsset as { chainId?: string } | null | undefined)?.chainId
 
-    return chainId ? canonicalizeOptionalTxHash(chainId, sellTxHash) : sellTxHash
+    return { sellTxHash: chainId ? canonicalizeOptionalTxHash(chainId, sellTxHash) : sellTxHash, chainId }
+  }
+
+  // An accepted claim names the transaction it was checked against. When the swap reports a different one, the
+  // claim goes back to pending and is resolved again against the new hash; a respelling of the same hash keeps it.
+  // The hash is written first so the row stays locked against an acceptance until the reset commits.
+  private async writeSellTx(
+    swapId: string,
+    sellTxHash: string | undefined,
+    chainId: string | undefined,
+    data: Prisma.SwapUpdateInput,
+  ) {
+    const update = this.prisma.swap.update({ where: { swapId }, data: { ...data, sellTxHash } })
+    if (!sellTxHash || !chainId) return update
+
+    const key = acceptedSellTxKey(chainId, sellTxHash)
+
+    const [, , updated] = await this.prisma.$transaction([
+      update,
+      this.prisma.swap.updateMany({
+        where: {
+          swapId,
+          attributionStatus: 'ACCEPTED',
+          OR: [{ acceptedSellTxKey: null }, { acceptedSellTxKey: { not: key } }],
+        },
+        data: {
+          attributionStatus: 'PENDING',
+          attributionDetails: { checked: false, reason: 'sell-tx-changed' },
+          attributionResolvedAt: null,
+          acceptedSellTxKey: null,
+        },
+      }),
+      this.prisma.swap.findUniqueOrThrow({ where: { swapId } }),
+    ])
+
+    return updated
   }
 
   async updateSwapStatus(data: UpdateSwapStatusDto): Promise<Swap> {
     try {
-      const sellTxHash = await this.canonicalSellTxHash(data.swapId, data.sellTxHash)
+      const { sellTxHash, chainId } = await this.canonicalSellTxHash(data.swapId, data.sellTxHash)
 
       const swap = toSwap(
-        await this.prisma.swap.update({
-          where: { swapId: data.swapId },
-          data: {
-            status: data.status,
-            sellTxHash,
-            buyTxHash: data.buyTxHash,
-            txLink: data.txLink,
-            statusMessage: data.statusMessage,
-            ...(isSettledStatus(data.status) && { settledAt: new Date() }),
-          },
+        await this.writeSellTx(data.swapId, sellTxHash, chainId, {
+          status: data.status,
+          buyTxHash: data.buyTxHash,
+          txLink: data.txLink,
+          statusMessage: data.statusMessage,
+          ...(isSettledStatus(data.status) && { settledAt: new Date() }),
         }),
       )
 
@@ -286,17 +320,13 @@ export class SwapsService {
     txLink?: string
     statusMessage?: string
   }): Promise<Swap> {
-    const sellTxHash = await this.canonicalSellTxHash(data.swapId, data.sellTxHash)
+    const { sellTxHash, chainId } = await this.canonicalSellTxHash(data.swapId, data.sellTxHash)
 
     const swap = toSwap(
-      await this.prisma.swap.update({
-        where: { swapId: data.swapId },
-        data: {
-          sellTxHash,
-          buyTxHash: data.buyTxHash,
-          txLink: data.txLink,
-          statusMessage: data.statusMessage,
-        },
+      await this.writeSellTx(data.swapId, sellTxHash, chainId, {
+        buyTxHash: data.buyTxHash,
+        txLink: data.txLink,
+        statusMessage: data.statusMessage,
       }),
     )
 
@@ -494,23 +524,35 @@ export class SwapsService {
   }
 
   // demotes any other accepted claim and takes the transaction's key in one step; the key is unique, so a claim
-  // accepted concurrently fails this one, which stays PENDING for the next pass to contest again
+  // accepted concurrently fails this one, which stays PENDING for the next pass to contest again. The claim is
+  // only taken while the swap still holds the transaction that was checked; if the poller replaced it meanwhile,
+  // nothing is written and the next pass checks the new one.
   private async acceptClaim(swap: Swap, attribution: AttributionVerdict): Promise<Swap> {
-    if (!swap.sellTxHash) return swap
+    const { sellTxHash } = swap
+    if (!sellTxHash) return swap
 
-    const key = acceptedSellTxKey(swap.sellAsset.chainId, swap.sellTxHash)
+    const chainId = swap.sellAsset.chainId
+    const key = acceptedSellTxKey(chainId, sellTxHash)
     const resolvedAt = new Date()
 
     try {
-      const [, accepted] = await this.prisma.$transaction([
-        this.prisma.swap.updateMany({
+      const accepted = await this.prisma.$transaction(async (tx) => {
+        // locks the row, so its hash can't change until this commits
+        const { count } = await tx.swap.updateMany({
+          where: { swapId: swap.swapId, sellTxHash },
+          data: {
+            attributionStatus: attribution.status,
+            attributionDetails: attribution.details,
+            attributionResolvedAt: resolvedAt,
+          },
+        })
+        if (count === 0) return null
+
+        await tx.swap.updateMany({
           where: {
             swapId: { not: swap.swapId },
             attributionStatus: 'ACCEPTED',
-            OR: [
-              { sellTxHash: swap.sellTxHash, sellAsset: { path: ['chainId'], equals: swap.sellAsset.chainId } },
-              { acceptedSellTxKey: key },
-            ],
+            OR: [{ sellTxHash, sellAsset: { path: ['chainId'], equals: chainId } }, { acceptedSellTxKey: key }],
           },
           data: {
             attributionStatus: 'DISPUTED',
@@ -518,17 +560,15 @@ export class SwapsService {
             attributionResolvedAt: resolvedAt,
             acceptedSellTxKey: null,
           },
-        }),
-        this.prisma.swap.update({
-          where: { swapId: swap.swapId },
-          data: {
-            attributionStatus: attribution.status,
-            attributionDetails: attribution.details,
-            attributionResolvedAt: resolvedAt,
-            acceptedSellTxKey: key,
-          },
-        }),
-      ])
+        })
+
+        return tx.swap.update({ where: { swapId: swap.swapId }, data: { acceptedSellTxKey: key } })
+      })
+
+      if (!accepted) {
+        logger.warn(`Swap ${swap.swapId} changed its sell transaction while ${key} was checked; contesting next pass`)
+        return swap
+      }
 
       return toSwap(accepted)
     } catch (error) {

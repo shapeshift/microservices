@@ -286,7 +286,7 @@ describe('polling queries and writes', () => {
   const build = (prisma: Record<string, unknown>) => {
     const stub = {} as never
     return new SwapsService(
-      { swap: prisma } as never,
+      { swap: prisma, $transaction: (operations: Promise<unknown>[]) => Promise.all(operations) } as never,
       stub,
       stub,
       stub,
@@ -401,6 +401,8 @@ describe('polling queries and writes', () => {
         writes.push(args.data)
         return Promise.resolve({ ...args.data, swapId: args.where.swapId })
       },
+      updateMany: () => Promise.resolve({ count: 0 }),
+      findUniqueOrThrow: () => Promise.resolve({ swapId: 'swap-1' }),
     })
 
     await service.updateSwapTxHashes({ swapId: 'swap-1', sellTxHash: `0x${'ab'.repeat(32)}` })
