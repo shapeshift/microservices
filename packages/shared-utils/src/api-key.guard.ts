@@ -1,7 +1,11 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common'
+import { CanActivate, ExecutionContext, Injectable, Optional, UnauthorizedException } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
 import * as crypto from 'crypto'
 
 export const API_KEY_HEADER = 'x-api-key'
+
+/** Metadata key for routes that serve public clients and enforce their own authorization. */
+export const PUBLIC_ACCESS = 'public-access'
 
 interface RequestWithHeaders {
   headers: Record<string, string | string[] | undefined>
@@ -14,6 +18,8 @@ interface RequestWithHeaders {
  * once from the `SERVICE_API_KEY` env var at construction time, so a missing key
  * fails the service at boot rather than silently allowing traffic through.
  *
+ * Handlers or controllers marked with `PUBLIC_ACCESS` metadata are skipped; they must authorize callers themselves.
+ *
  * Note: routes registered directly on the underlying HTTP adapter (e.g. `/health`)
  * are not Nest routes and are therefore not covered by this guard.
  */
@@ -21,13 +27,17 @@ interface RequestWithHeaders {
 export class ApiKeyGuard implements CanActivate {
   private readonly expectedKey: string
 
-  constructor() {
+  constructor(@Optional() private readonly reflector?: Reflector) {
     const key = process.env.SERVICE_API_KEY
     if (!key) throw new Error('Required environment variable SERVICE_API_KEY is not set')
     this.expectedKey = key
   }
 
   canActivate(context: ExecutionContext): boolean {
+    if (this.reflector?.getAllAndOverride<boolean>(PUBLIC_ACCESS, [context.getHandler(), context.getClass()])) {
+      return true
+    }
+
     const request = context.switchToHttp().getRequest<RequestWithHeaders>()
     const provided = request.headers[API_KEY_HEADER]
 
