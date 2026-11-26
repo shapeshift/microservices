@@ -91,6 +91,7 @@ const buildService = (affiliate: AffiliateRow | null, addressMatches: { partnerC
     stub,
     stub,
     stub,
+    stub,
   )
 
   return { service, findUniqueCalls, findManyCalls, createCalls }

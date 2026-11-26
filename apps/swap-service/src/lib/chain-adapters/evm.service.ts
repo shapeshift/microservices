@@ -36,24 +36,15 @@ export class EvmChainAdapterService {
       this.initializePlasmaAdapter(chainAdapterManager)
       this.initializeMantleAdapter(chainAdapterManager)
       this.initializeMegaEthAdapter(chainAdapterManager)
-      this.initializeBerachainAdapter(chainAdapterManager)
       this.initializeCronosAdapter(chainAdapterManager)
       this.initializeKatanaAdapter(chainAdapterManager)
-      this.initializeFlowEvmAdapter(chainAdapterManager)
       this.initializeCeloAdapter(chainAdapterManager)
-      this.initializePlumeAdapter(chainAdapterManager)
-      this.initializeStoryAdapter(chainAdapterManager)
-      this.initializeZkSyncEraAdapter(chainAdapterManager)
-      this.initializeBlastAdapter(chainAdapterManager)
-      this.initializeWorldChainAdapter(chainAdapterManager)
-      this.initializeHemiAdapter(chainAdapterManager)
-      this.initializeLineaAdapter(chainAdapterManager)
-      this.initializeScrollAdapter(chainAdapterManager)
       this.initializeSonicAdapter(chainAdapterManager)
       this.initializeUnichainAdapter(chainAdapterManager)
       this.initializeBobAdapter(chainAdapterManager)
-      this.initializeModeAdapter(chainAdapterManager)
-      this.initializeSoneiumAdapter(chainAdapterManager)
+      this.initializeElysiumAdapter(chainAdapterManager)
+      this.initializeRobinhoodAdapter(chainAdapterManager)
+      this.initializeSeiAdapter(chainAdapterManager)
 
       this.logger.log('All EVM chain adapters initialized successfully')
     } catch (error) {
@@ -81,17 +72,16 @@ export class EvmChainAdapterService {
   }
 
   private initializeAvalancheAdapter(chainAdapterManager: Map<string, any>) {
-    const avalancheHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_AVALANCHE_HTTP_URL }),
+    const avalancheHttp = new unchained.avalanche.V1Api(
+      new unchained.avalanche.Configuration({ basePath: env.VITE_UNCHAINED_AVALANCHE_HTTP_URL }),
     )
 
-    const avalancheWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_AVALANCHE_WS_URL)
+    const avalancheWs = new unchained.ws.Client<unchained.avalanche.Tx>(env.VITE_UNCHAINED_AVALANCHE_WS_URL)
 
-    const avalancheAdapter = new adapters.ethereum.ChainAdapter({
+    const avalancheAdapter = new adapters.avalanche.ChainAdapter({
       providers: { http: avalancheHttp, ws: avalancheWs },
       rpcUrl: env.VITE_AVALANCHE_NODE_URL,
-      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
+      midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.avalancheChainId, avalancheAdapter)
@@ -99,17 +89,15 @@ export class EvmChainAdapterService {
   }
 
   private initializeOptimismAdapter(chainAdapterManager: Map<string, any>) {
-    const optimismHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_OPTIMISM_HTTP_URL }),
+    const optimismHttp = new unchained.optimism.V1Api(
+      new unchained.optimism.Configuration({ basePath: env.VITE_UNCHAINED_OPTIMISM_HTTP_URL }),
     )
 
-    const optimismWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_OPTIMISM_WS_URL)
+    const optimismWs = new unchained.ws.Client<unchained.optimism.Tx>(env.VITE_UNCHAINED_OPTIMISM_WS_URL)
 
-    const optimismAdapter = new adapters.ethereum.ChainAdapter({
+    const optimismAdapter = new adapters.optimism.ChainAdapter({
       providers: { http: optimismHttp, ws: optimismWs },
       rpcUrl: env.VITE_OPTIMISM_NODE_URL,
-      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.optimismChainId, optimismAdapter)
@@ -117,17 +105,16 @@ export class EvmChainAdapterService {
   }
 
   private initializeBscAdapter(chainAdapterManager: Map<string, any>) {
-    const bscHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL }),
+    const bscHttp = new unchained.bnbsmartchain.V1Api(
+      new unchained.bnbsmartchain.Configuration({ basePath: env.VITE_UNCHAINED_BNBSMARTCHAIN_HTTP_URL }),
     )
 
-    const bscWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL)
+    const bscWs = new unchained.ws.Client<unchained.bnbsmartchain.Tx>(env.VITE_UNCHAINED_BNBSMARTCHAIN_WS_URL)
 
-    const bscAdapter = new adapters.ethereum.ChainAdapter({
+    const bscAdapter = new adapters.bnbsmartchain.ChainAdapter({
       providers: { http: bscHttp, ws: bscWs },
       rpcUrl: env.VITE_BNBSMARTCHAIN_NODE_URL,
-      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
+      midgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.bscChainId, bscAdapter)
@@ -135,17 +122,15 @@ export class EvmChainAdapterService {
   }
 
   private initializePolygonAdapter(chainAdapterManager: Map<string, any>) {
-    const polygonHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_POLYGON_HTTP_URL }),
+    const polygonHttp = new unchained.polygon.V1Api(
+      new unchained.polygon.Configuration({ basePath: env.VITE_UNCHAINED_POLYGON_HTTP_URL }),
     )
 
-    const polygonWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_POLYGON_WS_URL)
+    const polygonWs = new unchained.ws.Client<unchained.polygon.Tx>(env.VITE_UNCHAINED_POLYGON_WS_URL)
 
-    const polygonAdapter = new adapters.ethereum.ChainAdapter({
+    const polygonAdapter = new adapters.polygon.ChainAdapter({
       providers: { http: polygonHttp, ws: polygonWs },
       rpcUrl: env.VITE_POLYGON_NODE_URL,
-      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.polygonChainId, polygonAdapter)
@@ -153,17 +138,15 @@ export class EvmChainAdapterService {
   }
 
   private initializeGnosisAdapter(chainAdapterManager: Map<string, any>) {
-    const gnosisHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_GNOSIS_HTTP_URL }),
+    const gnosisHttp = new unchained.gnosis.V1Api(
+      new unchained.gnosis.Configuration({ basePath: env.VITE_UNCHAINED_GNOSIS_HTTP_URL }),
     )
 
-    const gnosisWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_GNOSIS_WS_URL)
+    const gnosisWs = new unchained.ws.Client<unchained.gnosis.Tx>(env.VITE_UNCHAINED_GNOSIS_WS_URL)
 
-    const gnosisAdapter = new adapters.ethereum.ChainAdapter({
+    const gnosisAdapter = new adapters.gnosis.ChainAdapter({
       providers: { http: gnosisHttp, ws: gnosisWs },
       rpcUrl: env.VITE_GNOSIS_NODE_URL,
-      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.gnosisChainId, gnosisAdapter)
@@ -171,16 +154,15 @@ export class EvmChainAdapterService {
   }
 
   private initializeArbitrumAdapter(chainAdapterManager: Map<string, any>) {
-    const arbitrumHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_ARBITRUM_HTTP_URL }),
+    const arbitrumHttp = new unchained.arbitrum.V1Api(
+      new unchained.arbitrum.Configuration({ basePath: env.VITE_UNCHAINED_ARBITRUM_HTTP_URL }),
     )
 
-    const arbitrumWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_ARBITRUM_WS_URL)
+    const arbitrumWs = new unchained.ws.Client<unchained.arbitrum.Tx>(env.VITE_UNCHAINED_ARBITRUM_WS_URL)
 
-    const arbitrumAdapter = new adapters.ethereum.ChainAdapter({
+    const arbitrumAdapter = new adapters.arbitrum.ChainAdapter({
       providers: { http: arbitrumHttp, ws: arbitrumWs },
       rpcUrl: env.VITE_ARBITRUM_NODE_URL,
-      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
       mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
@@ -189,17 +171,15 @@ export class EvmChainAdapterService {
   }
 
   private initializeBaseAdapter(chainAdapterManager: Map<string, any>) {
-    const baseHttp = new unchained.ethereum.V1Api(
-      new unchained.ethereum.Configuration({ basePath: env.VITE_UNCHAINED_BASE_HTTP_URL }),
+    const baseHttp = new unchained.base.V1Api(
+      new unchained.base.Configuration({ basePath: env.VITE_UNCHAINED_BASE_HTTP_URL }),
     )
 
-    const baseWs = new unchained.ws.Client<unchained.ethereum.Tx>(env.VITE_UNCHAINED_BASE_WS_URL)
+    const baseWs = new unchained.ws.Client<unchained.base.Tx>(env.VITE_UNCHAINED_BASE_WS_URL)
 
-    const baseAdapter = new adapters.ethereum.ChainAdapter({
+    const baseAdapter = new adapters.base.ChainAdapter({
       providers: { http: baseHttp, ws: baseWs },
       rpcUrl: env.VITE_BASE_NODE_URL,
-      thorMidgardUrl: env.VITE_THORCHAIN_MIDGARD_URL,
-      mayaMidgardUrl: env.VITE_MAYACHAIN_MIDGARD_URL,
     })
 
     chainAdapterManager.set(caip.baseChainId, baseAdapter)
@@ -266,16 +246,6 @@ export class EvmChainAdapterService {
     this.logger.log('MegaETH chain adapter initialized')
   }
 
-  private initializeBerachainAdapter(chainAdapterManager: Map<string, any>) {
-    const berachainAdapter = new adapters.berachain.ChainAdapter({
-      rpcUrl: env.VITE_BERACHAIN_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.BerachainMainnet, berachainAdapter)
-    this.logger.log('Berachain chain adapter initialized')
-  }
-
   private initializeCronosAdapter(chainAdapterManager: Map<string, any>) {
     const cronosAdapter = new adapters.cronos.ChainAdapter({
       rpcUrl: env.VITE_CRONOS_NODE_URL,
@@ -296,16 +266,6 @@ export class EvmChainAdapterService {
     this.logger.log('Katana chain adapter initialized')
   }
 
-  private initializeFlowEvmAdapter(chainAdapterManager: Map<string, any>) {
-    const flowEvmAdapter = new adapters.flowEvm.ChainAdapter({
-      rpcUrl: env.VITE_FLOWEVM_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.FlowEvmMainnet, flowEvmAdapter)
-    this.logger.log('Flow EVM chain adapter initialized')
-  }
-
   private initializeCeloAdapter(chainAdapterManager: Map<string, any>) {
     const celoAdapter = new adapters.celo.ChainAdapter({
       rpcUrl: env.VITE_CELO_NODE_URL,
@@ -314,86 +274,6 @@ export class EvmChainAdapterService {
 
     chainAdapterManager.set(KnownChainIds.CeloMainnet, celoAdapter)
     this.logger.log('Celo chain adapter initialized')
-  }
-
-  private initializePlumeAdapter(chainAdapterManager: Map<string, any>) {
-    const plumeAdapter = new adapters.plume.ChainAdapter({
-      rpcUrl: env.VITE_PLUME_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.PlumeMainnet, plumeAdapter)
-    this.logger.log('Plume chain adapter initialized')
-  }
-
-  private initializeStoryAdapter(chainAdapterManager: Map<string, any>) {
-    const storyAdapter = new adapters.story.ChainAdapter({
-      rpcUrl: env.VITE_STORY_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.StoryMainnet, storyAdapter)
-    this.logger.log('Story chain adapter initialized')
-  }
-
-  private initializeZkSyncEraAdapter(chainAdapterManager: Map<string, any>) {
-    const zkSyncEraAdapter = new adapters.zksyncera.ChainAdapter({
-      rpcUrl: env.VITE_ZKSYNCERA_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.ZkSyncEraMainnet, zkSyncEraAdapter)
-    this.logger.log('zkSync Era chain adapter initialized')
-  }
-
-  private initializeBlastAdapter(chainAdapterManager: Map<string, any>) {
-    const blastAdapter = new adapters.blast.ChainAdapter({
-      rpcUrl: env.VITE_BLAST_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.BlastMainnet, blastAdapter)
-    this.logger.log('Blast chain adapter initialized')
-  }
-
-  private initializeWorldChainAdapter(chainAdapterManager: Map<string, any>) {
-    const worldChainAdapter = new adapters.worldchain.ChainAdapter({
-      rpcUrl: env.VITE_WORLDCHAIN_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.WorldChainMainnet, worldChainAdapter)
-    this.logger.log('World Chain chain adapter initialized')
-  }
-
-  private initializeHemiAdapter(chainAdapterManager: Map<string, any>) {
-    const hemiAdapter = new adapters.hemi.ChainAdapter({
-      rpcUrl: env.VITE_HEMI_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.HemiMainnet, hemiAdapter)
-    this.logger.log('Hemi chain adapter initialized')
-  }
-
-  private initializeLineaAdapter(chainAdapterManager: Map<string, any>) {
-    const lineaAdapter = new adapters.linea.ChainAdapter({
-      rpcUrl: env.VITE_LINEA_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.LineaMainnet, lineaAdapter)
-    this.logger.log('Linea chain adapter initialized')
-  }
-
-  private initializeScrollAdapter(chainAdapterManager: Map<string, any>) {
-    const scrollAdapter = new adapters.scroll.ChainAdapter({
-      rpcUrl: env.VITE_SCROLL_NODE_URL,
-      getKnownTokens: () => [],
-    })
-
-    chainAdapterManager.set(KnownChainIds.ScrollMainnet, scrollAdapter)
-    this.logger.log('Scroll chain adapter initialized')
   }
 
   private initializeSonicAdapter(chainAdapterManager: Map<string, any>) {
@@ -426,24 +306,34 @@ export class EvmChainAdapterService {
     this.logger.log('BOB chain adapter initialized')
   }
 
-  private initializeModeAdapter(chainAdapterManager: Map<string, any>) {
-    const modeAdapter = new adapters.mode.ChainAdapter({
-      rpcUrl: env.VITE_MODE_NODE_URL,
+  private initializeElysiumAdapter(chainAdapterManager: Map<string, any>) {
+    const elysiumAdapter = new adapters.elysium.ChainAdapter({
+      rpcUrl: env.VITE_ELYSIUM_NODE_URL,
       getKnownTokens: () => [],
     })
 
-    chainAdapterManager.set(KnownChainIds.ModeMainnet, modeAdapter)
-    this.logger.log('Mode chain adapter initialized')
+    chainAdapterManager.set(KnownChainIds.ElysiumMainnet, elysiumAdapter)
+    this.logger.log('Elysium chain adapter initialized')
   }
 
-  private initializeSoneiumAdapter(chainAdapterManager: Map<string, any>) {
-    const soneiumAdapter = new adapters.soneium.ChainAdapter({
-      rpcUrl: env.VITE_SONEIUM_NODE_URL,
+  private initializeRobinhoodAdapter(chainAdapterManager: Map<string, any>) {
+    const robinhoodAdapter = new adapters.robinhood.ChainAdapter({
+      rpcUrl: env.VITE_ROBINHOOD_NODE_URL,
       getKnownTokens: () => [],
     })
 
-    chainAdapterManager.set(KnownChainIds.SoneiumMainnet, soneiumAdapter)
-    this.logger.log('Soneium chain adapter initialized')
+    chainAdapterManager.set(KnownChainIds.RobinhoodMainnet, robinhoodAdapter)
+    this.logger.log('Robinhood chain adapter initialized')
+  }
+
+  private initializeSeiAdapter(chainAdapterManager: Map<string, any>) {
+    const seiAdapter = new adapters.sei.ChainAdapter({
+      rpcUrl: env.VITE_SEI_NODE_URL,
+      getKnownTokens: () => [],
+    })
+
+    chainAdapterManager.set(KnownChainIds.SeiMainnet, seiAdapter)
+    this.logger.log('Sei chain adapter initialized')
   }
 
   assertGetEvmChainAdapter(chainId: ChainId): EvmChainAdapter {

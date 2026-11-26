@@ -1,0 +1,59 @@
+{
+  "data": {
+    "swapRequest": {
+      "completedEventId": "21999302862",
+      "executedSwaps": {
+        "aggregates": {
+          "sum": {
+            "swapInputAmount": "10019653322684281161543"
+          }
+        }
+      },
+      "egress": {
+        "amount": "15367185"
+      },
+      "beneficiaries": {
+        "nodes": [
+          {
+            "type": "AFFILIATE",
+            "brokerCommissionRateBps": 60,
+            "commissions": {
+              "groupedAggregates": [
+                {
+                  "asset": [
+                    "Usdc"
+                  ],
+                  "sum": {
+                    "amount": "59928344"
+                  }
+                }
+              ]
+            },
+            "account": {
+              "idSs58": "cFMeDPtPHccVYdBSJKTtCYuy7rewFNpro3xZBKaCGbSS2xhRi"
+            }
+          },
+          {
+            "type": "SUBMITTER",
+            "brokerCommissionRateBps": 5,
+            "commissions": {
+              "groupedAggregates": [
+                {
+                  "asset": [
+                    "Usdc"
+                  ],
+                  "sum": {
+                    "amount": "4994027"
+                  }
+                }
+              ]
+            },
+            "account": {
+              "idSs58": "cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

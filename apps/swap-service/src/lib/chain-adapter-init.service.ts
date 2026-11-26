@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 
 import { ChainAdapterManagerService } from './chain-adapter-manager.service'
+import { AptosChainAdapterService } from './chain-adapters/aptos.service'
 import { CosmosSdkChainAdapterService } from './chain-adapters/cosmos-sdk.service'
 import { EvmChainAdapterService } from './chain-adapters/evm.service'
 import { NearChainAdapterService } from './chain-adapters/near.service'
@@ -26,6 +27,7 @@ export class ChainAdapterInitService {
     private nearChainAdapterService: NearChainAdapterService,
     private starknetChainAdapterService: StarknetChainAdapterService,
     private tonChainAdapterService: TonChainAdapterService,
+    private aptosChainAdapterService: AptosChainAdapterService,
   ) {}
 
   initializeChainAdapters() {
@@ -41,6 +43,7 @@ export class ChainAdapterInitService {
       this.nearChainAdapterService.initializeNearChainAdapter()
       this.starknetChainAdapterService.initializeStarknetChainAdapter()
       this.tonChainAdapterService.initializeTonChainAdapter()
+      this.aptosChainAdapterService.initializeAptosChainAdapter()
 
       this.logger.log('All chain adapters initialized successfully')
     } catch (error) {

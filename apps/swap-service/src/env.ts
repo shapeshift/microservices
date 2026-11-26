@@ -11,6 +11,27 @@ const schema = z.object({
   // Security
   ACCOUNT_ID_SALT: z.string().min(1),
   SIWE_JWT_SECRET: z.string().min(1),
+  SIWE_ALLOWED_ORIGINS: z
+    .string()
+    .min(1)
+    .transform((value) => value.split(',').map((origin) => origin.trim()))
+    .refine(
+      (origins) =>
+        origins.every((origin) => {
+          try {
+            const url = new URL(origin)
+            return (
+              origin === url.origin &&
+              !url.username &&
+              !url.password &&
+              (url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost'))
+            )
+          } catch {
+            return false
+          }
+        }),
+      'SIWE_ALLOWED_ORIGINS must contain exact HTTPS origins (HTTP localhost is allowed)',
+    ),
   SERVICE_API_KEY: z.string().min(1),
 
   // API Keys
@@ -89,43 +110,39 @@ export const env = Object.freeze({
   ...result.data,
   VITE_UNCHAINED_MONAD_HTTP_URL: 'https://rpc.monad.xyz',
   VITE_UNCHAINED_MONAD_WS_URL: 'wss://rpc3.monad.xyz',
-  VITE_BERACHAIN_NODE_URL: 'https://rpc.berachain.com',
-  VITE_BLAST_NODE_URL: 'https://rpc.blast.io',
   VITE_BOB_NODE_URL: 'https://rpc.gobob.xyz',
   VITE_CELO_NODE_URL: 'https://forno.celo.org',
   VITE_CRONOS_NODE_URL: 'https://evm.cronos.org',
-  VITE_FLOWEVM_NODE_URL: 'https://mainnet.evm.nodes.onflow.org',
-  VITE_HEMI_NODE_URL: 'https://rpc.hemi.network/rpc',
+  VITE_ELYSIUM_NODE_URL: 'https://rpc.elysium.kinetiq.xyz',
   VITE_HYPEREVM_NODE_URL: 'https://rpc.hyperliquid.xyz/evm',
   VITE_INK_NODE_URL: 'https://rpc-gel.inkonchain.com',
   VITE_KATANA_NODE_URL: 'https://rpc.katana.network',
-  VITE_LINEA_NODE_URL: 'https://rpc.linea.build',
   VITE_MANTLE_NODE_URL: 'https://rpc.mantle.xyz',
   VITE_MEGAETH_NODE_URL: 'https://mainnet.megaeth.com/rpc',
-  VITE_MODE_NODE_URL: 'https://mainnet.mode.network',
   VITE_MONAD_NODE_URL: 'https://rpc.monad.xyz',
   VITE_NEAR_NODE_URLS: 'https://rpc.mainnet.near.org,https://near.lava.build,https://rpc.fastnear.com',
   VITE_PLASMA_NODE_URL: 'https://rpc.plasma.to',
-  VITE_PLUME_NODE_URL: 'https://rpc.plume.org',
-  VITE_SCROLL_NODE_URL: 'https://rpc.scroll.io',
-  VITE_SONEIUM_NODE_URL: 'https://rpc.soneium.org',
+  VITE_ROBINHOOD_NODE_URL: 'https://rpc.mainnet.chain.robinhood.com',
+  VITE_SEI_NODE_URL: 'https://evm-rpc.sei-apis.com',
   VITE_SONIC_NODE_URL: 'https://rpc.soniclabs.com',
   VITE_STARKNET_NODE_URL: 'https://rpc.starknet.lava.build',
-  VITE_STORY_NODE_URL: 'https://mainnet.storyrpc.io',
-  VITE_SUI_NODE_URL: 'https://fullnode.mainnet.sui.io:443',
+  VITE_SUI_NODE_URL: 'https://fullnode.mainnet.sui.io',
   VITE_TON_NODE_URL: 'https://toncenter.com/api/v2/jsonRPC',
   VITE_TRON_NODE_URL: 'https://api.trongrid.io',
   VITE_UNICHAIN_NODE_URL: 'https://mainnet.unichain.org',
-  VITE_WORLDCHAIN_NODE_URL: 'https://worldchain-mainnet.g.alchemy.com/public',
-  VITE_ZKSYNCERA_NODE_URL: 'https://mainnet.era.zksync.io',
+  VITE_APTOS_INDEXER_URL: 'https://api.mainnet.aptoslabs.com',
+  VITE_APTOS_NODE_URL: 'https://fullnode.mainnet.aptoslabs.com',
   VITE_ACROSS_API_URL: 'https://app.across.to/api',
-  VITE_BEBOP_API_URL: 'https://api.bebop.xyz',
   VITE_CHAINFLIP_API_URL: 'https://chainflip-broker.io',
+  VITE_CHAINFLIP_EXPLORER_URL: 'https://explorer-service-processor.chainflip.io/graphql',
   VITE_COWSWAP_BASE_URL: 'https://api.cow.fi',
   VITE_DEBRIDGE_API_URL: '',
+  VITE_FYND_BASE_URL: 'https://api.proxy.shapeshift.com/api/v1/fynd',
+  VITE_KYBER_BASE_URL: 'https://api.proxy.shapeshift.com/api/v1/kyber',
   VITE_NEAR_FAST_API_URL: 'https://api.fastnear.com',
   VITE_PORTALS_BASE_URL: 'https://api.proxy.shapeshift.com/api/v1/portals',
   VITE_RELAY_API_URL: 'https://api.relay.link',
+  VITE_SYMBIOSIS_API_URL: 'https://api.proxy.shapeshift.com/api/v1/symbiosis',
   VITE_ZRX_BASE_URL: 'https://api.proxy.shapeshift.com/api/v1/zrx',
 })
 

@@ -182,22 +182,20 @@ export const computeSellAmountUsd = (
   return bnOrZero(baseUnitToPrecision(sellAmountCryptoBaseUnit, precision)).times(sellAssetUsd).toNumber()
 }
 
-export const fetchUsdPrices = async (data: CreateSwapDto, affiliateFeeAssetId: string | null): Promise<UsdPrices> => {
+export const fetchUsdPrices = async (data: CreateSwapDto): Promise<Omit<UsdPrices, 'affiliateAssetUsd'>> => {
   try {
-    const [sellAssetUsd, buyAssetUsd, affiliateAssetUsd] = await Promise.all([
+    const [sellAssetUsd, buyAssetUsd] = await Promise.all([
       getAssetPriceUsd(data.sellAsset.assetId),
       getAssetPriceUsd(data.buyAsset.assetId),
-      affiliateFeeAssetId ? getAssetPriceUsd(affiliateFeeAssetId) : Promise.resolve<number | null>(null),
     ])
 
     return {
       sellAssetUsd: sellAssetUsd?.toString() ?? null,
       buyAssetUsd: buyAssetUsd?.toString() ?? null,
-      affiliateAssetUsd: affiliateAssetUsd?.toString() ?? null,
     }
   } catch (err) {
     logger.warn(`Failed to fetch USD prices for swap ${data.swapId}:`, err)
-    return { sellAssetUsd: null, buyAssetUsd: null, affiliateAssetUsd: null }
+    return { sellAssetUsd: null, buyAssetUsd: null }
   }
 }
 
