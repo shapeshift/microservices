@@ -1,0 +1,91 @@
+{
+  "status": "SUCCESS",
+  "updatedAt": "2026-10-28T09:15:15.000Z",
+  "swapDetails": {
+    "depositedAmount": "8367915739941227",
+    "depositedAmountUsd": "19.810120043579",
+    "depositedAmountFormatted": "0.008367915739941227",
+    "intentHashes": ["8EUY6XcAZmXJA5oLpZDYXGZtdrQj1WB3riyWfiBWPdHT"],
+    "nearTxHashes": ["7HSjfxpwbUMUCtcjwbFL7uEffBLy1v5cDnvfBDpNeg5b", "FZR7HPZ6aB3z7SwjdpytyeXuDYoCwYf2Yo3LNspdxojr"],
+    "amountIn": "8327035176393505",
+    "amountInFormatted": "0.008327035176393505",
+    "amountInUsd": "19.713339806242",
+    "amountOut": "22123",
+    "amountOutFormatted": "0.00022123",
+    "amountOutUsd": "18.002148790000",
+    "slippage": 1,
+    "refundedAmount": "40320563547722",
+    "refundedAmountFormatted": "0.000040320563547722",
+    "refundedAmountUsd": "0.095454498937",
+    "refundReason": null,
+    "refundFee": "560000000000",
+    "withdrawFee": "1900",
+    "originChainTxHashes": [
+      {
+        "hash": "0xf748350f50240c0897fc41c7121171be04aa4fe7c16b40cd81c3efb7721d8cab",
+        "explorerUrl": ""
+      },
+      {
+        "hash": "0x4134c4416dbfebf49f7e398893e2d625aa9de6a8ea6cc68c42f4e1c6102f7334",
+        "explorerUrl": ""
+      }
+    ],
+    "destinationChainTxHashes": [
+      {
+        "hash": "c6d3f16bc049d30264ae0636e05a647e71ddf00496ee850d6c28617d72352af6",
+        "explorerUrl": ""
+      }
+    ]
+  },
+  "quoteResponse": {
+    "timestamp": "2026-10-28T09:04:54.762Z",
+    "signature": "ed25519:4gYYVy2sr2zAPCmadtpwZ2rECqzYCXc9NFsPCNPboxcDTTmZgXny4uJ7kmZ2Bmg5kzMGJJHdxb4ReLZfKuAkZxuq",
+    "quoteRequest": {
+      "dry": false,
+      "swapType": "EXACT_OUTPUT",
+      "depositMode": "SIMPLE",
+      "slippageTolerance": 50,
+      "originAsset": "nep141:base.omft.near",
+      "depositType": "ORIGIN_CHAIN",
+      "destinationAsset": "1cs_v1:btc:native:coin",
+      "amount": "22123",
+      "refundTo": "0x3B49F3D23833aE81Fb08Cf4C211b7dc47Da2dE87",
+      "refundType": "ORIGIN_CHAIN",
+      "recipient": "bc1qct0s7yt4faqw2x3mvxpssctkram4s7462fajfe",
+      "recipientType": "DESTINATION_CHAIN",
+      "deadline": "2026-10-28T13:04:54.686Z",
+      "appFees": [
+        {
+          "limitOrderId": null,
+          "recipient": "shapeshifttokenomics.sputnik-dao.near",
+          "fee": 40
+        },
+        {
+          "limitOrderId": null,
+          "recipient": "5880ad2b362620fadf759cbceb1cd5737ce8c6ed7fb8e9942881e6731f9247dd",
+          "fee": 40
+        }
+      ],
+      "virtualChainRecipient": null,
+      "virtualChainRefundRecipient": null,
+      "referral": "shapeshift",
+      "confidentiality": "public"
+    },
+    "quote": {
+      "amountIn": "8367915739941227",
+      "amountInFormatted": "0.008367915739941227",
+      "amountInUsd": "19.810120043579",
+      "minAmountIn": "8326076161241520",
+      "amountOut": "22123",
+      "amountOutFormatted": "0.00022123",
+      "amountOutUsd": "18.002148790000",
+      "minAmountOut": "22123",
+      "timeWhenInactive": "2026-10-31T13:04:54.686Z",
+      "depositAddress": "0xDDa84fEfcC2524788CAfA4B43c16Eff6d5610587",
+      "deadline": "2026-10-31T13:04:54.686Z",
+      "timeEstimate": 480,
+      "refundFee": "560000000000",
+      "withdrawFee": "1900"
+    }
+  }
+}

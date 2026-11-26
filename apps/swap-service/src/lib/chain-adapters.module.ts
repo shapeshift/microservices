@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common'
 
 import { ChainAdapterInitService } from './chain-adapter-init.service'
 import { ChainAdapterManagerService } from './chain-adapter-manager.service'
+import { AptosChainAdapterService } from './chain-adapters/aptos.service'
 import { CosmosSdkChainAdapterService } from './chain-adapters/cosmos-sdk.service'
 import { EvmChainAdapterService } from './chain-adapters/evm.service'
 import { NearChainAdapterService } from './chain-adapters/near.service'
@@ -23,6 +24,7 @@ const adapters = [
   NearChainAdapterService,
   StarknetChainAdapterService,
   TonChainAdapterService,
+  AptosChainAdapterService,
 ]
 
 @Module({

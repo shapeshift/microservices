@@ -4,6 +4,8 @@ import * as jwt from 'jsonwebtoken'
 
 import { env } from '../env'
 
+import { SIWE_TOKEN_AUDIENCE, SIWE_TOKEN_ISSUER } from './siwe-policy'
+
 interface SiweJwtPayload {
   address: string
   iat: number
@@ -29,7 +31,11 @@ export class SiweAuthGuard implements CanActivate {
     const token = authHeader.slice(7)
 
     try {
-      const payload = jwt.verify(token, this.jwtSecret) as SiweJwtPayload
+      const payload = jwt.verify(token, this.jwtSecret, {
+        algorithms: ['HS256'],
+        issuer: SIWE_TOKEN_ISSUER,
+        audience: SIWE_TOKEN_AUDIENCE,
+      }) as SiweJwtPayload
       request.siweAddress = payload.address.toLowerCase()
       return true
     } catch {

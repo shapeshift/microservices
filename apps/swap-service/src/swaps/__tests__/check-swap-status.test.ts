@@ -79,6 +79,7 @@ const buildService = (swap: ReturnType<typeof row>, onChainTxHash: string | unde
     stub,
     stub,
     stub,
+    stub,
     depositDetection as never,
   )
 

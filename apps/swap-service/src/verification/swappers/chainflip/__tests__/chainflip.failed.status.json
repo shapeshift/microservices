@@ -1,0 +1,79 @@
+{
+  "id": 79736,
+  "platform": "chainflip",
+  "status": {
+    "state": "failed",
+    "sourceAsset": "eth.eth",
+    "destinationAsset": "btc.btc",
+    "destinationAddress": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    "depositChannel": {
+      "id": "15609261-Ethereum-30463",
+      "createdAt": 1794170688000,
+      "createdAtDate": "2026-11-08T20:44:48+00:00",
+      "brokerCommissionBps": 5,
+      "depositAddress": "0xa9414c570140b4b4d23ad9a07891f1b72db784a0",
+      "sourceChainExpiryBlock": "26378802",
+      "estimatedExpiryTime": 1794244758000,
+      "estimatedExpiryDate": "2026-11-09T17:19:18+00:00",
+      "isExpired": false,
+      "openedThroughBackend": false,
+      "affiliateBrokers": [],
+      "fillOrKillParams": {
+        "retryDurationBlocks": 2,
+        "refundAddress": "0x2029a5d4a7fca6e19130184233716a591c8b7371",
+        "minimumPrice": "0.000001"
+      }
+    },
+    "fillOrKillParams": {
+      "retryDurationBlocks": 2,
+      "refundAddress": "0x2029a5d4a7fca6e19130184233716a591c8b7371",
+      "minimumPrice": "0.000001"
+    },
+    "brokers": [
+      {
+        "account": "cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH",
+        "commissionBps": 5
+      }
+    ],
+    "estimatedDurationSeconds": 462,
+    "estimatedDurationsSeconds": {
+      "deposit": 60,
+      "swap": 12,
+      "egress": 390
+    },
+    "sourceChainRequiredBlockConfirmations": 5,
+    "fees": [],
+    "deposit": {
+      "amountNative": "1000000000000000",
+      "amount": 0.001,
+      "transactionReference": "0x96bac4151d0ca08d8565b54c8bca26917d89a1a7e4345f0e4609f868cbb99686",
+      "failure": {
+        "failedAt": 1794170772000,
+        "failedAtDate": "2026-11-08T20:46:12+00:00",
+        "failedBlockIndex": "15609275-1523",
+        "mode": "DEPOSIT_IGNORED",
+        "reason": {
+          "code": "BelowMinimumDeposit",
+          "message": "The deposited amount was below the minimum required"
+        }
+      },
+      "failedAt": 1794170772000,
+      "failedAtDate": "2026-11-08T20:46:12+00:00",
+      "failedBlockIndex": "15609275-1523"
+    },
+    "swap": {
+      "originalInputAmountNative": "1000000000000000",
+      "originalInputAmount": 0.001,
+      "remainingInputAmountNative": "1000000000000000",
+      "remainingInputAmount": 0.001,
+      "swappedInputAmountNative": "0",
+      "swappedInputAmount": 0,
+      "swappedIntermediateAmountNative": "0",
+      "swappedIntermediateAmount": 0,
+      "swappedOutputAmountNative": "0",
+      "swappedOutputAmount": 0
+    },
+    "lastStateChainUpdateAt": 1794170797567,
+    "lastStateChainUpdateAtDate": "2026-11-08T20:46:37.567+00:00"
+  }
+}

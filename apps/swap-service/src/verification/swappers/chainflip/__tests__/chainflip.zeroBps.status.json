@@ -1,0 +1,119 @@
+{
+  "id": 57774,
+  "platform": "chainflip",
+  "status": {
+    "state": "completed",
+    "swapId": "1648623",
+    "sourceAsset": "usdc.arb",
+    "destinationAsset": "usdc.eth",
+    "destinationAddress": "0x3d504949ca5ff1143caca57d75ead1179ba1dd3a",
+    "depositChannel": {
+      "id": "13843756-Arbitrum-4361",
+      "createdAt": 1783563726000,
+      "createdAtDate": "2026-07-09T02:22:06+00:00",
+      "brokerCommissionBps": 5,
+      "depositAddress": "0xc16e0b627bef3ea2bbbc96001d7e56e9ce09422b",
+      "sourceChainExpiryBlock": "482235696",
+      "estimatedExpiryTime": 1783653588480,
+      "estimatedExpiryDate": "2026-07-10T03:19:48.48+00:00",
+      "isExpired": false,
+      "openedThroughBackend": false,
+      "affiliateBrokers": [],
+      "fillOrKillParams": {
+        "retryDurationBlocks": 150,
+        "refundAddress": "0x3d504949ca5ff1143caca57d75ead1179ba1dd3a",
+        "minimumPrice": "0.923844"
+      }
+    },
+    "fillOrKillParams": {
+      "retryDurationBlocks": 150,
+      "refundAddress": "0x3d504949ca5ff1143caca57d75ead1179ba1dd3a",
+      "minimumPrice": "0.923844"
+    },
+    "brokers": [
+      {
+        "account": "cFJZVRaybb2PBwxTiAiRLiQfHY4KPB3RpJK22Q7Fhqk979aCH",
+        "commissionBps": 5
+      }
+    ],
+    "estimatedDurationSeconds": 114.39,
+    "estimatedDurationsSeconds": {
+      "deposit": 6.39,
+      "swap": 12,
+      "egress": 96
+    },
+    "sourceChainRequiredBlockConfirmations": 2,
+    "fees": [
+      {
+        "type": "network",
+        "asset": "usdc.eth",
+        "amountNative": "500000",
+        "amount": 0.5
+      },
+      {
+        "type": "broker",
+        "asset": "usdc.eth",
+        "amountNative": "4748",
+        "amount": 0.004748
+      },
+      {
+        "type": "ingress",
+        "asset": "usdc.arb",
+        "amountNative": "3163",
+        "amount": 0.003163
+      },
+      {
+        "type": "egress",
+        "asset": "usdc.eth",
+        "amountNative": "57253",
+        "amount": 0.057253
+      }
+    ],
+    "deposit": {
+      "amountNative": "10000000",
+      "amount": 10,
+      "transactionReference": "0x81ac3093a2e5d467384a9c05438f1a443a1da438c841bcc4774751020301b23b",
+      "witnessedAt": 1783563780000,
+      "witnessedAtDate": "2026-07-09T02:23:00+00:00",
+      "witnessedBlockIndex": "13843765-1875"
+    },
+    "swap": {
+      "originalInputAmountNative": "9996837",
+      "originalInputAmount": 9.996837,
+      "remainingInputAmountNative": "0",
+      "remainingInputAmount": 0,
+      "swappedInputAmountNative": "9996837",
+      "swappedInputAmount": 9.996837,
+      "swappedIntermediateAmountNative": "0",
+      "swappedIntermediateAmount": 0,
+      "swappedOutputAmountNative": "9491088",
+      "swappedOutputAmount": 9.491088,
+      "livePriceExecutionDeltaPercentage": -0.02,
+      "regular": {
+        "inputAmountNative": "9996837",
+        "inputAmount": 9.996837,
+        "outputAmountNative": "9491088",
+        "outputAmount": 9.491088,
+        "scheduledAt": 1783563780000,
+        "scheduledAtDate": "2026-07-09T02:23:00+00:00",
+        "scheduledBlockIndex": "13843765-1874",
+        "executedAt": 1783563792000,
+        "executedAtDate": "2026-07-09T02:23:12+00:00",
+        "executedBlockIndex": "13843767-1949",
+        "retryCount": 0
+      }
+    },
+    "swapEgress": {
+      "amountNative": "9433835",
+      "amount": 9.433835,
+      "scheduledAt": 1783563792000,
+      "scheduledAtDate": "2026-07-09T02:23:12+00:00",
+      "scheduledBlockIndex": "13843767-1952",
+      "transactionReference": "0x5becc35c7bbb1043ff920c376f1182cccfe28a679d25f0a6ab3dc5c006e05a58",
+      "witnessedAt": 1783563984001,
+      "witnessedBlockIndex": "13843799-1971"
+    },
+    "lastStateChainUpdateAt": 1783564005019,
+    "lastStateChainUpdateAtDate": "2026-07-09T02:26:45.019+00:00"
+  }
+}
