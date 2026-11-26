@@ -23,8 +23,8 @@ export class NotificationsService {
   }
 
   async createNotification(data: CreateNotificationDto): Promise<Notification> {
-    try {
-      const notification = await this.prisma.notification.create({
+    const notification = await this.prisma.notification
+      .create({
         data: {
           userId: data.userId,
           title: data.title,
@@ -33,15 +33,16 @@ export class NotificationsService {
           swapId: data.swapId,
         },
       })
+      .catch(() => {
+        this.logger.error('Failed to create notification')
+        throw new BadRequestException('Failed to create notification')
+      })
 
-      // Send push notification to all user devices
-      await this.sendPushNotification(notification)
+    // The notification is stored at this point. A push failure must not fail the request, or callers
+    // that retry would store and push it twice. sendPushNotification logs its own failures.
+    await this.sendPushNotification(notification).catch(() => undefined)
 
-      return notification
-    } catch (error) {
-      this.logger.error('Failed to create notification', error)
-      throw error
-    }
+    return notification
   }
 
   async sendPushNotification(notification: Notification) {
@@ -55,7 +56,7 @@ export class NotificationsService {
       const activeDevices = devices.filter((device) => device.isActive)
 
       if (activeDevices.length === 0) {
-        throw new BadRequestException(`No active devices found for user ${notification.userId}`)
+        return []
       }
 
       const messages: ExpoPushMessage[] = activeDevices
@@ -76,8 +77,8 @@ export class NotificationsService {
 
       const tickets = await this.sendExpoPushNotifications(messages, notification.id)
       return tickets
-    } catch (error) {
-      this.logger.error('Failed to send push notification', error)
+    } catch {
+      this.logger.error('Failed to send push notification')
       throw new BadRequestException('Failed to send push notification')
     }
   }
@@ -90,7 +91,7 @@ export class NotificationsService {
   ): Promise<ExpoPushTicket[]> {
     try {
       if (!Expo.isExpoPushToken(deviceToken)) {
-        throw new BadRequestException(`Invalid Expo push token: ${String(deviceToken)}`)
+        throw new BadRequestException('Invalid Expo push token')
       }
 
       const message: ExpoPushMessage = {
@@ -105,8 +106,8 @@ export class NotificationsService {
 
       const tickets = await this.sendExpoPushNotifications([message])
       return tickets
-    } catch (error) {
-      this.logger.error('Failed to send push notification to device', error)
+    } catch {
+      this.logger.error('Failed to send push notification to device')
       throw new BadRequestException('Failed to send push notification to device')
     }
   }
@@ -156,8 +157,8 @@ export class NotificationsService {
       try {
         const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk)
         tickets.push(...ticketChunk)
-      } catch (error) {
-        this.logger.error('Error sending chunk', error)
+      } catch {
+        this.logger.error('Error sending chunk')
       }
     }
 
@@ -176,10 +177,6 @@ export class NotificationsService {
 
   async registerDevice(userId: string, deviceToken: string, deviceType: 'MOBILE' | 'WEB') {
     try {
-      this.logger.log(
-        `registerDevice called with userId: ${userId}, deviceType: ${deviceType}, deviceToken: ${deviceToken}`,
-      )
-
       // Only validate Expo push token for mobile devices
       if (deviceType === 'MOBILE' && !Expo.isExpoPushToken(deviceToken)) {
         throw new BadRequestException('Invalid Expo push token')
@@ -197,10 +194,10 @@ export class NotificationsService {
         deviceType,
       })
       const device = response.data
-      this.logger.log(`Device registered: ${deviceToken} for user ${userId} (${deviceType})`)
+
       return device
-    } catch (error) {
-      this.logger.error('Failed to register device', error)
+    } catch {
+      this.logger.error('Failed to register device')
       throw new BadRequestException('Failed to register device')
     }
   }
@@ -218,8 +215,8 @@ export class NotificationsService {
       const userServiceUrl = getRequiredEnvVar('USER_SERVICE_URL')
       const response = await this.httpService.axiosRef.get<Device[]>(`${userServiceUrl}/users/${userId}/devices`)
       return response.data
-    } catch (error) {
-      this.logger.error('Failed to get user devices', error)
+    } catch {
+      this.logger.error('Failed to get user devices')
       throw new BadRequestException('Failed to get user devices')
     }
   }
